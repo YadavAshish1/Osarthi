@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
+import { getApiRoot } from '../config/api';
 
 export default function Register() {
   const { pendingRole, register, clearPendingRole } = useAuth();
@@ -59,7 +59,7 @@ export default function Register() {
         {error && <p className="text-sm text-red-400">{error}</p>}
         <button type="submit" className="w-full rounded-full bg-brand-600 py-3 font-semibold hover:bg-brand-500">Create account</button>
       </form>
-      <a href={`${API_BASE}/api/auth/google?role=${pendingRole}`} className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-white/20 py-3 text-sm hover:bg-white/5">
+      <a href={`${getApiRoot('/api/auth/google')}?role=${pendingRole}`} className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-white/20 py-3 text-sm hover:bg-white/5">
         Sign up with Google
       </a>
       <p className="mt-6 text-center text-sm text-slate-400">

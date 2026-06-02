@@ -15,7 +15,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
+import { getApiRoot } from '../config/api';
 
 const STEPS = { ROLE: 1, ACCOUNT: 2 };
 
@@ -154,7 +154,7 @@ export default function Signup() {
   };
 
   const googleHref = role
-    ? `${API_BASE}/api/auth/google?role=${role}`
+    ? `${getApiRoot('/api/auth/google')}?role=${role}`
     : null;
 
   return (

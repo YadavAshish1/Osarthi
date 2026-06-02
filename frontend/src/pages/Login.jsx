@@ -3,8 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, Loader2, Mail } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-
-const API_BASE = import.meta.env.VITE_API_URL || '';
+import { getApiRoot } from '../config/api';
 
 function GoogleIcon() {
   return (
@@ -50,7 +49,7 @@ export default function Login() {
       <p className="mt-2 text-sm text-slate-400">Sign in to your Osarthi account</p>
 
       <a
-        href={`${API_BASE}/api/auth/google`}
+        href={getApiRoot('/api/auth/google')}
         className="mt-8 flex w-full items-center justify-center gap-3 rounded-xl border border-white/15 bg-white/5 py-3 text-sm font-medium transition hover:bg-white/10"
       >
         <GoogleIcon />
