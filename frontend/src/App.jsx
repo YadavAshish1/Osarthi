@@ -16,6 +16,7 @@ import QuizResult from './pages/QuizResult';
 import Notifications from './pages/Notifications';
 import About from './pages/About';
 import Contact from './pages/Contact';
+import ProfilePage from './pages/ProfilePage';
 
 export default function App() {
   return (
@@ -41,6 +42,7 @@ export default function App() {
             <Route path="/student/quiz/:id" element={<ProtectedRoute role="student"><QuizTake /></ProtectedRoute>} />
             <Route path="/student/result/:id" element={<ProtectedRoute role="student"><QuizResult /></ProtectedRoute>} />
             <Route path="/student/notifications" element={<ProtectedRoute role="student"><Notifications /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

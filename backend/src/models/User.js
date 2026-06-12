@@ -10,6 +10,23 @@ const userSchema = new mongoose.Schema(
     googleId: { type: String, sparse: true },
     refreshTokenHash: { type: String },
     avatar: { type: String },
+    bio: { type: String, default: '' },
+    education: [
+      {
+        institution: { type: String },
+        degree: { type: String },
+        year: { type: String },
+        _id: false,
+      },
+    ],
+    experience: [
+      {
+        title: { type: String },
+        organization: { type: String },
+        duration: { type: String },
+        _id: false,
+      },
+    ],
   },
   { timestamps: true }
 );
