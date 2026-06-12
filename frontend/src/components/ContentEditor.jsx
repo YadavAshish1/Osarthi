@@ -4,12 +4,16 @@ import { renderMarkedText } from '../utils/renderMarks';
 import { mediaUrl } from '../utils/mediaUrl';
 import {
   Bold,
+  Eye,
+  EyeOff,
   Heading1,
   Heading2,
   Image,
   Italic,
   List,
   Minus,
+  MoreHorizontal,
+  Pipette,
   Quote,
   Save,
   Type,
@@ -25,12 +29,13 @@ const BLOCK_TYPES = [
   { type: 'quote', label: 'Quote', icon: Quote },
   { type: 'list', label: 'Bullet list', icon: List },
   { type: 'divider', label: 'Divider', icon: Minus },
+  { type: 'part', label: 'Part', icon: MoreHorizontal },
   { type: 'image', label: 'Image', icon: Image },
   { type: 'video', label: 'Video', icon: Video },
 ];
 
 const HIGHLIGHT_COLORS = ['#fef08a', '#bbf7d0', '#bfdbfe', '#fbcfe8', '#fed7aa'];
-const TEXT_COLORS = ['#ffffff', '#f87171', '#34d399', '#60a5fa', '#c084fc'];
+const TEXT_COLORS = ['#ffffff', '#000000', '#f87171', '#34d399', '#60a5fa', '#c084fc', '#fb923c'];
 
 const uid = () => crypto.randomUUID();
 
@@ -59,6 +64,9 @@ export default function ContentEditor({ topicId, contentId = null, onSaved, onCa
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [selection, setSelection] = useState(null);
+  const [showFormatBar, setShowFormatBar] = useState(false);
+  const [showHighlightPicker, setShowHighlightPicker] = useState(false);
+  const [showTextColorPicker, setShowTextColorPicker] = useState(false);
   const fileRef = useRef();
   const blocksRef = useRef(blocks);
 
@@ -107,12 +115,50 @@ export default function ContentEditor({ topicId, contentId = null, onSaved, onCa
     if (start === end) return;
 
     const marks = [...(block.marks || [])];
-    const existing = marks.findIndex((m) => m.start === start && m.end === end);
-    const newMark = { start, end, ...style };
-    if (existing >= 0) marks[existing] = { ...marks[existing], ...style };
-    else marks.push(newMark);
+    const existingIdx = marks.findIndex((m) => m.start === start && m.end === end);
+
+    if (existingIdx >= 0) {
+      const existing = { ...marks[existingIdx] };
+      // Toggle: if property already matches, remove it; otherwise set it
+      Object.keys(style).forEach((key) => {
+        if (key === 'bold' || key === 'italic' || key === 'underline') {
+          if (existing[key]) {
+            delete existing[key]; // untoggle
+          } else {
+            existing[key] = style[key]; // apply
+          }
+        } else {
+          // for colors/backgrounds: if same value, remove (acts as clear); else set new
+          if (existing[key] === style[key]) {
+            delete existing[key];
+            // if backgroundColor removed, also remove dark text override
+            if (key === 'backgroundColor') delete existing.color;
+          } else {
+            existing[key] = style[key];
+          }
+        }
+      });
+      // If mark is now empty (no styles left), remove it entirely
+      const hasStyles = ['bold', 'italic', 'underline', 'backgroundColor', 'color']
+        .some((k) => existing[k] !== undefined && existing[k] !== null);
+      if (hasStyles) marks[existingIdx] = existing;
+      else marks.splice(existingIdx, 1);
+    } else {
+      marks.push({ start, end, ...style });
+    }
 
     updateBlock(block.id, { marks });
+  };
+
+  /** Check if the current selection range has a specific mark active */
+  const isMarkActive = (key, value) => {
+    if (!selection) return false;
+    const block = blocks.find((b) => b.id === selection.blockId);
+    if (!block) return false;
+    const { start, end } = selection;
+    const m = block.marks?.find((m) => m.start === start && m.end === end);
+    if (!m) return false;
+    return value !== undefined ? m[key] === value : !!m[key];
   };
 
   const handleTextSelect = (blockId, e) => {
@@ -231,7 +277,7 @@ export default function ContentEditor({ topicId, contentId = null, onSaved, onCa
         </p>
       )}
 
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         {BLOCK_TYPES.map((bt) => (
           <button
             key={`${bt.type}-${bt.level || 0}`}
@@ -242,20 +288,154 @@ export default function ContentEditor({ topicId, contentId = null, onSaved, onCa
             <bt.icon className="h-3.5 w-3.5" /> {bt.label}
           </button>
         ))}
+        {/* Toggle format bar button */}
+        <button
+          type="button"
+          title={showFormatBar ? 'Hide format toolbar' : 'Show format toolbar'}
+          onClick={() => setShowFormatBar((v) => !v)}
+          className={`ml-auto flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-all ${showFormatBar
+            ? 'border-brand-500/40 bg-brand-500/10 text-brand-300 hover:bg-brand-500/20'
+            : 'border-white/10 text-slate-500 hover:bg-white/5 hover:text-slate-300'
+            }`}
+        >
+          {showFormatBar ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+          {showFormatBar ? 'Hide Format' : 'Show Format'}
+        </button>
       </div>
 
-      {selection && (
+      {/*selection && */ showFormatBar && (
         <div className="glass mb-4 flex flex-wrap items-center gap-2 rounded-xl p-3">
           <span className="text-xs text-slate-400 mr-2">Format selection:</span>
-          <button type="button" onClick={() => applyMark({ bold: true })} className="rounded p-1.5 hover:bg-white/10"><Bold className="h-4 w-4" /></button>
-          <button type="button" onClick={() => applyMark({ italic: true })} className="rounded p-1.5 hover:bg-white/10"><Italic className="h-4 w-4" /></button>
-          <button type="button" onClick={() => applyMark({ underline: true })} className="rounded p-1.5 hover:bg-white/10"><Underline className="h-4 w-4" /></button>
+
+          {/* Bold / Italic / Underline toggles */}
+          <button
+            type="button"
+            onClick={() => applyMark({ bold: true })}
+            title={isMarkActive('bold') ? 'Remove bold' : 'Bold'}
+            className={`rounded p-1.5 transition-all ${isMarkActive('bold') ? 'bg-brand-500/30 text-brand-200' : 'hover:bg-white/10'
+              }`}
+          >
+            <Bold className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => applyMark({ italic: true })}
+            title={isMarkActive('italic') ? 'Remove italic' : 'Italic'}
+            className={`rounded p-1.5 transition-all ${isMarkActive('italic') ? 'bg-brand-500/30 text-brand-200' : 'hover:bg-white/10'
+              }`}
+          >
+            <Italic className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => applyMark({ underline: true })}
+            title={isMarkActive('underline') ? 'Remove underline' : 'Underline'}
+            className={`rounded p-1.5 transition-all ${isMarkActive('underline') ? 'bg-brand-500/30 text-brand-200' : 'hover:bg-white/10'
+              }`}
+          >
+            <Underline className="h-4 w-4" />
+          </button>
+
+          <span className="h-4 w-px bg-white/10 mx-1" />
+
+          {/* Highlight color swatches */}
+          <span className="text-[10px] text-slate-500">BG:</span>
           {HIGHLIGHT_COLORS.map((c) => (
-            <button key={c} type="button" onClick={() => applyMark({ backgroundColor: c, color: '#0f172a' })} className="h-6 w-6 rounded border border-white/20" style={{ backgroundColor: c }} />
+            <button
+              key={c} type="button"
+              title="Highlight color"
+              onClick={() => applyMark({ backgroundColor: c, color: '#0f172a' })}
+              className={`h-5 w-5 rounded border-2 transition-transform hover:scale-110 ${isMarkActive('backgroundColor', c) ? 'border-white scale-110' : 'border-white/20'
+                }`}
+              style={{ backgroundColor: c }}
+            />
           ))}
+          {/* Custom highlight color picker */}
+          <div className="relative">
+            <button
+              type="button"
+              title="Custom highlight color"
+              onClick={() => { setShowHighlightPicker((v) => !v); setShowTextColorPicker(false); }}
+              className="flex items-center justify-center h-5 w-5 rounded border border-dashed border-white/30 text-slate-400 hover:border-white/60 hover:text-white transition-all"
+            >
+              <Pipette className="h-3 w-3" />
+            </button>
+            {showHighlightPicker && (
+              <div className="absolute top-7 left-0 z-30 rounded-lg border border-white/10 bg-slate-900 p-2 shadow-xl">
+                <p className="text-[10px] text-slate-400 mb-1">Custom BG color</p>
+                <input
+                  type="color"
+                  defaultValue="#fef08a"
+                  className="h-8 w-24 cursor-pointer rounded border-none bg-transparent"
+                  onChange={(e) => applyMark({ backgroundColor: e.target.value, color: '#0f172a' })}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowHighlightPicker(false)}
+                  className="mt-1 block w-full text-center text-[10px] text-slate-500 hover:text-white"
+                >Done</button>
+              </div>
+            )}
+          </div>
+
+          <span className="h-4 w-px bg-white/10 mx-1" />
+
+          {/* Text color swatches */}
+          <span className="text-[10px] text-slate-500">Color:</span>
           {TEXT_COLORS.map((c) => (
-            <button key={c} type="button" onClick={() => applyMark({ color: c })} className="h-6 w-6 rounded-full border border-white/20" style={{ backgroundColor: c }} />
+            <button
+              key={c} type="button"
+              title="Text color"
+              onClick={() => applyMark({ color: c })}
+              className={`h-5 w-5 rounded-full border-2 transition-transform hover:scale-110 ${isMarkActive('color', c) ? 'border-white scale-110' : 'border-white/20'
+                }`}
+              style={{ backgroundColor: c }}
+            />
           ))}
+          {/* Custom text color picker */}
+          <div className="relative">
+            <button
+              type="button"
+              title="Custom text color"
+              onClick={() => { setShowTextColorPicker((v) => !v); setShowHighlightPicker(false); }}
+              className="flex items-center justify-center h-5 w-5 rounded-full border border-dashed border-white/30 text-slate-400 hover:border-white/60 hover:text-white transition-all"
+            >
+              <Pipette className="h-3 w-3" />
+            </button>
+            {showTextColorPicker && (
+              <div className="absolute top-7 left-0 z-30 rounded-lg border border-white/10 bg-slate-900 p-2 shadow-xl">
+                <p className="text-[10px] text-slate-400 mb-1">Custom text color</p>
+                <input
+                  type="color"
+                  defaultValue="#ffffff"
+                  className="h-8 w-24 cursor-pointer rounded border-none bg-transparent"
+                  onChange={(e) => applyMark({ color: e.target.value })}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowTextColorPicker(false)}
+                  className="mt-1 block w-full text-center text-[10px] text-slate-500 hover:text-white"
+                >Done</button>
+              </div>
+            )}
+          </div>
+
+          {/* Clear all formatting on selection */}
+          <button
+            type="button"
+            title="Clear all formatting"
+            onClick={() => {
+              const block = blocks.find((b) => b.id === selection.blockId);
+              if (!block) return;
+              const marks = (block.marks || []).filter(
+                (m) => !(m.start === selection.start && m.end === selection.end)
+              );
+              updateBlock(block.id, { marks });
+            }}
+            className="ml-2 rounded px-2 py-1 text-[10px] text-slate-500 border border-white/10 hover:text-red-400 hover:border-red-400/30 transition-all"
+          >
+            Clear
+          </button>
         </div>
       )}
 
@@ -271,18 +451,29 @@ export default function ContentEditor({ topicId, contentId = null, onSaved, onCa
               />
             )}
             {block.type === 'paragraph' && (
-              <>
+              <div className="relative">
+                {/* Formatted render layer — what the user sees */}
+                <div
+                  aria-hidden="true"
+                  className="min-h-[80px] w-full leading-relaxed whitespace-pre-wrap break-words text-slate-200 pointer-events-none text-sm"
+                >
+                  {block.text
+                    ? renderMarkedText(block.text, block.marks)
+                    : <span className="text-slate-500">Write your content…</span>
+                  }
+                  {/* keeps container height stable when empty */}
+                  &#8203;
+                </div>
+                {/* Transparent textarea on top — captures input, cursor visible */}
                 <textarea
                   value={block.text}
                   onChange={(e) => updateBlock(block.id, { text: e.target.value })}
                   onSelect={(e) => handleTextSelect(block.id, e)}
-                  className="w-full min-h-[80px] resize-y bg-transparent leading-relaxed outline-none"
-                  placeholder="Write your content…"
+                  spellCheck={false}
+                  className="absolute inset-0 w-full h-full resize-none leading-relaxed outline-none text-sm bg-transparent"
+                  style={{ color: 'transparent', caretColor: '#a5b4fc' }}
                 />
-                <div className="mt-2 rounded-lg bg-slate-900/50 p-3 text-sm text-slate-400">
-                  Preview: {renderMarkedText(block.text, block.marks)}
-                </div>
-              </>
+              </div>
             )}
             {block.type === 'quote' && (
               <blockquote className="border-l-4 border-brand-500 pl-4 italic">
@@ -308,6 +499,7 @@ export default function ContentEditor({ topicId, contentId = null, onSaved, onCa
               </ul>
             )}
             {block.type === 'divider' && <hr className="border-white/20" />}
+            {block.type === 'part' && <div className="py-2 text-center text-3xl font-bold tracking-[0.5em] text-slate-400">· · ·</div>}
             {(block.type === 'image' || block.type === 'video') && (
               <div className="space-y-2">
                 {block.previewUrl || block.url ? (

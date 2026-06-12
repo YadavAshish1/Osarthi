@@ -19,7 +19,7 @@ function ArticleBody({ content }) {
               <h2 className={block.level === 1 ? 'text-2xl font-bold' : 'text-xl font-semibold'}>{block.text}</h2>
             )}
             {block.type === 'paragraph' && (
-              <p className="leading-relaxed text-slate-200">{renderMarkedText(block.text, block.marks)}</p>
+              <p className="leading-relaxed text-slate-200" style={{ whiteSpace: 'pre-wrap' }}>{renderMarkedText(block.text, block.marks)}</p>
             )}
             {block.type === 'quote' && (
               <blockquote className="border-l-4 border-brand-500 pl-4 italic text-slate-300">{block.text}</blockquote>
@@ -32,6 +32,7 @@ function ArticleBody({ content }) {
               </ul>
             )}
             {block.type === 'divider' && <hr className="border-white/20" />}
+            {block.type === 'part' && <div className="py-2 text-center text-3xl font-bold tracking-[0.5em] text-slate-400">· · ·</div>}
             {block.type === 'image' && block.url && (
               <figure>
                 <img src={mediaUrl(block.url)} alt={block.caption} className="max-h-96 w-full rounded-xl object-cover" />

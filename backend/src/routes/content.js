@@ -39,8 +39,8 @@ router.get('/topic/:topicId', async (req, res, next) => {
     }
 
     const items = await Content.find(filter)
-      .sort({ createdAt: -1 })
-      .select('title published createdAt updatedAt topicRef subjectRef classRef createdBy');
+      .sort({ order: 1, createdAt: -1 })
+      .select('title published createdAt updatedAt topicRef subjectRef classRef createdBy order');
 
     res.json(items);
   } catch (err) {
@@ -66,6 +66,30 @@ router.get('/:contentId', async (req, res, next) => {
     }
 
     res.json(content);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Reorder blogs */
+router.put('/reorder', requireRole('teacher'), async (req, res, next) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds)) {
+      return res.status(400).json({ message: 'orderedIds must be an array' });
+    }
+
+    // Process updates in parallel
+    await Promise.all(
+      orderedIds.map((id, index) =>
+        Content.findOneAndUpdate(
+          { _id: id, createdBy: req.user._id }, // Ensure user owns the content
+          { $set: { order: index } }
+        )
+      )
+    );
+
+    res.json({ message: 'Order updated successfully' });
   } catch (err) {
     next(err);
   }
