@@ -128,7 +128,7 @@ router.put('/:contentId', requireRole('teacher'), async (req, res, next) => {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
-    const { title, blocks, published } = req.body;
+    const { title, blocks, published, topicRef, subjectRef, classRef } = req.body;
 
     const content = await Content.findByIdAndUpdate(
       req.params.contentId,
@@ -136,6 +136,9 @@ router.put('/:contentId', requireRole('teacher'), async (req, res, next) => {
         ...(title !== undefined && { title }),
         ...(blocks !== undefined && { blocks }),
         ...(published !== undefined && { published }),
+        ...(topicRef !== undefined && { topicRef }),
+        ...(subjectRef !== undefined && { subjectRef }),
+        ...(classRef !== undefined && { classRef }),
       },
       { new: true, runValidators: true }
     );

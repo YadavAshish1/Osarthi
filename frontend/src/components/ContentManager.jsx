@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api/client';
 import ContentEditor from './ContentEditor';
-import { FilePlus, GripVertical, Pencil, Trash2 } from 'lucide-react';
+import TaxonomySelector from './TaxonomySelector';
+import { FilePlus, GripVertical, Pencil, Trash2, FolderOutput, X } from 'lucide-react';
 
 export default function ContentManager({ topicId }) {
   const [posts, setPosts] = useState([]);
@@ -9,6 +10,8 @@ export default function ContentManager({ topicId }) {
   const [activeId, setActiveId] = useState(null);
   const [isNew, setIsNew] = useState(false);
   const [draggedId, setDraggedId] = useState(null);
+  const [moveModalPost, setMoveModalPost] = useState(null);
+  const [moveTarget, setMoveTarget] = useState(null);
 
   const loadPosts = useCallback(() => {
     if (!topicId) return;
@@ -24,6 +27,7 @@ export default function ContentManager({ topicId }) {
     loadPosts();
     setActiveId(null);
     setIsNew(false);
+    setMoveModalPost(null);
   }, [topicId, loadPosts]);
 
   const startNew = () => {
@@ -68,6 +72,24 @@ export default function ContentManager({ topicId }) {
       await api.put('/content/reorder', { orderedIds: newPosts.map((p) => p._id) });
     } catch (err) {
       console.error('Failed to save order', err);
+    }
+  };
+
+  const handleMoveContent = async () => {
+    if (!moveModalPost || !moveTarget || !moveTarget.topicId) return;
+    try {
+      await api.put(`/content/${moveModalPost._id}`, {
+        topicRef: moveTarget.topicId,
+        subjectRef: moveTarget.subjectId,
+        classRef: moveTarget.classId,
+      });
+      setMoveModalPost(null);
+      if (activeId === moveModalPost._id) {
+        setActiveId(null);
+      }
+      loadPosts(); // It will disappear from the current list
+    } catch (err) {
+      console.error('Failed to move post', err);
     }
   };
 
@@ -130,13 +152,22 @@ export default function ContentManager({ topicId }) {
                       {post.published ? 'Published' : 'Draft'}
                     </span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(post._id)}
-                    className="mt-2 flex items-center gap-1 text-xs text-red-400 hover:text-red-300"
-                  >
-                    <Trash2 className="h-3 w-3" /> Delete
-                  </button>
+                  <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => { setMoveModalPost(post); setMoveTarget(null); }}
+                      className="flex items-center gap-1 text-xs text-slate-400 hover:text-brand-300"
+                    >
+                      <FolderOutput className="h-3 w-3" /> Move
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(post._id)}
+                      className="flex items-center gap-1 text-xs text-red-400/70 hover:text-red-300"
+                    >
+                      <Trash2 className="h-3 w-3" /> Delete
+                    </button>
+                  </div>
                 </div>
               </li>
             ))}
@@ -163,6 +194,45 @@ export default function ContentManager({ topicId }) {
           />
         )}
       </div>
+
+      {/* Move Modal */}
+      {moveModalPost && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="text-xl font-bold">Move "{moveModalPost.title}"</h2>
+              <button
+                onClick={() => setMoveModalPost(null)}
+                className="rounded-lg p-2 text-slate-400 hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+              Select the new destination for this blog post. It will be removed from the current topic.
+            </div>
+
+            <TaxonomySelector onSelect={setMoveTarget} allowCreate={false} />
+
+            <div className="mt-8 flex justify-end gap-3">
+              <button
+                onClick={() => setMoveModalPost(null)}
+                className="rounded-lg border border-white/20 px-4 py-2 hover:bg-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleMoveContent}
+                disabled={!moveTarget?.topicId}
+                className="rounded-lg bg-brand-600 px-4 py-2 font-semibold hover:bg-brand-500 disabled:opacity-50"
+              >
+                Move Blog
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
