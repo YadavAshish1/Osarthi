@@ -13,17 +13,29 @@ export function AuthProvider({ children }) {
   const loadUser = useCallback(async () => {
     try {
       const token = getAccessToken();
+
       if (token) {
-        const res = await api.get('/auth/me');
-        setUser(res.data.user);
-        setLoading(false);
-        return;
+        try {
+          // Access token present hai — verify karo /auth/me se
+          const res = await api.get('/auth/me');
+          if (res.data.user) {
+            setUser(res.data.user);
+            return;
+          }
+        } catch (err) {
+          // Access token expire ho gaya (401) — refresh try karo
+          if (err.response?.status !== 401) throw err;
+          setAccessToken(null);
+        }
       }
+
+      // Access token nahi hai ya expire hua — refresh token se naya access token lo
       try {
         const refresh = await api.post('/auth/refresh');
         setAccessToken(refresh.data.accessToken);
         setUser(refresh.data.user);
       } catch {
+        // Refresh token bhi nahi / expire — user ko logout karo
         setAccessToken(null);
         setUser(null);
       }
@@ -35,9 +47,20 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // App open hone par auto-login try karo
   useEffect(() => {
     loadUser();
   }, [loadUser]);
+
+  // Jab refresh token expire ho jaye (mid-session), user ko logout karo
+  useEffect(() => {
+    const handleForceLogout = () => {
+      setAccessToken(null);
+      setUser(null);
+    };
+    window.addEventListener('auth:logout', handleForceLogout);
+    return () => window.removeEventListener('auth:logout', handleForceLogout);
+  }, []);
 
   const selectRole = (role) => {
     sessionStorage.setItem('osarthi_pending_role', role);

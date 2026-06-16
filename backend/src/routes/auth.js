@@ -158,16 +158,26 @@ router.post('/refresh', async (req, res, next) => {
     const token = req.cookies.refreshToken;
     if (!token) return res.status(401).json({ message: 'Refresh token missing' });
 
-    const decoded = verifyRefreshToken(token);
+    let decoded;
+    try {
+      decoded = verifyRefreshToken(token);
+    } catch {
+      return res.status(401).json({ message: 'Invalid or expired refresh token' });
+    }
+
     const user = await User.findById(decoded.userId);
-    if (!user || user.refreshTokenHash !== hashToken(token)) {
-      return res.status(401).json({ message: 'Invalid refresh token' });
+    if (!user) return res.status(401).json({ message: 'User not found' });
+
+    if (user.refreshTokenHash !== hashToken(token)) {
+      // Token mismatch — security ke liye hash clear karo (reuse attempt)
+      await User.findByIdAndUpdate(decoded.userId, { refreshTokenHash: null });
+      return res.status(401).json({ message: 'Refresh token invalid' });
     }
 
     const tokens = await issueTokens(user, res);
     res.json({ accessToken: tokens.accessToken, user: tokens.user });
-  } catch {
-    res.status(401).json({ message: 'Invalid refresh token' });
+  } catch (err) {
+    next(err);
   }
 });
 

@@ -1,29 +1,23 @@
 /**
  * Central API configuration — import from here, not VITE_API_URL directly.
  *
- * Priority:
- * 1. VITE_API_URL (Vercel env, optional override)
- * 2. PRODUCTION_API_URL when built for production (import.meta.env.PROD)
- * 3. Empty in dev → axios uses /api and Vite proxies to localhost:5000
+ * It uses VITE_API_URL from .env file. If not set, it defaults to empty string
+ * which makes axios use relative paths (handled by Vite proxy in dev).
  */
-
-/** Your deployed backend (Render). Update if the URL changes. */
-export const PRODUCTION_API_URL = 'https://osarthi.onrender.com';
 
 function normalizeBase(url) {
   if (!url || typeof url !== 'string') return '';
   return url.trim().replace(/\/$/, '');
 }
 
-/** Backend origin without trailing slash, e.g. https://osarthi.onrender.com */
+/** Backend origin without trailing slash */
 export function getApiBaseUrl() {
   const fromEnv = normalizeBase(import.meta.env.VITE_API_URL);
   if (fromEnv) return fromEnv;
-  if (import.meta.env.PROD) return normalizeBase(PRODUCTION_API_URL);
   return '';
 }
 
-/** Axios baseURL: full backend /api in prod, relative /api in dev */
+/** Axios baseURL: full backend /api or relative /api */
 export function getApiClientBaseUrl() {
   const base = getApiBaseUrl();
   return base ? `${base}/api` : '/api';

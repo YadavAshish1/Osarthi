@@ -52,7 +52,9 @@ api.interceptors.response.use(
           return res.data.accessToken;
         })
         .catch(() => {
+          // Refresh token expire ya invalid — force logout
           setAccessToken(null);
+          window.dispatchEvent(new CustomEvent('auth:logout'));
           return null;
         })
         .finally(() => {

@@ -21,9 +21,9 @@ export function setRefreshCookie(res, token) {
   res.cookie('refreshToken', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000,
-    path: '/api/auth',
+    path: '/',
   });
 }
 
@@ -31,13 +31,16 @@ export async function issueTokens(user, res) {
   const payload = { userId: user._id.toString(), role: user.role };
   const accessToken = signAccessToken(payload);
   const refreshToken = signRefreshToken(payload);
-  user.refreshTokenHash = hashToken(refreshToken);
-  await user.save();
+  const newHash = hashToken(refreshToken);
+
+  // Use atomic update to avoid stale-document overwrite issues
+  await User.findByIdAndUpdate(user._id, { refreshTokenHash: newHash });
+
   setRefreshCookie(res, refreshToken);
   const safeUser = await User.findById(user._id).select('-passwordHash -refreshTokenHash');
   return { accessToken, user: safeUser };
 }
 
 export function clearRefreshCookie(res) {
-  res.clearCookie('refreshToken', { path: '/api/auth' });
+  res.clearCookie('refreshToken', { path: '/' });
 }
