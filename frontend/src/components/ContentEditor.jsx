@@ -59,6 +59,69 @@ function blockForApi(block) {
   return rest;
 }
 
+function styleEquals(s1 = {}, s2 = {}) {
+  const keys = new Set([...Object.keys(s1), ...Object.keys(s2)]);
+  for (const key of keys) {
+    if (s1[key] !== s2[key]) return false;
+  }
+  return true;
+}
+
+function normalizeMarks(marks = [], textLength = 0) {
+  if (!marks?.length) return [];
+
+  const boundaries = new Set([0, textLength]);
+  marks.forEach((mark) => {
+    if (mark.start == null || mark.end == null) return;
+    boundaries.add(mark.start);
+    boundaries.add(mark.end);
+  });
+
+  const sorted = Array.from(boundaries).sort((a, b) => a - b);
+  const segments = [];
+
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const start = sorted[i];
+    const end = sorted[i + 1];
+    if (start >= end) continue;
+
+    const covering = marks.filter((mark) => mark.start <= start && mark.end >= end);
+    if (!covering.length) continue;
+
+    const style = {};
+    covering.forEach((mark) => {
+      Object.keys(mark).forEach((key) => {
+        if (key === 'start' || key === 'end') return;
+        if (mark[key] !== undefined) style[key] = mark[key];
+      });
+    });
+
+    segments.push({ start, end, ...style });
+  }
+
+  const normalized = [];
+  for (const seg of segments) {
+    const prev = normalized[normalized.length - 1];
+    const segStyle = { ...seg };
+    delete segStyle.start;
+    delete segStyle.end;
+
+    if (prev && prev.end === seg.start) {
+      const prevStyle = { ...prev };
+      delete prevStyle.start;
+      delete prevStyle.end;
+      if (styleEquals(prevStyle, segStyle)) {
+        prev.end = seg.end;
+        continue;
+      }
+    }
+
+    normalized.push(seg);
+  }
+
+  return normalized;
+}
+
 export default function ContentEditor({ topicId, contentId = null, onSaved, onCancel }) {
   const [title, setTitle] = useState('Untitled');
   const [blocks, setBlocks] = useState([newBlock('paragraph')]);
@@ -121,7 +184,14 @@ export default function ContentEditor({ topicId, contentId = null, onSaved, onCa
   };
 
   const updateBlock = (id, patch) => {
-    setBlocks((b) => b.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+    setBlocks((b) =>
+      b.map((x) => {
+        if (x.id !== id) return x;
+        const text = patch.text != null ? patch.text : x.text;
+        const marks = patch.marks ? normalizeMarks(patch.marks, text.length) : x.marks;
+        return { ...x, ...patch, marks };
+      })
+    );
   };
 
   // ── Move block up / down ──────────────────────────────────────────────────
@@ -144,9 +214,41 @@ export default function ContentEditor({ topicId, contentId = null, onSaved, onCa
     const { start, end } = selection;
     if (start === end) return;
 
-    const marks = [...(block.marks || [])];
-    const existingIdx = marks.findIndex((m) => m.start === start && m.end === end);
+    let marks = [...(block.marks || [])];
+    const styleKeys = Object.keys(style);
+    const removeKeys = styleKeys.filter((key) => key === 'color' || key === 'backgroundColor');
 
+    if (removeKeys.length) {
+      const nextMarks = [];
+      marks.forEach((mark) => {
+        const noOverlap = mark.end <= start || mark.start >= end;
+        if (noOverlap || !removeKeys.some((key) => mark[key] !== undefined)) {
+          nextMarks.push(mark);
+          return;
+        }
+
+        if (mark.start < start) {
+          nextMarks.push({ ...mark, end: start });
+        }
+
+        if (mark.end > end) {
+          nextMarks.push({ ...mark, start: end });
+        }
+
+        const overlap = {
+          ...mark,
+          start: Math.max(mark.start, start),
+          end: Math.min(mark.end, end),
+        };
+        removeKeys.forEach((key) => delete overlap[key]);
+        if (Object.keys(overlap).some((k) => k !== 'start' && k !== 'end')) {
+          nextMarks.push(overlap);
+        }
+      });
+      marks = nextMarks;
+    }
+
+    const existingIdx = marks.findIndex((m) => m.start === start && m.end === end);
     if (existingIdx >= 0) {
       const existing = { ...marks[existingIdx] };
       Object.keys(style).forEach((key) => {
@@ -159,7 +261,6 @@ export default function ContentEditor({ topicId, contentId = null, onSaved, onCa
         } else {
           if (existing[key] === style[key]) {
             delete existing[key];
-            if (key === 'backgroundColor') delete existing.color;
           } else {
             existing[key] = style[key];
           }
@@ -189,7 +290,82 @@ export default function ContentEditor({ topicId, contentId = null, onSaved, onCa
   const handleTextSelect = (blockId, e) => {
     const start = e.target.selectionStart;
     const end = e.target.selectionEnd;
-    if (start !== end) setSelection({ blockId, start, end });
+    if (start === end) {
+      setSelection(null);
+      return;
+    }
+
+    // Trim leading/trailing spaces from the selection so formatting
+    // doesn't apply to pure whitespace. This prevents selecting
+    // trailing spaces which then affect newly typed text.
+    const block = blocksRef.current.find((b) => b.id === blockId);
+    const text = (block?.text) || '';
+    let s = start;
+    let ePos = end;
+    while (s < ePos && text[s] === ' ') s++;
+    while (ePos > s && text[ePos - 1] === ' ') ePos--;
+
+    if (s >= ePos) {
+      // Selection contains only spaces — ignore
+      setSelection(null);
+      return;
+    }
+
+    setSelection({ blockId, start: s, end: ePos });
+  };
+
+  const handleBlockTextChange = (blockId, e) => {
+    const newText = e.target.value;
+    setBlocks((prev) => {
+      const idx = prev.findIndex((b) => b.id === blockId);
+      if (idx === -1) return prev;
+      const block = prev[idx];
+      const oldText = block.text || '';
+      if (oldText === newText) return prev;
+
+      const oldLen = oldText.length;
+      const newLen = newText.length;
+      const minLen = Math.min(oldLen, newLen);
+
+      let prefix = 0;
+      while (prefix < minLen && oldText[prefix] === newText[prefix]) prefix++;
+
+      let suffix = 0;
+      while (
+        suffix < minLen - prefix &&
+        oldText[oldLen - 1 - suffix] === newText[newLen - 1 - suffix]
+      ) suffix++;
+
+      const removedCount = oldLen - prefix - suffix;
+      const insertedCount = newLen - prefix - suffix;
+      const delta = insertedCount - removedCount;
+
+      const mapOld = (oldIdx) => {
+        if (oldIdx < prefix) return oldIdx;
+        if (oldIdx >= prefix + removedCount) return oldIdx + delta;
+        return prefix; // oldIdx was inside deleted region -> collapse to insertion point
+      };
+
+      const oldMarks = block.marks || [];
+      const newMarks = [];
+      for (const m of oldMarks) {
+        const ns = mapOld(m.start);
+        const ne = mapOld(m.end);
+        if (ne > ns) {
+          const copy = { ...m, start: ns, end: ne };
+          // remove any styling-only fields that no longer make sense
+          newMarks.push(copy);
+        }
+      }
+
+      const next = [...prev];
+      next[idx] = { ...block, text: newText, marks: normalizeMarks(newMarks, newText.length) };
+
+      // clear selection that referenced old indices
+      setSelection((sel) => (sel && sel.blockId === blockId ? null : sel));
+
+      return next;
+    });
   };
 
   const attachFile = (file, blockId) => {
@@ -540,7 +716,7 @@ export default function ContentEditor({ topicId, contentId = null, onSaved, onCa
                 </div>
                 <textarea
                   value={block.text}
-                  onChange={(e) => updateBlock(block.id, { text: e.target.value })}
+                  onChange={(e) => handleBlockTextChange(block.id, e)}
                   onSelect={(e) => handleTextSelect(block.id, e)}
                   spellCheck={false}
                   className="absolute inset-0 w-full h-full resize-none leading-relaxed outline-none text-sm bg-transparent"

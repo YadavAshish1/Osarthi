@@ -12,24 +12,30 @@ export function renderMarkedText(text = '', marks = []) {
     return splitLines(text, 'plain');
   }
 
-  const sorted = [...marks].sort((a, b) => a.start - b.start);
-  const segments = [];
-  let cursor = 0;
-
-  sorted.forEach((mark, i) => {
-    if (mark.start > cursor) {
-      segments.push({ text: text.slice(cursor, mark.start), mark: null, key: `t-${i}` });
-    }
-    segments.push({
-      text: text.slice(mark.start, mark.end),
-      mark,
-      key: `m-${i}`,
-    });
-    cursor = mark.end;
+  // Merge marks that have identical start/end ranges to avoid
+  // rendering duplicate segments when multiple marks target the same range.
+  const boundaries = new Set([0, text.length]);
+  marks.forEach((mark) => {
+    boundaries.add(mark.start);
+    boundaries.add(mark.end);
   });
+  const sortedBoundaries = Array.from(boundaries).sort((a, b) => a - b);
 
-  if (cursor < text.length) {
-    segments.push({ text: text.slice(cursor), mark: null, key: 'end' });
+  const segments = [];
+  for (let i = 0; i < sortedBoundaries.length - 1; i++) {
+    const start = sortedBoundaries[i];
+    const end = sortedBoundaries[i + 1];
+    if (start >= end) continue;
+
+    const coveringMarks = marks.filter((mark) => mark.start <= start && mark.end >= end);
+    let segmentMark = null;
+    if (coveringMarks.length) {
+      segmentMark = coveringMarks.reduce((acc, mark) => ({ ...acc, ...mark }), {});
+      delete segmentMark.start;
+      delete segmentMark.end;
+    }
+
+    segments.push({ text: text.slice(start, end), mark: segmentMark, key: `seg-${start}-${end}` });
   }
 
   return segments.flatMap((seg) => {
@@ -46,7 +52,7 @@ export function renderMarkedText(text = '', marks = []) {
         <span
           key={`${seg.key}-l${i}`}
           style={style}
-          className={`${seg.mark.bold ? 'font-bold' : ''} ${seg.mark.italic ? 'italic' : ''} ${seg.mark.underline ? 'underline' : ''} rounded px-0.5`}
+          className={`${seg.mark.bold ? 'font-bold' : ''} ${seg.mark.italic ? 'italic' : ''} ${seg.mark.underline ? 'underline' : ''} rounded`}
         >
           {line}
         </span>
