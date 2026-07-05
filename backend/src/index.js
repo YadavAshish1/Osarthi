@@ -31,9 +31,33 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:3000',
+  'https://osarthi.onrender.com'
+];
+
+if (process.env.CLIENT_URL) {
+  const envOrigins = process.env.CLIENT_URL.split(',').map(url => url.trim());
+  envOrigins.forEach(origin => {
+    if (origin && !allowedOrigins.includes(origin)) {
+      allowedOrigins.push(origin);
+    }
+  });
+}
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:5173' || 'https://osarthi.onrender.com',
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        return callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
   })
 );
