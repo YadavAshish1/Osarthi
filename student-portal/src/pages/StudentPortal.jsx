@@ -388,7 +388,6 @@ export default function StudentPortal() {
     setFilters({ classId: cls._id, subjectId: null, topicId: null });
     setSearchQuery('');
     setShowHero(false);
-    setMobileSidebarOpen(false);
   };
 
   const handleClearFilter = () => {
