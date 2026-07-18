@@ -190,6 +190,34 @@ export default function PublicBlogReader() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  // Update document title and meta description for blog-specific SEO
+  useEffect(() => {
+    if (!blog) return;
+    const siteName = 'Medhashine';
+    document.title = `${blog.title} | ${siteName}`;
+
+    const firstParagraph = blog.blocks?.find((b) => b.type === 'paragraph' && b.text?.trim());
+    const rawDesc = firstParagraph?.text?.replace(/\s+/g, ' ').trim() || blog.title;
+    const blogDesc = rawDesc.length > 160 ? rawDesc.slice(0, 157) + '...' : rawDesc;
+
+    const setMeta = (name, content, prop = false) => {
+      const attr = prop ? 'property' : 'name';
+      let el = document.querySelector(`meta[${attr}="${name}"]`);
+      if (!el) { el = document.createElement('meta'); el.setAttribute(attr, name); document.head.appendChild(el); }
+      el.setAttribute('content', content);
+    };
+
+    setMeta('description', blogDesc);
+    setMeta('og:title', `${blog.title} | ${siteName}`, true);
+    setMeta('og:description', blogDesc, true);
+    setMeta('twitter:title', `${blog.title} | ${siteName}`);
+    setMeta('twitter:description', blogDesc);
+
+    return () => {
+      document.title = `${siteName} — Learn. Teach. Excel.`;
+    };
+  }, [blog]);
+
   // Fetch related blogs
   useEffect(() => {
     if (!blog) return;

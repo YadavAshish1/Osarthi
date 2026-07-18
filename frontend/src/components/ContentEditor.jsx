@@ -133,6 +133,8 @@ export default function ContentEditor({ topicId, contentId = null, onSaved, onCa
   const [showHighlightPicker, setShowHighlightPicker] = useState(false);
   const [showTextColorPicker, setShowTextColorPicker] = useState(false);
   const [toolbarSticky, setToolbarSticky] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const [localDraft, setLocalDraft] = useState(null);
   const fileRef = useRef();
   const blocksRef = useRef(blocks);
   const toolbarRef = useRef();
@@ -154,12 +156,39 @@ export default function ContentEditor({ topicId, contentId = null, onSaved, onCa
 
   useEffect(() => {
     if (!topicId) return;
+
+    const draftKey = `osarthi_draft_${topicId}_${contentId || 'new'}`;
+    const savedDraft = localStorage.getItem(draftKey);
+    let parsedDraft = null;
+    if (savedDraft) {
+      try {
+        parsedDraft = JSON.parse(savedDraft);
+      } catch (e) {
+        console.error('Failed to parse draft', e);
+      }
+    }
+
+    setIsDirty(false);
+
     if (contentId) {
       api.get(`/content/${contentId}`).then((res) => {
         if (res.data) {
           setTitle(res.data.title);
           setBlocks(res.data.blocks?.length ? res.data.blocks : [newBlock('paragraph')]);
           setPublished(res.data.published);
+
+          if (parsedDraft && parsedDraft.updatedAt) {
+            const draftTime = new Date(parsedDraft.updatedAt).getTime();
+            const dbTime = new Date(res.data.updatedAt || res.data.createdAt).getTime();
+            if (draftTime > dbTime) {
+              setLocalDraft(parsedDraft);
+            } else {
+              localStorage.removeItem(draftKey);
+              setLocalDraft(null);
+            }
+          } else {
+            setLocalDraft(null);
+          }
         }
       });
     } else {
@@ -167,8 +196,50 @@ export default function ContentEditor({ topicId, contentId = null, onSaved, onCa
       setBlocks([newBlock('paragraph')]);
       setPublished(false);
       setSaveError('');
+      if (parsedDraft) {
+        setLocalDraft(parsedDraft);
+      } else {
+        setLocalDraft(null);
+      }
     }
   }, [topicId, contentId]);
+
+  useEffect(() => {
+    if (!isDirty) return;
+
+    const draftKey = `osarthi_draft_${topicId}_${contentId || 'new'}`;
+    const serializableBlocks = blocks.map((block) => {
+      const { pendingFile, previewUrl, ...rest } = block;
+      return rest;
+    });
+
+    const draftData = {
+      title,
+      blocks: serializableBlocks,
+      published,
+      updatedAt: new Date().toISOString(),
+    };
+
+    localStorage.setItem(draftKey, JSON.stringify(draftData));
+  }, [isDirty, title, blocks, published, topicId, contentId]);
+
+  const restoreDraft = () => {
+    if (localDraft) {
+      setTitle(localDraft.title);
+      setBlocks(localDraft.blocks || [newBlock('paragraph')]);
+      setPublished(!!localDraft.published);
+      setIsDirty(true);
+      setLocalDraft(null);
+    }
+  };
+
+  const discardDraft = () => {
+    if (window.confirm('Are you sure you want to discard this draft? This cannot be undone.')) {
+      const draftKey = `osarthi_draft_${topicId}_${contentId || 'new'}`;
+      localStorage.removeItem(draftKey);
+      setLocalDraft(null);
+    }
+  };
 
   useEffect(() => {
     return () => {
@@ -181,6 +252,7 @@ export default function ContentEditor({ topicId, contentId = null, onSaved, onCa
   const addBlock = (bt) => {
     const extra = bt.type === 'heading' ? { level: bt.level } : bt.type === 'list' ? { items: [''] } : {};
     setBlocks((b) => [...b, newBlock(bt.type, extra)]);
+    setIsDirty(true);
   };
 
   const updateBlock = (id, patch) => {
@@ -192,6 +264,7 @@ export default function ContentEditor({ topicId, contentId = null, onSaved, onCa
         return { ...x, ...patch, marks };
       })
     );
+    setIsDirty(true);
   };
 
   // ── Move block up / down ──────────────────────────────────────────────────
@@ -205,6 +278,7 @@ export default function ContentEditor({ topicId, contentId = null, onSaved, onCa
       [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
       return next;
     });
+    setIsDirty(true);
   };
 
   const applyMark = (style) => {
@@ -414,6 +488,17 @@ export default function ContentEditor({ topicId, contentId = null, onSaved, onCa
         ? await api.put(`/content/${contentId}`, payload)
         : await api.post(`/content/topic/${topicId}`, payload);
 
+      // Clear draft on successful save
+      localStorage.removeItem(`osarthi_draft_${topicId}_new`);
+      if (contentId) {
+        localStorage.removeItem(`osarthi_draft_${topicId}_${contentId}`);
+      }
+      if (res.data?._id) {
+        localStorage.removeItem(`osarthi_draft_${topicId}_${res.data._id}`);
+      }
+      setLocalDraft(null);
+      setIsDirty(false);
+
       setBlocks(res.data.blocks || prepared);
       onSaved?.(res.data);
     } catch (err) {
@@ -595,17 +680,42 @@ export default function ContentEditor({ topicId, contentId = null, onSaved, onCa
 
   return (
     <div className="mx-auto max-w-3xl">
+      {localDraft && (
+        <div className="mb-6 flex items-center justify-between gap-4 rounded-xl border border-brand-500/30 bg-brand-500/10 p-4 text-sm text-slate-200">
+          <div>
+            <span className="font-semibold text-brand-300">Unsaved draft found!</span> You have unsaved changes from{' '}
+            <span className="font-medium text-white">{new Date(localDraft.updatedAt).toLocaleString()}</span>.
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={restoreDraft}
+              className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold hover:bg-brand-500 transition-colors"
+            >
+              Restore Draft
+            </button>
+            <button
+              type="button"
+              onClick={discardDraft}
+              className="rounded-lg border border-white/20 px-3 py-1.5 text-xs hover:bg-white/5 transition-colors"
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Title + save bar */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <input
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => { setTitle(e.target.value); setIsDirty(true); }}
           className="w-full bg-transparent text-3xl font-bold outline-none sm:w-auto"
           placeholder="Title"
         />
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 text-sm text-slate-400">
-            <input type="checkbox" checked={published} onChange={(e) => setPublished(e.target.checked)} />
+            <input type="checkbox" checked={published} onChange={(e) => { setPublished(e.target.checked); setIsDirty(true); }} />
             Published
           </label>
           {onCancel && (
@@ -811,7 +921,7 @@ export default function ContentEditor({ topicId, contentId = null, onSaved, onCa
             {/* Remove block */}
             <button
               type="button"
-              onClick={() => setBlocks((b) => b.filter((x) => x.id !== block.id))}
+              onClick={() => { setBlocks((b) => b.filter((x) => x.id !== block.id)); setIsDirty(true); }}
               className="absolute right-2 top-2 hidden text-xs text-red-400 group-hover:block"
             >
               Remove

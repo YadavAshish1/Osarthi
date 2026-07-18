@@ -8,7 +8,7 @@ import {
 import { Link } from 'react-router-dom';
 import ExploreSidebar from '../components/ExploreSidebar';
 import BlogCard from '../components/BlogCard';
-import { getFeatured, getBlogs } from '../api/explore';
+import { getFeatured, getBlogs, getSeo } from '../api/explore';
 
 // ─── Animated counter ──────────────────────────────────────────────────────────
 function Counter({ from = 0, to, suffix = '' }) {
@@ -361,6 +361,32 @@ export default function StudentPortal() {
   const [showHero, setShowHero] = useState(true);
   const [toast, setToast] = useState({ show: false, message: '', title: '' });
 
+  // ── Fetch SEO settings from backend and update document metadata ────────
+  useEffect(() => {
+    getSeo().then((seo) => {
+      if (seo.title) document.title = seo.title;
+      const setMeta = (name, content, prop = false) => {
+        const attr = prop ? 'property' : 'name';
+        let el = document.querySelector(`meta[${attr}="${name}"]`);
+        if (!el) { el = document.createElement('meta'); el.setAttribute(attr, name); document.head.appendChild(el); }
+        el.setAttribute('content', content);
+      };
+      if (seo.description) {
+        setMeta('description', seo.description);
+        setMeta('og:description', seo.description, true);
+        setMeta('twitter:description', seo.description);
+      }
+      if (seo.keywords) setMeta('keywords', seo.keywords);
+      if (seo.author) setMeta('author', seo.author);
+      if (seo.robots) setMeta('robots', seo.robots);
+      if (seo.title) {
+        setMeta('og:title', seo.title, true);
+        setMeta('twitter:title', seo.title);
+      }
+      if (seo.googleSiteVerification) setMeta('google-site-verification', seo.googleSiteVerification);
+    }).catch(() => {});
+  }, []);
+
   const showNotification = (title, message) => {
     setToast({ show: true, title, message });
   };
@@ -435,7 +461,7 @@ export default function StudentPortal() {
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-violet-600">
               <BookOpen className="h-3.5 w-3.5 text-white" />
             </div>
-            <span className="text-sm font-bold text-slate-100">Osarthi</span>
+            <span className="text-sm font-bold text-slate-100">Medhashine</span>
             <span className="hidden rounded-full bg-brand-500/15 px-2 py-0.5 text-xs text-brand-400 sm:block">Student Portal</span>
           </Link>
 
