@@ -12,12 +12,12 @@ let refreshPromise = null;
 
 export function setAccessToken(token) {
   accessToken = token;
-  if (token) localStorage.setItem('osarthi_access', token);
-  else localStorage.removeItem('osarthi_access');
+  if (token) localStorage.setItem('medhashine_access', token);
+  else localStorage.removeItem('medhashine_access');
 }
 
 export function getAccessToken() {
-  if (!accessToken) accessToken = localStorage.getItem('osarthi_access');
+  if (!accessToken) accessToken = localStorage.getItem('medhashine_access');
   return accessToken;
 }
 

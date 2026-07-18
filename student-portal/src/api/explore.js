@@ -14,3 +14,4 @@ export const getTopics = (subjectId) => exploreApi.get(`/topics?subjectId=${subj
 export const getFeatured = () => exploreApi.get('/featured').then((r) => r.data);
 export const getBlogs = (params) => exploreApi.get('/blogs', { params }).then((r) => r.data);
 export const getBlog = (id) => exploreApi.get(`/blogs/${id}`).then((r) => r.data);
+export const getSeo = () => exploreApi.get('/seo').then((r) => r.data);

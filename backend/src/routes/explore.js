@@ -3,6 +3,8 @@ import Class from '../models/Class.js';
 import Subject from '../models/Subject.js';
 import Topic from '../models/Topic.js';
 import Content from '../models/Content.js';
+import SeoSettings from '../models/SeoSettings.js';
+import { authenticate, requireRole } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -154,6 +156,41 @@ router.get('/tree', async (req, res, next) => {
     }));
 
     res.json(tree);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /api/explore/seo - get current SEO settings */
+router.get('/seo', async (req, res, next) => {
+  try {
+    let settings = await SeoSettings.findOne();
+    if (!settings) {
+      settings = await SeoSettings.create({});
+    }
+    res.json(settings);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** PUT /api/explore/seo - update SEO settings (Admin only) */
+router.put('/seo', authenticate, requireRole('admin'), async (req, res, next) => {
+  try {
+    const { title, description, keywords, author, googleSiteVerification, robots } = req.body;
+    let settings = await SeoSettings.findOne();
+    if (!settings) {
+      settings = new SeoSettings();
+    }
+    if (title !== undefined) settings.title = title;
+    if (description !== undefined) settings.description = description;
+    if (keywords !== undefined) settings.keywords = keywords;
+    if (author !== undefined) settings.author = author;
+    if (googleSiteVerification !== undefined) settings.googleSiteVerification = googleSiteVerification;
+    if (robots !== undefined) settings.robots = robots;
+
+    await settings.save();
+    res.json(settings);
   } catch (err) {
     next(err);
   }
