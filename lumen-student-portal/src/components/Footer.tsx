@@ -9,8 +9,15 @@ export default function Footer() {
     >
       <div className="max-w-screen-xl mx-auto px-6 md:px-12 flex flex-col md:flex-row justify-between gap-10">
         <div className="max-w-sm">
-          <div className="font-serif-display text-3xl font-semibold text-[#1A1A1A] mb-3">
-            Medhashine
+          <div className="flex items-center gap-2.5 mb-3">
+            <img
+              src="/logo/logo.svg"
+              alt="Medhashine Logo"
+              className="w-9 h-9 object-cover rounded-full shadow-xs border border-[#E5E1D8]"
+            />
+            <div className="font-serif-display text-3xl font-semibold text-[#1A1A1A]">
+              Medhashine
+            </div>
           </div>
           <p className="font-serif-body text-sm leading-relaxed text-[#5C5A55]">
             A quiet room for insights written by teachers, built for students

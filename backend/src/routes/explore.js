@@ -69,11 +69,25 @@ router.get('/blogs', async (req, res, next) => {
     const { topicId, classId, subjectId, teacherId, search, page = 1, limit = 12 } = req.query;
     const filter = { published: true };
 
-    if (topicId) filter.topicRef = topicId;
-    else if (subjectId) filter.subjectRef = subjectId;
-    else if (classId) filter.classRef = classId;
+    const parseIds = (val) => {
+      if (!val) return null;
+      if (Array.isArray(val)) return { $in: val };
+      if (typeof val === 'string') {
+        const parts = val.split(',').map((s) => s.trim()).filter(Boolean);
+        return parts.length > 1 ? { $in: parts } : parts[0];
+      }
+      return val;
+    };
 
-    if (teacherId) filter.createdBy = teacherId;
+    const parsedTopic = parseIds(topicId);
+    const parsedSubject = parseIds(subjectId);
+    const parsedClass = parseIds(classId);
+    const parsedTeacher = parseIds(teacherId);
+
+    if (parsedTopic) filter.topicRef = parsedTopic;
+    if (parsedSubject) filter.subjectRef = parsedSubject;
+    if (parsedClass) filter.classRef = parsedClass;
+    if (parsedTeacher) filter.createdBy = parsedTeacher;
 
     if (search) {
       filter.title = { $regex: search, $options: 'i' };
