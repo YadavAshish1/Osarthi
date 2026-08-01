@@ -13,8 +13,13 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.medhashine.in";
+
 export const metadata: Metadata = {
-  metadataBase: new URL("http://localhost:3000"),
+  metadataBase: new URL(siteUrl),
+  alternates: {
+    canonical: siteUrl,
+  },
   title: {
     default: "Medhashine | Insights for Curious Minds",
     template: "%s | Medhashine Student Portal",
@@ -31,6 +36,7 @@ export const metadata: Metadata = {
     "literature",
     "teachers",
     "Osarthi",
+    "Medhashine",
   ],
   authors: [{ name: "Medhashine Education Team" }],
   creator: "Osarthi Team",
@@ -38,7 +44,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "http://localhost:3000",
+    url: siteUrl,
     title: "Medhashine | Insights for Curious Minds",
     description:
       "A quiet library of insights, ideas, and encouragements — written by teachers, meant for curious young minds.",
@@ -80,7 +86,7 @@ export default function RootLayout({
     "@context": "https://schema.org",
     "@type": "EducationalOrganization",
     name: "Medhashine Student Portal",
-    url: "http://localhost:3000",
+    url: siteUrl,
     description:
       "A quiet library of insights, ideas, and encouragements — written by teachers, meant for curious young minds.",
     sameAs: [],

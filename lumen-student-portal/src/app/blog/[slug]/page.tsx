@@ -110,7 +110,7 @@ export default async function BlogDetailPage({
         publisher: {
           "@type": "Organization",
           name: "Medhashine Student Portal",
-          url: "http://localhost:3000",
+          url: process.env.NEXT_PUBLIC_SITE_URL || "https://www.medhashine.in",
         },
         articleSection: blog.subject,
         keywords: [blog.subject, blog.topic, blog.class_level],

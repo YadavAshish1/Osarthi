@@ -1,8 +1,8 @@
 import type { MetadataRoute } from "next";
-import { FALLBACK_BLOGS } from "@/lib/api";
+import { API, FALLBACK_BLOGS } from "@/lib/api";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.medhashine.in";
 
   // Static routes
   const staticRoutes: MetadataRoute.Sitemap = [
@@ -26,8 +26,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ];
 
-  // Dynamic blog routes
-  const blogRoutes: MetadataRoute.Sitemap = FALLBACK_BLOGS.map((blog) => ({
+  let blogs: { id: string; slug?: string; created_at?: string }[] = FALLBACK_BLOGS;
+  try {
+    const res = await fetch(`${API}/explore/blogs?limit=50`, { next: { revalidate: 3600 } });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.items) && data.items.length > 0) {
+        blogs = data.items.map((item: any) => ({
+          id: item._id,
+          slug: item.slug || item._id,
+          created_at: item.createdAt,
+        }));
+      }
+    }
+  } catch {}
+
+  const blogRoutes: MetadataRoute.Sitemap = blogs.map((blog) => ({
     url: `${baseUrl}/blog/${blog.slug || blog.id}`,
     lastModified: new Date(blog.created_at || Date.now()),
     changeFrequency: "weekly",
