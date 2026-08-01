@@ -1,8 +1,8 @@
 import type { MetadataRoute } from "next";
 import { FALLBACK_BLOGS } from "@/lib/api";
 
-export default async function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = "http://localhost:3000";
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
   // Static routes
   const staticRoutes: MetadataRoute.Sitemap = [
