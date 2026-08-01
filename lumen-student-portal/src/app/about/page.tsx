@@ -4,15 +4,30 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "About Us | Medhashine Student Portal",
   description: "A quiet room for insights written by teachers who care.",
+  openGraph: {
+    title: "About Us | Medhashine Student Portal",
+    description: "A quiet room for insights written by teachers who care.",
+    images: [{ url: "/assets/images/branding.jpg", alt: "Medhashine Brand Showcase" }],
+  },
 };
 
 export default function AboutPage() {
   return (
-    <div className="max-w-3xl mx-auto px-6 py-20 md:py-28" data-testid="about-page">
+    <div className="max-w-4xl mx-auto px-6 py-16 md:py-24" data-testid="about-page">
       <div className="eyebrow text-[#A84C32] mb-4">Our story</div>
       <h1 className="font-serif-display text-5xl md:text-6xl leading-[1.05] font-medium text-[#1A1A1A]">
         A quiet room for insights written by teachers who care.
       </h1>
+
+      {/* Brand Showcase Image */}
+      <div className="my-10 overflow-hidden rounded-2xl border border-[#E5E1D8] shadow-md group">
+        <img
+          src="/assets/images/branding.jpg"
+          alt="Medhashine - Illuminating Minds, Empowering Futures"
+          className="w-full h-auto object-cover transform group-hover:scale-[1.02] transition-transform duration-700 ease-out"
+        />
+      </div>
+
       <p className="mt-8 font-serif-body text-xl leading-relaxed text-[#2A2A2A]">
         Medhashine is a reading portal built for curious students. Every essay here is authored by a teacher — someone who has spent years turning difficult ideas into clear, patient explanations.
       </p>

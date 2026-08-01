@@ -29,74 +29,93 @@ interface FilterBarProps {
   onClear: () => void;
 }
 
-export default function FilterBar({ tree = [], teachers = [], filters, onChange, onClear }: FilterBarProps) {
+export default function FilterBar({
+  tree = [],
+  teachers = [],
+  filters,
+  onChange,
+  onClear,
+}: FilterBarProps) {
   const activeCount = Object.values(filters).filter(Boolean).length;
 
-  // All class options (always show all)
+  // All class options (always show all, deduplicated by name)
   const classOptions = useMemo(() => {
     const seen = new Set<string>();
     return tree.filter((c) => {
-      const key = c.name.toLowerCase();
+      const key = c.name.trim().toLowerCase();
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
   }, [tree]);
 
-  // Subject options — filtered by selected class if any
+  // Subject options — filtered by selected class if any, deduplicated by name
   const subjectOptions = useMemo(() => {
     const sources = filters.class_level
       ? tree.filter((c) => c._id === filters.class_level)
       : tree;
 
-    const seen = new Set<string>();
-    const result: { _id: string; name: string }[] = [];
+    const map = new Map<string, { ids: string[]; name: string }>();
     for (const cls of sources) {
       for (const sub of cls.subjects || []) {
-        if (!seen.has(sub._id)) {
-          seen.add(sub._id);
-          result.push(sub);
+        const key = sub.name.trim().toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, { ids: [sub._id], name: sub.name.trim() });
+        } else {
+          const item = map.get(key)!;
+          if (!item.ids.includes(sub._id)) {
+            item.ids.push(sub._id);
+          }
         }
       }
     }
-    return result;
+    return Array.from(map.values()).map((item) => ({
+      value: item.ids.join(","),
+      name: item.name,
+    }));
   }, [tree, filters.class_level]);
 
-  // Topic options — filtered by selected subject if any, else by selected class
+  // Topic options — filtered by selected subject if any, else by selected class, deduplicated by name
   const topicOptions = useMemo(() => {
     let subjects: { _id: string; name: string; topics?: { _id: string; name: string }[] }[] = [];
 
     if (filters.subject) {
-      // Only topics under the selected subject
+      const selectedSubjectIds = new Set(filters.subject.split(",").filter(Boolean));
       for (const cls of tree) {
         for (const sub of cls.subjects || []) {
-          if (sub._id === filters.subject) {
+          if (selectedSubjectIds.has(sub._id)) {
             subjects.push(sub);
           }
         }
       }
     } else if (filters.class_level) {
-      // All topics under the selected class
       const clsNode = tree.find((c) => c._id === filters.class_level);
       subjects = clsNode?.subjects || [];
     } else {
-      // All topics across all classes
       for (const cls of tree) {
         subjects = subjects.concat(cls.subjects || []);
       }
     }
 
-    const seen = new Set<string>();
-    const result: { _id: string; name: string }[] = [];
+    const map = new Map<string, { ids: string[]; name: string }>();
     for (const sub of subjects) {
       for (const topic of sub.topics || []) {
-        if (!seen.has(topic._id)) {
-          seen.add(topic._id);
-          result.push(topic);
+        const key = topic.name.trim().toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, { ids: [topic._id], name: topic.name.trim() });
+        } else {
+          const item = map.get(key)!;
+          if (!item.ids.includes(topic._id)) {
+            item.ids.push(topic._id);
+          }
         }
       }
     }
-    return result;
+
+    return Array.from(map.values()).map((item) => ({
+      value: item.ids.join(","),
+      name: item.name,
+    }));
   }, [tree, filters.class_level, filters.subject]);
 
   // When class changes: reset subject and topic if they're no longer valid
@@ -106,15 +125,11 @@ export default function FilterBar({ tree = [], teachers = [], filters, onChange,
     if (classId) {
       const cls = tree.find((c) => c._id === classId);
       const validSubjects = new Set((cls?.subjects || []).map((s) => s._id));
-      if (newFilters.subject && !validSubjects.has(newFilters.subject)) {
+      const currentSubjectIds = newFilters.subject.split(",").filter(Boolean);
+      const isSubjectValid = currentSubjectIds.some((id) => validSubjects.has(id));
+      if (newFilters.subject && !isSubjectValid) {
         newFilters.subject = "";
         newFilters.topic = "";
-      } else if (newFilters.topic) {
-        const sub = (cls?.subjects || []).find((s) => s._id === newFilters.subject);
-        const validTopics = new Set((sub?.topics || []).map((t) => t._id));
-        if (!validTopics.has(newFilters.topic)) {
-          newFilters.topic = "";
-        }
       }
     }
 
@@ -126,17 +141,20 @@ export default function FilterBar({ tree = [], teachers = [], filters, onChange,
     const newFilters = { ...filters, subject: subjectId };
 
     if (subjectId && newFilters.topic) {
-      let validTopics = new Set<string>();
+      const selectedSubIds = new Set(subjectId.split(",").filter(Boolean));
+      const validTopics = new Set<string>();
       for (const cls of tree) {
         for (const sub of cls.subjects || []) {
-          if (sub._id === subjectId) {
+          if (selectedSubIds.has(sub._id)) {
             for (const t of sub.topics || []) {
               validTopics.add(t._id);
             }
           }
         }
       }
-      if (!validTopics.has(newFilters.topic)) {
+      const currentTopicIds = newFilters.topic.split(",").filter(Boolean);
+      const isTopicValid = currentTopicIds.some((id) => validTopics.has(id));
+      if (!isTopicValid) {
         newFilters.topic = "";
       }
     }
@@ -185,7 +203,7 @@ export default function FilterBar({ tree = [], teachers = [], filters, onChange,
       >
         <option value="">All Subjects</option>
         {subjectOptions.map((s) => (
-          <option key={s._id} value={s._id}>
+          <option key={s.value} value={s.value}>
             {s.name}
           </option>
         ))}
@@ -200,7 +218,7 @@ export default function FilterBar({ tree = [], teachers = [], filters, onChange,
       >
         <option value="">All Topics</option>
         {topicOptions.map((tp) => (
-          <option key={tp._id} value={tp._id}>
+          <option key={tp.value} value={tp.value}>
             {tp.name}
           </option>
         ))}
