@@ -1,292 +1,131 @@
-"use client";
+import type { Metadata } from "next";
+import BlogDetailClient from "./BlogDetailClient";
+import { API, BlogItem, FALLBACK_BLOGS, mapContentToBlog, getDefaultSubjectCover } from "@/lib/api";
 
-import React, { useState, useEffect, useCallback, use } from "react";
-import Link from "next/link";
-import { ArrowLeft, Clock, Heart } from "lucide-react";
-import { api, BlogItem, CommentItem, FALLBACK_BLOGS, mapContentToBlog, formatApiErrorDetail } from "@/lib/api";
-import { renderMarkedText, mediaUrl } from "@/lib/renderMarks";
-import CommentThread from "@/components/CommentThread";
-import { useAuth } from "@/context/AuthContext";
-import { toast } from "sonner";
-
-/**
- * Extract the MongoDB ObjectId (or fallback id) from the slug.
- * Slug format: "the-wonders-of-science-6839abc123"
- * The last segment after the final hyphen is the ID.
- */
 function extractIdFromSlug(slug: string): string {
-  // Try to match a MongoDB ObjectId (24 hex chars) at the end
   const mongoMatch = slug.match(/([a-f0-9]{24})$/);
   if (mongoMatch) return mongoMatch[1];
-  // Otherwise take everything after last hyphen (fallback IDs like "blog-1")
   const lastHyphen = slug.lastIndexOf("-");
   if (lastHyphen !== -1) {
     const suffix = slug.slice(lastHyphen + 1);
-    // If it's a number, the id is "blog-<number>"
     if (/^\d+$/.test(suffix)) return `blog-${suffix}`;
     return suffix;
   }
   return slug;
 }
 
-export default function BlogDetailPage({ params }: { params: Promise<{ slug: string }> }) {
-  const resolvedParams = use(params);
-  const rawSlug = resolvedParams.slug;
+async function fetchBlogServer(id: string, slug: string): Promise<BlogItem | null> {
+  try {
+    const res = await fetch(`${API}/explore/blogs/${id}`, { next: { revalidate: 60 } });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.title) {
+        return mapContentToBlog(data);
+      }
+    }
+  } catch {}
+
+  return FALLBACK_BLOGS.find((b) => b.id === id || b.slug === slug) || null;
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const resolvedParams = await params;
+  const rawSlug = resolvedParams.slug || "";
   const slug = decodeURIComponent(rawSlug);
   const id = extractIdFromSlug(slug);
-  const { requireAuth } = useAuth();
 
-  const [blog, setBlog] = useState<BlogItem | null>(null);
-  const [comments, setComments] = useState<CommentItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [liked, setLiked] = useState(false);
-  const [likesCount, setLikesCount] = useState(0);
-  const [avatarError, setAvatarError] = useState(false);
-
-  // Load comments from our backend /api/comments/blog/:blogId
-  const loadComments = useCallback(async () => {
-    try {
-      const { data } = await api.get(`/comments/blog/${id}`);
-      if (Array.isArray(data)) setComments(data);
-    } catch {
-      setComments([]);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const { data } = await api.get(`/explore/blogs/${id}`);
-        if (data && data.title) {
-          const mapped = mapContentToBlog(data);
-          setBlog(mapped);
-          setLiked(!!data.user_liked);
-          setLikesCount(data.likes_count || 0);
-          await loadComments();
-          setLoading(false);
-          return;
-        }
-      } catch { }
-
-      // Fallback to local mock data
-      const fallback = FALLBACK_BLOGS.find((b) => b.id === id || b.slug === slug) || FALLBACK_BLOGS[0];
-      setBlog(fallback);
-      setLikesCount(fallback.likes_count || 12);
-      setLoading(false);
-    })();
-  }, [id, slug, loadComments]);
-
-  const toggleLike = async () => {
-    if (!requireAuth(toggleLike)) return;
-    const nextLiked = !liked;
-    const nextCount = nextLiked ? likesCount + 1 : Math.max(0, likesCount - 1);
-    setLiked(nextLiked);
-    setLikesCount(nextCount);
-    try {
-      await api.post(`/blogs/${id}/like`);
-    } catch {
-      // Keep optimistic update
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="max-w-3xl mx-auto px-6 py-24 font-serif-body text-[#5C5A55] text-center">
-        Loading essay…
-      </div>
-    );
-  }
+  const blog = await fetchBlogServer(id, slug);
 
   if (!blog) {
-    return (
-      <div className="max-w-3xl mx-auto px-6 py-24 text-center font-serif-body">
-        <h2 className="text-2xl text-[#1A1A1A]">Essay not found.</h2>
-        <Link href="/" className="mt-4 inline-block text-[#A84C32] font-ui text-sm hover:underline">
-          Return to Reading Room
-        </Link>
-      </div>
-    );
+    return {
+      title: "Insight Not Found",
+      description: "The requested insight could not be found.",
+    };
   }
 
-  const hasBlocks = blog.blocks && blog.blocks.length > 0;
-  const contentParagraphs = !hasBlocks ? (blog.content || "").split("\n\n") : [];
+  const title = blog.title;
+  const description = blog.excerpt || `Read "${blog.title}" by ${blog.teacher_name} on Medhashine Student Portal.`;
+  const coverUrl = blog.cover || getDefaultSubjectCover(blog.subject);
+
+  return {
+    title,
+    description,
+    keywords: [
+      blog.subject,
+      blog.topic,
+      blog.class_level,
+      blog.teacher_name,
+      "Medhashine",
+      "essays",
+      "insights",
+      "education",
+    ],
+    authors: [{ name: blog.teacher_name }],
+    openGraph: {
+      title: `${blog.title} | Medhashine Student Portal`,
+      description,
+      type: "article",
+      publishedTime: blog.created_at,
+      authors: [blog.teacher_name],
+      images: coverUrl ? [{ url: coverUrl, alt: blog.title }] : [],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${blog.title} | Medhashine Student Portal`,
+      description,
+      images: coverUrl ? [coverUrl] : [],
+    },
+  };
+}
+
+export default async function BlogDetailPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const resolvedParams = await params;
+  const rawSlug = resolvedParams.slug || "";
+  const slug = decodeURIComponent(rawSlug);
+  const id = extractIdFromSlug(slug);
+
+  const blog = await fetchBlogServer(id, slug);
+
+  // Structured Data (JSON-LD) for Schema.org BlogPosting / Article for Google Search
+  const jsonLd = blog
+    ? {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        headline: blog.title,
+        description: blog.excerpt,
+        image: blog.cover || getDefaultSubjectCover(blog.subject),
+        datePublished: blog.created_at,
+        author: {
+          "@type": "Person",
+          name: blog.teacher_name,
+        },
+        publisher: {
+          "@type": "Organization",
+          name: "Medhashine Student Portal",
+          url: "http://localhost:3000",
+        },
+        articleSection: blog.subject,
+        keywords: [blog.subject, blog.topic, blog.class_level],
+      }
+    : null;
 
   return (
-    <article className="pb-24" data-testid="blog-detail">
-      <div className="max-w-3xl mx-auto px-6 pt-10 md:pt-16">
-        <Link
-          href="/"
-          data-testid="back-to-home"
-          className="inline-flex items-center gap-2 font-ui text-xs tracking-widest uppercase text-[#5C5A55] hover:text-[#A84C32] transition-colors"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" /> Back to insights
-        </Link>
-      </div>
-
-      <header className="max-w-3xl mx-auto px-6 pt-8 pb-10">
-        <div className="eyebrow text-[#A84C32] mb-4 flex items-center gap-2">
-          <span>{blog.subject}</span>
-          <span className="text-[#E5E1D8]">•</span>
-          <span>{blog.topic}</span>
-          <span className="text-[#E5E1D8]">•</span>
-          <span className="text-[#5C5A55]">{blog.class_level}</span>
-        </div>
-
-        <h1
-          data-testid="blog-title"
-          className="font-serif-display text-4xl sm:text-5xl lg:text-6xl leading-[1.1] font-semibold text-[#1A1A1A]"
-        >
-          {blog.title}
-        </h1>
-
-        <p className="mt-6 font-serif-body italic text-xl text-[#5C5A55] leading-relaxed">
-          {blog.excerpt}
-        </p>
-
-        <div className="mt-8 flex items-center gap-4 pt-6 border-t border-[#E5E1D8]">
-          {blog.teacher_avatar && !avatarError ? (
-            <img
-              src={blog.teacher_avatar}
-              alt={blog.teacher_name}
-              onError={() => setAvatarError(true)}
-              className="w-12 h-12 rounded-full object-cover border border-[#E5E1D8] shrink-0"
-            />
-          ) : (
-            <div className="w-12 h-12 rounded-full bg-[#1A1A1A] text-white flex items-center justify-center text-sm font-bold uppercase shrink-0">
-              {blog.teacher_name?.[0] || "T"}
-            </div>
-          )}
-          <div className="flex-1">
-            <div className="font-ui text-sm font-semibold text-[#1A1A1A]">
-              {blog.teacher_name}
-            </div>
-            <div className="font-ui text-xs text-[#5C5A55]">
-              Published on{" "}
-              {new Date(blog.created_at || Date.now()).toLocaleDateString(undefined, {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5 font-ui text-xs text-[#5C5A55] bg-[#F5F2EB] px-3 py-1.5 rounded-full">
-            <Clock className="h-3.5 w-3.5 text-[#A84C32]" />
-            <span>{blog.read_minutes} min read</span>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Essay Body */}
-      <div className="max-w-3xl mx-auto px-6 font-serif-body text-lg md:text-xl leading-relaxed text-[#2A2A2A] space-y-6">
-        {hasBlocks ? (
-          blog.blocks!.map((block) => (
-            <div key={block.id}>
-              {block.type === "heading" && (
-                <h2 className={`font-serif-display font-semibold text-[#1A1A1A] pt-6 pb-2 border-b border-[#E5E1D8]/60 ${
-                  block.level === 1 ? "text-3xl md:text-4xl" : "text-2xl md:text-3xl"
-                }`}>
-                  {block.text}
-                </h2>
-              )}
-              {block.type === "paragraph" && (
-                <p className="leading-relaxed" style={{ whiteSpace: "pre-wrap" }}>
-                  {renderMarkedText(block.text || "", block.marks || [])}
-                </p>
-              )}
-              {block.type === "quote" && (
-                <blockquote className="border-l-4 border-[#A84C32] pl-4 italic text-[#5C5A55]">
-                  {block.text}
-                </blockquote>
-              )}
-              {block.type === "list" && (
-                block.ordered ? (
-                  <ol className="list-decimal pl-6 space-y-1">
-                    {block.items?.map((item, i) => <li key={i}>{item}</li>)}
-                  </ol>
-                ) : (
-                  <ul className="list-disc pl-6 space-y-1">
-                    {block.items?.map((item, i) => <li key={i}>{item}</li>)}
-                  </ul>
-                )
-              )}
-              {block.type === "divider" && <hr className="border-[#E5E1D8]" />}
-              {block.type === "part" && (
-                <div className="py-2 text-center text-3xl font-bold tracking-[0.5em] text-[#5C5A55]">· · ·</div>
-              )}
-              {/* Inline images — hover scale animation */}
-              {block.type === "image" && block.url && (
-                <figure className="group/img">
-                  <div className="overflow-hidden rounded-xl">
-                    <img
-                      src={mediaUrl(block.url)}
-                      alt={block.caption || ""}
-                      className="max-h-96 w-full object-cover transition-transform duration-500 ease-out group-hover/img:scale-105"
-                    />
-                  </div>
-                  {block.caption && (
-                    <figcaption className="mt-2 text-center text-sm text-[#5C5A55]">
-                      {block.caption}
-                    </figcaption>
-                  )}
-                </figure>
-              )}
-              {block.type === "video" && block.url && (
-                <video src={mediaUrl(block.url)} controls className="w-full rounded-xl" />
-              )}
-            </div>
-          ))
-        ) : (
-          contentParagraphs.map((para, i) => {
-            if (para.startsWith("## ")) {
-              return (
-                <h2
-                  key={i}
-                  className="font-serif-display text-2xl md:text-3xl font-semibold text-[#1A1A1A] pt-6 pb-2 border-b border-[#E5E1D8]/60"
-                >
-                  {para.replace("## ", "")}
-                </h2>
-              );
-            }
-            if (para.startsWith("> ")) {
-              return (
-                <blockquote
-                  key={i}
-                  className="border-l-4 border-[#A84C32] pl-4 italic text-[#5C5A55]"
-                >
-                  {para.replace("> ", "")}
-                </blockquote>
-              );
-            }
-            return <p key={i}>{para}</p>;
-          })
-        )}
-
-        {/* Appreciation Button */}
-        <div className="pt-10 pb-6 flex items-center justify-center">
-          <button
-            onClick={toggleLike}
-            data-testid="like-blog-button"
-            className={`flex items-center gap-3 px-8 py-3.5 rounded-full font-ui text-sm font-semibold transition-all cursor-pointer shadow-xs hover:shadow-md ${liked
-                ? "bg-[#A84C32] text-white"
-                : "bg-white border border-[#E5E1D8] text-[#1A1A1A] hover:border-[#A84C32]"
-              }`}
-          >
-            <Heart className={`h-5 w-5 ${liked ? "fill-white" : "text-[#A84C32]"}`} />
-            <span>{liked ? "Appreciated" : "Appreciate Essay"}</span>
-            <span className="opacity-80">({likesCount})</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Reflections / Comments */}
-      <div className="max-w-3xl mx-auto px-6">
-        <CommentThread
-          blogId={blog.id}
-          comments={comments}
-          onRefresh={loadComments}
+    <>
+      {jsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
-      </div>
-    </article>
+      )}
+      <BlogDetailClient id={id} slug={slug} initialBlog={blog} />
+    </>
   );
 }
