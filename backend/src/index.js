@@ -16,6 +16,8 @@ import notificationRoutes from './routes/notifications.js';
 import uploadRoutes from './routes/upload.js';
 import profileRoutes from './routes/profile.js';
 import exploreRoutes from './routes/explore.js';
+import commentsRoutes from './routes/comments.js';
+import contactRoutes from './routes/contact.js';
 import { getStorageMode, isCloudinaryEnabled } from './services/storage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -36,6 +38,7 @@ const allowedOrigins = [
   'http://localhost:5174',
   'http://localhost:5175',
   'http://localhost:3000',
+  'http://localhost:3001',
   'https://osarthi.onrender.com'
 ];
 
@@ -83,6 +86,8 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/explore', exploreRoutes);
+app.use('/api/comments', commentsRoutes);
+app.use('/api/contact', contactRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
