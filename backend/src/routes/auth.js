@@ -4,6 +4,8 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import User from '../models/User.js';
 import Class from '../models/Class.js';
+import OtpVerification from '../models/OtpVerification.js';
+import { sendOtpEmail } from '../utils/emailService.js';
 import {
   hashPassword,
   comparePassword,
@@ -78,7 +80,7 @@ router.get('/me', async (req, res, next) => {
 });
 
 router.post(
-  '/register',
+  '/send-otp',
   [
     body('name').trim().notEmpty().withMessage('Name is required'),
     body('email').isEmail().withMessage('Valid email required'),
@@ -88,8 +90,10 @@ router.post(
   async (req, res, next) => {
     try {
       if (!validate(req, res)) return;
-      const { name, email, password, role, classId, className } = req.body;
-      const existing = await User.findOne({ email: email.toLowerCase() });
+      const { name, email, role, classId, className } = req.body;
+      const cleanEmail = email.toLowerCase();
+
+      const existing = await User.findOne({ email: cleanEmail });
       if (existing) return res.status(409).json({ message: 'Email already registered' });
 
       let resolvedClassId = classId;
@@ -98,28 +102,83 @@ router.post(
           const cls = await Class.findOne({
             name: { $regex: new RegExp(`^${className.trim()}$`, 'i') },
           });
-          if (!cls) {
-            return res.status(400).json({
-              message: 'Class not found. Ask your teacher to create this class first.',
-            });
-          }
-          resolvedClassId = cls._id;
+          if (cls) resolvedClassId = cls._id;
         }
-        if (!resolvedClassId) {
-          return res.status(400).json({ message: 'Class selection required for students' });
+        if (resolvedClassId) {
+          const cls = await Class.findById(resolvedClassId);
+          if (!cls) resolvedClassId = undefined;
         }
-        const cls = await Class.findById(resolvedClassId);
-        if (!cls) return res.status(400).json({ message: 'Invalid class' });
+      }
+
+      // Generate 6-digit OTP
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+      // Store OTP
+      await OtpVerification.deleteMany({ email: cleanEmail });
+      await OtpVerification.create({
+        email: cleanEmail,
+        otp,
+      });
+
+      // Send OTP Email
+      await sendOtpEmail(cleanEmail, otp, name);
+
+      res.json({ message: 'Verification code sent to your email' });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.post(
+  '/register',
+  [
+    body('name').trim().notEmpty().withMessage('Name is required'),
+    body('email').isEmail().withMessage('Valid email required'),
+    body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+    body('role').isIn(['student', 'teacher', 'admin']).withMessage('Invalid role'),
+    body('otp').trim().isLength({ min: 6, max: 6 }).withMessage('6-digit OTP code required'),
+  ],
+  async (req, res, next) => {
+    try {
+      if (!validate(req, res)) return;
+      const { name, email, password, role, classId, className, otp } = req.body;
+      const cleanEmail = email.toLowerCase();
+
+      const existing = await User.findOne({ email: cleanEmail });
+      if (existing) return res.status(409).json({ message: 'Email already registered' });
+
+      // Verify OTP
+      const otpRecord = await OtpVerification.findOne({ email: cleanEmail, otp });
+      if (!otpRecord) {
+        return res.status(400).json({ message: 'Invalid or expired verification code' });
+      }
+
+      let resolvedClassId = classId;
+      if (role === 'student') {
+        if (!resolvedClassId && className?.trim()) {
+          const cls = await Class.findOne({
+            name: { $regex: new RegExp(`^${className.trim()}$`, 'i') },
+          });
+          if (cls) resolvedClassId = cls._id;
+        }
+        if (resolvedClassId) {
+          const cls = await Class.findById(resolvedClassId);
+          if (!cls) resolvedClassId = undefined;
+        }
       }
 
       const passwordHash = await hashPassword(password);
       const user = await User.create({
         name,
-        email: email.toLowerCase(),
+        email: cleanEmail,
         passwordHash,
         role,
         classRef: role === 'student' ? resolvedClassId : undefined,
       });
+
+      // Delete used OTP
+      await OtpVerification.deleteMany({ email: cleanEmail });
 
       const tokens = await issueTokens(user, res);
       res.status(201).json(tokens);
@@ -128,6 +187,7 @@ router.post(
     }
   }
 );
+
 
 router.post(
   '/login',
@@ -261,15 +321,11 @@ router.post('/oauth-register', async (req, res, next) => {
         const cls = await Class.findOne({
           name: { $regex: new RegExp(`^${className.trim()}$`, 'i') },
         });
-        if (!cls) {
-          return res.status(400).json({
-            message: 'Class not found. Ask your teacher to create this class first.',
-          });
-        }
-        resolvedClassId = cls._id;
+        if (cls) resolvedClassId = cls._id;
       }
-      if (!resolvedClassId) {
-        return res.status(400).json({ message: 'Class selection required for students' });
+      if (resolvedClassId) {
+        const cls = await Class.findById(resolvedClassId);
+        if (!cls) resolvedClassId = undefined;
       }
     }
 

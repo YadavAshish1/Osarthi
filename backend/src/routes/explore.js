@@ -3,10 +3,23 @@ import Class from '../models/Class.js';
 import Subject from '../models/Subject.js';
 import Topic from '../models/Topic.js';
 import Content from '../models/Content.js';
+import User from '../models/User.js';
 import SeoSettings from '../models/SeoSettings.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 
 const router = Router();
+
+/** GET /api/explore/teachers - all teachers (public) */
+router.get('/teachers', async (req, res, next) => {
+  try {
+    const teachers = await User.find({ role: 'teacher' })
+      .sort({ name: 1 })
+      .select('name _id avatar');
+    res.json(teachers);
+  } catch (err) {
+    next(err);
+  }
+});
 
 /** GET /api/explore/classes - all classes (public) */
 router.get('/classes', async (req, res, next) => {
@@ -53,12 +66,14 @@ router.get('/topics', async (req, res, next) => {
 /** GET /api/explore/blogs?topicId=&classId=&subjectId=&search=&page=&limit= */
 router.get('/blogs', async (req, res, next) => {
   try {
-    const { topicId, classId, subjectId, search, page = 1, limit = 12 } = req.query;
+    const { topicId, classId, subjectId, teacherId, search, page = 1, limit = 12 } = req.query;
     const filter = { published: true };
 
     if (topicId) filter.topicRef = topicId;
     else if (subjectId) filter.subjectRef = subjectId;
     else if (classId) filter.classRef = classId;
+
+    if (teacherId) filter.createdBy = teacherId;
 
     if (search) {
       filter.title = { $regex: search, $options: 'i' };
@@ -70,11 +85,11 @@ router.get('/blogs', async (req, res, next) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit))
-        .select('title createdAt updatedAt topicRef subjectRef classRef createdBy')
+        .select('title blocks createdAt updatedAt topicRef subjectRef classRef createdBy')
         .populate('classRef', 'name')
         .populate('subjectRef', 'name')
         .populate('topicRef', 'name')
-        .populate('createdBy', 'name'),
+        .populate('createdBy', 'name avatar'),
       Content.countDocuments(filter),
     ]);
 
@@ -100,7 +115,7 @@ router.get('/featured', async (req, res, next) => {
       .populate('classRef', 'name')
       .populate('subjectRef', 'name')
       .populate('topicRef', 'name')
-      .populate('createdBy', 'name');
+      .populate('createdBy', 'name avatar');
     res.json(items);
   } catch (err) {
     next(err);
@@ -114,7 +129,7 @@ router.get('/blogs/:id', async (req, res, next) => {
       .populate('classRef', 'name')
       .populate('subjectRef', 'name')
       .populate('topicRef', 'name')
-      .populate('createdBy', 'name');
+      .populate('createdBy', 'name avatar');
     if (!content) return res.status(404).json({ message: 'Blog not found or not published' });
     res.json(content);
   } catch (err) {
