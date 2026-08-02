@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, BookOpen, GraduationCap, Briefcase, Clock, Calendar, Share2, Check } from "lucide-react";
+import { ArrowLeft, BookOpen, GraduationCap, Briefcase, Clock, Calendar, Share2, Check, ChevronDown, Loader2 } from "lucide-react";
 import { api, BlogItem, TeacherProfile, mapContentToBlog, FALLBACK_BLOGS, getDefaultSubjectCover } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -10,14 +10,22 @@ export default function TeacherProfileClient({
   id,
   initialTeacher,
   initialBlogs,
+  initialTotal = 0,
+  initialHasMore = false,
 }: {
   id: string;
   initialTeacher: TeacherProfile | null;
   initialBlogs: BlogItem[];
+  initialTotal?: number;
+  initialHasMore?: boolean;
 }) {
   const [teacher, setTeacher] = useState<TeacherProfile | null>(initialTeacher);
   const [blogs, setBlogs] = useState<BlogItem[]>(initialBlogs);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(initialTotal || initialBlogs.length);
+  const [hasMore, setHasMore] = useState(initialHasMore);
   const [loading, setLoading] = useState(!initialTeacher);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -50,17 +58,51 @@ export default function TeacherProfileClient({
     }
   };
 
+  const handleDiscoverMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const nextPage = page + 1;
+    const rawId = id.match(/([a-f0-9]{24})$/)?.[1] || id;
+
+    try {
+      const { data } = await api.get(`/explore/teachers/${rawId}`, {
+        params: { page: nextPage, limit: 20 },
+      });
+
+      if (data && Array.isArray(data.blogs)) {
+        const mapped = data.blogs.map((b: any) => mapContentToBlog(b));
+        setBlogs((prev) => [...prev, ...mapped]);
+        setPage(nextPage);
+        setHasMore(data.hasMore ?? false);
+        if (data.total !== undefined) setTotalCount(data.total);
+      }
+    } catch {
+      toast.error("Failed to load more insights.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
   useEffect(() => {
+    if (initialTeacher) {
+      setLoading(false);
+      return;
+    }
+
     (async () => {
       const rawId = id.match(/([a-f0-9]{24})$/)?.[1] || id;
       try {
-        const { data } = await api.get(`/explore/teachers/${rawId}`);
+        const { data } = await api.get(`/explore/teachers/${rawId}`, {
+          params: { page: 1, limit: 20 },
+        });
         if (data && data.teacher) {
           setTeacher(data.teacher);
           if (Array.isArray(data.blogs)) {
             const mapped = data.blogs.map((b: any) => mapContentToBlog(b));
             setBlogs(mapped);
           }
+          setTotalCount(data.total || data.blogs?.length || 0);
+          setHasMore(data.hasMore ?? false);
           setLoading(false);
           return;
         }
@@ -90,6 +132,8 @@ export default function TeacherProfileClient({
           ],
         });
         setBlogs(activeBlogs);
+        setTotalCount(activeBlogs.length);
+        setHasMore(false);
       }
       setLoading(false);
     })();
@@ -271,66 +315,95 @@ export default function TeacherProfileClient({
           <div className="flex items-center gap-3">
             <BookOpen className="h-5 w-5 text-[#A84C32]" />
             <h2 className="font-serif-display text-2xl md:text-3xl font-semibold text-[#1A1A1A]">
-              Authored Insights ({blogs.length})
+              Authored Insights ({totalCount || blogs.length})
             </h2>
           </div>
         </div>
 
         {blogs.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {blogs.map((blog) => {
-              const coverImg = blog.cover || getDefaultSubjectCover(blog.subject);
-              return (
-                <article
-                  key={blog.id}
-                  className="group bg-white rounded-2xl border border-[#E5E1D8] overflow-hidden flex flex-col hover:border-[#A84C32] transition-all duration-300 shadow-xs hover:shadow-md"
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {blogs.map((blog) => {
+                const coverImg = blog.cover || getDefaultSubjectCover(blog.subject);
+                return (
+                  <article
+                    key={blog.id}
+                    className="group bg-white rounded-2xl border border-[#E5E1D8] overflow-hidden flex flex-col hover:border-[#A84C32] transition-all duration-300 shadow-xs hover:shadow-md"
+                  >
+                    <Link href={`/blog/${blog.slug}`} className="block overflow-hidden relative aspect-16/9">
+                      {coverImg ? (
+                        <img
+                          src={coverImg}
+                          alt={blog.title}
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-[#F5F2EB] flex items-center justify-center text-[#5C5A55] font-serif-display">
+                          Medhashine Insight
+                        </div>
+                      )}
+                      <div className="absolute top-3 left-3 flex gap-2">
+                        <span className="text-[11px] font-ui uppercase tracking-wider bg-white/90 backdrop-blur-xs text-[#A84C32] px-2.5 py-1 rounded-full font-semibold border border-[#E5E1D8]">
+                          {blog.subject}
+                        </span>
+                      </div>
+                    </Link>
+
+                    <div className="p-6 flex-1 flex flex-col justify-between">
+                      <div>
+                        <h3 className="font-serif-display text-xl font-semibold text-[#1A1A1A] group-hover:text-[#A84C32] transition-colors leading-snug">
+                          <Link href={`/blog/${blog.slug}`}>{blog.title}</Link>
+                        </h3>
+                        <p className="mt-3 font-serif-body text-sm text-[#5C5A55] line-clamp-2 leading-relaxed">
+                          {blog.excerpt}
+                        </p>
+                      </div>
+
+                      <div className="mt-6 pt-4 border-t border-[#E5E1D8]/60 flex items-center justify-between text-xs font-ui text-[#5C5A55]">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="h-3.5 w-3.5 text-[#A84C32]" />
+                          <span>{blog.read_minutes} min read</span>
+                        </div>
+                        <Link
+                          href={`/blog/${blog.slug}`}
+                          className="text-[#A84C32] font-semibold hover:underline"
+                        >
+                          Read Insight →
+                        </Link>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            {hasMore && (
+              <div className="mt-12 text-center">
+                <button
+                  onClick={handleDiscoverMore}
+                  disabled={loadingMore}
+                  className="inline-flex items-center gap-2 px-8 py-3.5 rounded-full font-ui text-sm font-semibold bg-white border border-[#E5E1D8] text-[#1A1A1A] hover:border-[#A84C32] hover:text-[#A84C32] transition-all cursor-pointer shadow-xs hover:shadow-md disabled:opacity-60"
                 >
-                  <Link href={`/blog/${blog.slug}`} className="block overflow-hidden relative aspect-16/9">
-                    {coverImg ? (
-                      <img
-                        src={coverImg}
-                        alt={blog.title}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-[#F5F2EB] flex items-center justify-center text-[#5C5A55] font-serif-display">
-                        Medhashine Insight
-                      </div>
-                    )}
-                    <div className="absolute top-3 left-3 flex gap-2">
-                      <span className="text-[11px] font-ui uppercase tracking-wider bg-white/90 backdrop-blur-xs text-[#A84C32] px-2.5 py-1 rounded-full font-semibold border border-[#E5E1D8]">
-                        {blog.subject}
-                      </span>
-                    </div>
-                  </Link>
-
-                  <div className="p-6 flex-1 flex flex-col justify-between">
-                    <div>
-                      <h3 className="font-serif-display text-xl font-semibold text-[#1A1A1A] group-hover:text-[#A84C32] transition-colors leading-snug">
-                        <Link href={`/blog/${blog.slug}`}>{blog.title}</Link>
-                      </h3>
-                      <p className="mt-3 font-serif-body text-sm text-[#5C5A55] line-clamp-2 leading-relaxed">
-                        {blog.excerpt}
-                      </p>
-                    </div>
-
-                    <div className="mt-6 pt-4 border-t border-[#E5E1D8]/60 flex items-center justify-between text-xs font-ui text-[#5C5A55]">
-                      <div className="flex items-center gap-1.5">
-                        <Clock className="h-3.5 w-3.5 text-[#A84C32]" />
-                        <span>{blog.read_minutes} min read</span>
-                      </div>
-                      <Link
-                        href={`/blog/${blog.slug}`}
-                        className="text-[#A84C32] font-semibold hover:underline"
-                      >
-                        Read Insight →
-                      </Link>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
+                  {loadingMore ? (
+                    <>
+                      <Loader2 className="h-4 w-4 text-[#A84C32] animate-spin" />
+                      <span>Loading…</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Discover More Insights</span>
+                      <ChevronDown className="h-4 w-4 text-[#A84C32]" />
+                    </>
+                  )}
+                </button>
+                {totalCount > 0 && (
+                  <p className="mt-2 text-xs font-ui text-[#5C5A55]">
+                    Showing {blogs.length} of {totalCount} insights
+                  </p>
+                )}
+              </div>
+            )}
+          </>
         ) : (
           <div className="text-center py-16 bg-white rounded-2xl border border-[#E5E1D8] p-8">
             <BookOpen className="h-10 w-10 text-[#5C5A55] mx-auto mb-3 opacity-50" />

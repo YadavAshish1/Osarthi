@@ -12,20 +12,30 @@ function extractTeacherIdFromSlug(slug: string): string {
   return slug;
 }
 
-async function fetchTeacherServer(slugOrId: string): Promise<{ teacher: TeacherProfile | null; blogs: BlogItem[] }> {
+async function fetchTeacherServer(slugOrId: string): Promise<{
+  teacher: TeacherProfile | null;
+  blogs: BlogItem[];
+  total: number;
+  hasMore: boolean;
+}> {
   const id = extractTeacherIdFromSlug(slugOrId);
   try {
-    const res = await fetch(`${API}/explore/teachers/${id}`, { next: { revalidate: 60 } });
+    const res = await fetch(`${API}/explore/teachers/${id}?page=1&limit=20`, { next: { revalidate: 60 } });
     if (res.ok) {
       const data = await res.json();
       if (data && data.teacher) {
         const blogs = Array.isArray(data.blogs) ? data.blogs.map((b: any) => mapContentToBlog(b)) : [];
-        return { teacher: data.teacher, blogs };
+        return {
+          teacher: data.teacher,
+          blogs,
+          total: data.total || blogs.length,
+          hasMore: data.hasMore ?? false,
+        };
       }
     }
-  } catch {}
+  } catch { }
 
-  return { teacher: null, blogs: [] };
+  return { teacher: null, blogs: [], total: 0, hasMore: false };
 }
 
 export async function generateMetadata({
@@ -78,23 +88,23 @@ export default async function TeacherProfilePage({
   const resolvedParams = await params;
   const id = resolvedParams.id || "";
 
-  const { teacher, blogs } = await fetchTeacherServer(id);
+  const { teacher, blogs, total, hasMore } = await fetchTeacherServer(id);
 
   // Structured Data (JSON-LD) for Schema.org Person / Educator for Google Search indexing
   const jsonLd = teacher
     ? {
-        "@context": "https://schema.org",
-        "@type": "Person",
-        name: teacher.name,
-        image: teacher.avatar || undefined,
-        description: teacher.bio || undefined,
-        jobTitle: "Educator / Faculty",
-        worksFor: {
-          "@type": "EducationalOrganization",
-          name: "Medhashine",
-          url: "https://www.medhashine.in",
-        },
-      }
+      "@context": "https://schema.org",
+      "@type": "Person",
+      name: teacher.name,
+      image: teacher.avatar || undefined,
+      description: teacher.bio || undefined,
+      jobTitle: "Educator / Faculty",
+      worksFor: {
+        "@type": "EducationalOrganization",
+        name: "Medhashine",
+        url: "https://www.medhashine.in",
+      },
+    }
     : null;
 
   return (
@@ -105,7 +115,13 @@ export default async function TeacherProfilePage({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       )}
-      <TeacherProfileClient id={id} initialTeacher={teacher} initialBlogs={blogs} />
+      <TeacherProfileClient
+        id={id}
+        initialTeacher={teacher}
+        initialBlogs={blogs}
+        initialTotal={total}
+        initialHasMore={hasMore}
+      />
     </>
   );
 }
