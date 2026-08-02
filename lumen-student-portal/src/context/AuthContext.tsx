@@ -29,6 +29,7 @@ interface AuthContextType {
   openAuth: (mode?: "login" | "register") => void;
   closeAuth: () => void;
   setAuthModal: React.Dispatch<React.SetStateAction<AuthModalState>>;
+  updateUser: (updates: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -184,6 +185,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAuthModal((s) => ({ ...s, open: false }));
   }, []);
 
+  const updateUser = useCallback((updates: Partial<User>) => {
+    setUser((prev) => (prev ? { ...prev, ...updates } : null));
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -198,6 +203,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         openAuth,
         closeAuth,
         setAuthModal,
+        updateUser,
       }}
     >
       {children}
