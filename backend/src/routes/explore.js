@@ -14,8 +14,33 @@ router.get('/teachers', async (req, res, next) => {
   try {
     const teachers = await User.find({ role: 'teacher' })
       .sort({ name: 1 })
-      .select('name _id avatar');
+      .select('name _id avatar bio education experience');
     res.json(teachers);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /api/explore/teachers/:id - single teacher public profile & published blogs */
+router.get('/teachers/:id', async (req, res, next) => {
+  try {
+    const user = await User.findById(req.params.id).select(
+      'name avatar bio education experience role createdAt'
+    );
+    if (!user) return res.status(404).json({ message: 'Teacher profile not found' });
+
+    const blogs = await Content.find({ createdBy: user._id, published: true })
+      .sort({ createdAt: -1 })
+      .select('title blocks createdAt updatedAt topicRef subjectRef classRef createdBy')
+      .populate('classRef', 'name')
+      .populate('subjectRef', 'name')
+      .populate('topicRef', 'name')
+      .populate('createdBy', 'name avatar');
+
+    res.json({
+      teacher: user,
+      blogs,
+    });
   } catch (err) {
     next(err);
   }
