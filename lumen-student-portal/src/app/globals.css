@@ -29,3 +29,19 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
+
+/* Swiper custom pagination accent theme */
+.swiper-accent-theme {
+  position: relative;
+}
+
+.swiper-accent-theme .swiper-button-next,
+.swiper-accent-theme .swiper-button-prev {
+  display: none !important;
+}
+
+.swiper-accent-theme .swiper-pagination-bullet-active {
+  background-color: #A84C32 !important;
+  width: 18px !important;
+  border-radius: 9999px !important;
+}

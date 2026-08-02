@@ -27,6 +27,8 @@ const userSchema = new mongoose.Schema(
         _id: false,
       },
     ],
+    savedBlogs: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Content' }],
+    likedBlogs: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Content' }],
   },
   { timestamps: true }
 );

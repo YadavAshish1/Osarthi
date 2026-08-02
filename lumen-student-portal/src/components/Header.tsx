@@ -94,13 +94,25 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
 
           {user ? (
             <div className="flex items-center gap-4 pl-4 border-l border-[#E5E1D8]">
-              <span
-                className="flex items-center gap-2 text-[#1A1A1A]"
+              <Link
+                href="/profile"
+                className="flex items-center gap-2.5 text-[#1A1A1A] hover:text-[#A84C32] transition-colors"
                 data-testid="header-user-name"
+                title="View Profile & Saved Insights"
               >
-                <UserIcon className="h-4 w-4 text-[#A84C32]" />
+                {user.avatar ? (
+                  <img
+                    src={user.avatar}
+                    alt={user.name}
+                    className="w-7 h-7 rounded-full object-cover border border-[#E5E1D8] shrink-0 shadow-2xs"
+                  />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-[#F5F2EB] text-[#A84C32] border border-[#E5E1D8] flex items-center justify-center shrink-0">
+                    <UserIcon className="h-4 w-4" />
+                  </div>
+                )}
                 <span className="font-medium">{user.name}</span>
-              </span>
+              </Link>
               <button
                 onClick={() => logout()}
                 data-testid="logout-button"
@@ -170,10 +182,23 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
             </Link>
             {user ? (
               <div className="pt-4 border-t border-[#E5E1D8] flex items-center justify-between">
-                <span className="font-medium text-[#1A1A1A] flex items-center gap-2">
-                  <UserIcon className="h-4 w-4 text-[#A84C32]" />
+                <Link
+                  href="/profile"
+                  className="font-medium text-[#1A1A1A] hover:text-[#A84C32] flex items-center gap-2.5"
+                >
+                  {user.avatar ? (
+                    <img
+                      src={user.avatar}
+                      alt={user.name}
+                      className="w-7 h-7 rounded-full object-cover border border-[#E5E1D8] shrink-0"
+                    />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-[#F5F2EB] text-[#A84C32] border border-[#E5E1D8] flex items-center justify-center shrink-0">
+                      <UserIcon className="h-4 w-4" />
+                    </div>
+                  )}
                   {user.name}
-                </span>
+                </Link>
                 <button
                   onClick={() => logout()}
                   className="text-sm text-[#A84C32] font-medium"
