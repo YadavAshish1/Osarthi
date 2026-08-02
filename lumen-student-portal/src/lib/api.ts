@@ -67,6 +67,34 @@ export interface Facets {
   topics: string[];
 }
 
+export interface EducationItem {
+  institution: string;
+  degree: string;
+  year?: string;
+}
+
+export interface ExperienceItem {
+  title: string;
+  organization: string;
+  duration?: string;
+}
+
+export interface TeacherProfile {
+  _id: string;
+  name: string;
+  avatar?: string;
+  bio?: string;
+  role?: string;
+  education?: EducationItem[];
+  experience?: ExperienceItem[];
+  createdAt?: string;
+}
+
+export interface TeacherProfileResponse {
+  teacher: TeacherProfile;
+  blogs: BlogItem[];
+}
+
 export interface CommentItem {
   id: string;
   blog_id: string;
@@ -81,6 +109,16 @@ export interface CommentItem {
 }
 
 // ─── Mapper: backend Content → BlogItem ────────────────────────────────────
+
+/**
+ * Generate a URL-friendly slug for a teacher profile.
+ * e.g. "Dr. Aisha Verma" + "6839abc123" → "dr-aisha-verma-6839abc123"
+ */
+export function getTeacherSlug(id: string, name: string = "educator"): string {
+  if (!id) return "";
+  const cleanName = slugify(name);
+  return `${cleanName}-${id}`;
+}
 
 /**
  * Generate a URL-friendly slug from a title.
@@ -191,9 +229,9 @@ export const FALLBACK_BLOGS: BlogItem[] = [
     excerpt: "From walking to rocket propulsion, every action has an equal and opposite reaction — and it shapes the world we live in.",
     content: "In every discipline, the questions we choose to ask reveal the shape of our curiosity. This piece invites you to slow down — to notice what is often hidden in plain sight.\n\n## Starting with wonder\nThe world does not offer its secrets easily. It waits for the patient observer, the one willing to look twice at the ordinary. As students, your greatest instrument is not memory but attention — the deliberate quality of noticing.\n\n## The idea in motion\nIdeas travel best when they are anchored in experience. Consider a simple observation from your own life and hold it against the framework we will build. The point is not to master a formula, but to feel how it clarifies what was murky moments ago.\n\n## Where this leads\nYou are not learning to pass an exam. You are learning to see. And once you have seen, the world quietly rearranges itself around your understanding. Carry this piece with you into your next quiet moment — and let the questions surface on their own.",
     cover: "https://images.unsplash.com/photo-1509869175650-a1d97972541a?crop=entropy&cs=srgb&fm=jpg&q=85",
-    teacher_id: "t-aisha",
-    teacher_name: "Dr. Aisha Verma",
-    teacher_avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?crop=entropy&cs=srgb&fm=jpg&q=85",
+    teacher_id: "t-ramesh",
+    teacher_name: "Dr. Ramesh Yaduvanshi",
+    teacher_avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?crop=entropy&cs=srgb&fm=jpg&q=85",
     class_level: "Grade 10",
     subject: "Physics",
     topic: "Mechanics",
@@ -239,7 +277,7 @@ export const FALLBACK_BLOGS: BlogItem[] = [
 
 export const FALLBACK_FACETS: Facets = {
   teachers: [
-    { id: "t-aisha", name: "Dr. Aisha Verma" },
+    { id: "t-ramesh", name: "Dr. Ramesh Yaduvanshi" },
     { id: "t-rohan", name: "Mr. Rohan Iyer" },
     { id: "t-meera", name: "Ms. Meera Kapoor" },
   ],

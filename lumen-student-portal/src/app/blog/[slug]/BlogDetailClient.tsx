@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { ArrowLeft, Clock, Heart, Share2, Check } from "lucide-react";
-import { api, BlogItem, CommentItem, FALLBACK_BLOGS, mapContentToBlog } from "@/lib/api";
+import { api, BlogItem, CommentItem, FALLBACK_BLOGS, mapContentToBlog, getTeacherSlug } from "@/lib/api";
 import { renderMarkedText, mediaUrl } from "@/lib/renderMarks";
 import CommentThread from "@/components/CommentThread";
 import { useAuth } from "@/context/AuthContext";
@@ -172,31 +172,40 @@ export default function BlogDetailClient({
         </p>
 
         <div className="mt-8 flex items-center gap-4 pt-6 border-t border-[#E5E1D8]">
-          {blog.teacher_avatar && !avatarError ? (
-            <img
-              src={blog.teacher_avatar}
-              alt={blog.teacher_name}
-              onError={() => setAvatarError(true)}
-              className="w-12 h-12 rounded-full object-cover border border-[#E5E1D8] shrink-0"
-            />
-          ) : (
-            <div className="w-12 h-12 rounded-full bg-[#1A1A1A] text-white flex items-center justify-center text-sm font-bold uppercase shrink-0">
-              {blog.teacher_name?.[0] || "T"}
+          <Link
+            href={`/teachers/${getTeacherSlug(blog.teacher_id, blog.teacher_name)}`}
+            data-testid="author-profile-link"
+            className="flex items-center gap-4 flex-1 group transition-colors"
+          >
+            {blog.teacher_avatar && !avatarError ? (
+              <img
+                src={blog.teacher_avatar}
+                alt={blog.teacher_name}
+                onError={() => setAvatarError(true)}
+                className="w-12 h-12 rounded-full object-cover border border-[#E5E1D8] shrink-0 group-hover:border-[#A84C32] transition-colors"
+              />
+            ) : (
+              <div className="w-12 h-12 rounded-full bg-[#1A1A1A] text-white flex items-center justify-center text-sm font-bold uppercase shrink-0 group-hover:bg-[#A84C32] transition-colors">
+                {blog.teacher_name?.[0] || "T"}
+              </div>
+            )}
+            <div>
+              <div className="font-ui text-sm font-semibold text-[#1A1A1A] group-hover:text-[#A84C32] transition-colors flex items-center gap-1.5">
+                <span>{blog.teacher_name}</span>
+                <span className="text-[10px] font-normal uppercase tracking-wider bg-[#F5F2EB] text-[#A84C32] px-2 py-0.5 rounded-full border border-[#E5E1D8]">
+                  Educator
+                </span>
+              </div>
+              <div className="font-ui text-xs text-[#5C5A55]">
+                Published on{" "}
+                {new Date(blog.created_at || Date.now()).toLocaleDateString(undefined, {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </div>
             </div>
-          )}
-          <div className="flex-1">
-            <div className="font-ui text-sm font-semibold text-[#1A1A1A]">
-              {blog.teacher_name}
-            </div>
-            <div className="font-ui text-xs text-[#5C5A55]">
-              Published on{" "}
-              {new Date(blog.created_at || Date.now()).toLocaleDateString(undefined, {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </div>
-          </div>
+          </Link>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 font-ui text-xs text-[#5C5A55] bg-[#F5F2EB] px-3 py-1.5 rounded-full">
               <Clock className="h-3.5 w-3.5 text-[#A84C32]" />
@@ -320,7 +329,7 @@ export default function BlogDetailClient({
               }`}
           >
             <Heart className={`h-5 w-5 ${liked ? "fill-white" : "text-[#A84C32]"}`} />
-            <span>{liked ? "Appreciated" : "Appreciate Essay"}</span>
+            <span>{liked ? "Appreciated" : "Appreciate Insight"}</span>
             <span className="opacity-80">({likesCount})</span>
           </button>
 

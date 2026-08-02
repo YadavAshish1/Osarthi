@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { API, FALLBACK_BLOGS, slugify } from "@/lib/api";
+import { API, FALLBACK_BLOGS, slugify, getTeacherSlug } from "@/lib/api";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.medhashine.in";
@@ -58,5 +58,33 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.9,
   }));
 
-  return [...staticRoutes, ...blogRoutes];
+  let teacherRoutes: MetadataRoute.Sitemap = [];
+  try {
+    const tRes = await fetch(`${API}/explore/teachers`, { next: { revalidate: 3600 } });
+    if (tRes.ok) {
+      const teachers = await tRes.json();
+      if (Array.isArray(teachers)) {
+        teacherRoutes = teachers.map((t: any) => ({
+          url: `${baseUrl}/teachers/${getTeacherSlug(t._id, t.name)}`,
+          lastModified: new Date(),
+          changeFrequency: "monthly",
+          priority: 0.8,
+        }));
+      }
+    }
+  } catch {}
+
+  if (teacherRoutes.length === 0) {
+    const uniqueTeachers = Array.from(
+      new Map(FALLBACK_BLOGS.map((b) => [b.teacher_id, b.teacher_name])).entries()
+    );
+    teacherRoutes = uniqueTeachers.map(([id, name]) => ({
+      url: `${baseUrl}/teachers/${getTeacherSlug(id, name)}`,
+      lastModified: new Date(),
+      changeFrequency: "monthly",
+      priority: 0.8,
+    }));
+  }
+
+  return [...staticRoutes, ...blogRoutes, ...teacherRoutes];
 }
