@@ -190,11 +190,8 @@ export default function BlogDetailClient({
               </div>
             )}
             <div>
-              <div className="font-ui text-sm font-semibold text-[#1A1A1A] group-hover:text-[#A84C32] transition-colors flex items-center gap-1.5">
-                <span>{blog.teacher_name}</span>
-                <span className="text-[10px] font-normal uppercase tracking-wider bg-[#F5F2EB] text-[#A84C32] px-2 py-0.5 rounded-full border border-[#E5E1D8]">
-                  Educator
-                </span>
+              <div className="font-ui text-sm font-semibold text-[#1A1A1A] group-hover:text-[#A84C32] transition-colors">
+                {blog.teacher_name}
               </div>
               <div className="font-ui text-xs text-[#5C5A55]">
                 Published on{" "}

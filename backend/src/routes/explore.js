@@ -21,25 +21,38 @@ router.get('/teachers', async (req, res, next) => {
   }
 });
 
-/** GET /api/explore/teachers/:id - single teacher public profile & published blogs */
+/** GET /api/explore/teachers/:id - single teacher public profile & paginated published blogs */
 router.get('/teachers/:id', async (req, res, next) => {
   try {
+    const { page = 1, limit = 20 } = req.query;
     const user = await User.findById(req.params.id).select(
       'name avatar bio education experience role createdAt'
     );
     if (!user) return res.status(404).json({ message: 'Teacher profile not found' });
 
-    const blogs = await Content.find({ createdBy: user._id, published: true })
-      .sort({ createdAt: -1 })
-      .select('title blocks createdAt updatedAt topicRef subjectRef classRef createdBy')
-      .populate('classRef', 'name')
-      .populate('subjectRef', 'name')
-      .populate('topicRef', 'name')
-      .populate('createdBy', 'name avatar');
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const filter = { createdBy: user._id, published: true };
+
+    const [blogs, total] = await Promise.all([
+      Content.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .select('title blocks createdAt updatedAt topicRef subjectRef classRef createdBy')
+        .populate('classRef', 'name')
+        .populate('subjectRef', 'name')
+        .populate('topicRef', 'name')
+        .populate('createdBy', 'name avatar'),
+      Content.countDocuments(filter),
+    ]);
 
     res.json({
       teacher: user,
       blogs,
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      hasMore: skip + blogs.length < total,
     });
   } catch (err) {
     next(err);
