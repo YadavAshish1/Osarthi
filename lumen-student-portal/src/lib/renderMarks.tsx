@@ -36,10 +36,10 @@ export interface ContentBlock {
 
 // ─── Render Marked Text (preserves color, bold, italic, etc.) ───────────────
 
-function splitLines(text: string, keyPrefix: string): React.ReactNode[] {
+function splitLines(text: string, keyPrefix: string): React.ReactElement[] {
   return text.split("\n").flatMap((line, i, arr) => {
-    const el = <span key={`${keyPrefix}-l${i}`}>{line}</span>;
-    return i < arr.length - 1 ? [el, <br key={`${keyPrefix}-br${i}`} />] : [el];
+    const el = <React.Fragment key={`${keyPrefix}-${i}`}>{line}</React.Fragment>;
+    return i < arr.length - 1 ? [el, <br key={`${keyPrefix}-br-${i}`} />] : [el];
   });
 }
 

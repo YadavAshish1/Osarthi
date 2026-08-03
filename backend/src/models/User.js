@@ -29,6 +29,7 @@ const userSchema = new mongoose.Schema(
     ],
     savedBlogs: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Content' }],
     likedBlogs: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Content' }],
+    savedTeachers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   },
   { timestamps: true }
 );

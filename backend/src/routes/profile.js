@@ -187,6 +187,7 @@ router.get('/activity', async (req, res, next) => {
       savedBlogs: savedBlogs || [],
       likedBlogs: likedBlogs || [],
       commentedBlogs: commentedBlogs || [],
+      savedTeachers: user.savedTeachers || [],
     });
   } catch (err) {
     next(err);
@@ -222,6 +223,70 @@ router.post('/likes/toggle', async (req, res, next) => {
     res.json({
       liked: !isAlreadyLiked,
       message: !isAlreadyLiked ? 'Appreciated insight' : 'Unliked insight',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /api/profile/saved-teachers — list saved/liked teachers for current user */
+router.get('/saved-teachers', async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const savedTeacherIds = (user.savedTeachers || []).filter((id) => mongoose.Types.ObjectId.isValid(id));
+    const teachers = await User.find({ _id: { $in: savedTeacherIds } }).select(
+      'name avatar bio education experience createdAt'
+    );
+
+    // Aggregate published blogs count per teacher
+    const blogsCounts = await Content.aggregate([
+      { $match: { published: true, createdBy: { $in: savedTeacherIds } } },
+      { $group: { _id: '$createdBy', count: { $sum: 1 } } },
+    ]);
+
+    const countMap = new Map();
+    for (const b of blogsCounts) {
+      if (b._id) countMap.set(b._id.toString(), b.count);
+    }
+
+    const result = teachers.map((t) => {
+      const obj = t.toObject();
+      obj.blogsCount = countMap.get(t._id.toString()) || 0;
+      return obj;
+    });
+
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** POST /api/profile/saved-teachers/toggle — toggle save/like a teacher */
+router.post('/saved-teachers/toggle', async (req, res, next) => {
+  try {
+    const { teacherId } = req.body;
+    if (!teacherId) return res.status(400).json({ message: 'teacherId is required' });
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const isAlreadySaved = user.savedTeachers?.some((id) => id.toString() === teacherId.toString());
+
+    if (isAlreadySaved) {
+      user.savedTeachers = user.savedTeachers.filter((id) => id.toString() !== teacherId.toString());
+    } else {
+      if (!user.savedTeachers) user.savedTeachers = [];
+      user.savedTeachers.push(teacherId);
+    }
+
+    await user.save();
+
+    res.json({
+      saved: !isAlreadySaved,
+      message: !isAlreadySaved ? 'Added teacher to your saved mentors' : 'Removed teacher from your saved mentors',
+      savedTeachers: user.savedTeachers,
     });
   } catch (err) {
     next(err);

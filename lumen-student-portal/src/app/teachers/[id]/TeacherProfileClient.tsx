@@ -273,7 +273,7 @@ export default function TeacherProfileClient({
             </div>
           ) : (
             <p className="text-sm font-ui text-[#5C5A55] italic">
-              Verified Medhashine Faculty
+              Verified Medhashine Teacher
             </p>
           )}
         </div>

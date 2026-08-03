@@ -9,6 +9,7 @@ export interface User {
   email: string;
   role?: string;
   avatar?: string;
+  savedTeachers?: string[];
 }
 
 interface AuthModalState {
@@ -62,7 +63,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // backend returns { user: {...} }
         const u = data?.user;
         if (u && u._id) {
-          setUser({ id: u._id, name: u.name, email: u.email, role: u.role, avatar: u.avatar });
+          setUser({
+            id: u._id,
+            name: u.name,
+            email: u.email,
+            role: u.role,
+            avatar: u.avatar,
+            savedTeachers: Array.isArray(u.savedTeachers) ? u.savedTeachers.map((id: any) => id.toString()) : [],
+          });
         } else {
           clearToken();
         }
@@ -82,7 +90,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const u = data.user;
       if (!accessToken || !u) throw new Error("Invalid response");
       saveToken(accessToken);
-      setUser({ id: u._id, name: u.name, email: u.email, role: u.role, avatar: u.avatar });
+      setUser({
+        id: u._id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        avatar: u.avatar,
+        savedTeachers: Array.isArray(u.savedTeachers) ? u.savedTeachers.map((id: any) => id.toString()) : [],
+      });
       return { ok: true };
     } catch (e: any) {
       return {

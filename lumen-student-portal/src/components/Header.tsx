@@ -74,6 +74,15 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
             Home
           </Link>
           <Link
+            data-testid="nav-teachers"
+            href="/teachers"
+            className={`hover:text-[#A84C32] transition-colors flex items-center gap-1.5 ${
+              pathname.startsWith("/teachers") ? "font-semibold text-[#A84C32]" : ""
+            }`}
+          >
+            Find Teachers
+          </Link>
+          <Link
             data-testid="nav-about"
             href="/about"
             className={`hover:text-[#A84C32] transition-colors ${
@@ -167,6 +176,12 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
               className="py-1 text-[#1A1A1A] hover:text-[#A84C32]"
             >
               Home
+            </Link>
+            <Link
+              href="/teachers"
+              className="py-1 font-medium text-[#A84C32] hover:text-[#1A1A1A]"
+            >
+              Find Teachers
             </Link>
             <Link
               href="/about"

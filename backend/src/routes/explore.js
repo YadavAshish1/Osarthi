@@ -12,10 +12,54 @@ const router = Router();
 /** GET /api/explore/teachers - all teachers (public) */
 router.get('/teachers', async (req, res, next) => {
   try {
-    const teachers = await User.find({ role: 'teacher' })
+    // Find all users with role 'teacher' or 'admin', or who have published content
+    const publishedCreatorIds = await Content.find({ published: true }).distinct('createdBy');
+
+    const teachers = await User.find({
+      $or: [
+        { role: 'teacher' },
+        { role: 'admin' },
+        { _id: { $in: publishedCreatorIds } },
+      ],
+    })
       .sort({ name: 1 })
-      .select('name _id avatar bio education experience');
-    res.json(teachers);
+      .select('name _id avatar bio education experience createdAt role');
+
+    // Aggregate published blogs count & unique subjects per teacher
+    const contents = await Content.find({ published: true })
+      .populate('subjectRef', 'name')
+      .select('createdBy subjectRef');
+
+    const countMap = new Map();
+    const subjectsMap = new Map();
+
+    for (const c of contents) {
+      if (!c.createdBy) continue;
+      const tid = c.createdBy.toString();
+      countMap.set(tid, (countMap.get(tid) || 0) + 1);
+
+      let subName = '';
+      if (c.subjectRef && typeof c.subjectRef === 'object' && c.subjectRef.name) {
+        subName = c.subjectRef.name.trim();
+      } else if (typeof c.subjectRef === 'string') {
+        subName = c.subjectRef.trim();
+      }
+
+      if (subName) {
+        if (!subjectsMap.has(tid)) subjectsMap.set(tid, new Set());
+        subjectsMap.get(tid).add(subName);
+      }
+    }
+
+    const result = teachers.map((t) => {
+      const obj = t.toObject();
+      const tid = t._id.toString();
+      obj.blogsCount = countMap.get(tid) || 0;
+      obj.subjects = Array.from(subjectsMap.get(tid) || []);
+      return obj;
+    });
+
+    res.json(result);
   } catch (err) {
     next(err);
   }
@@ -77,13 +121,53 @@ router.get('/classes', async (req, res, next) => {
   }
 });
 
-/** GET /api/explore/subjects?classId= */
+/** GET /api/explore/subjects?classId= (returns all unique subjects from DB) */
 router.get('/subjects', async (req, res, next) => {
   try {
     const { classId } = req.query;
-    if (!classId) return res.status(400).json({ message: 'classId required' });
-    const subjects = await Subject.find({ classRef: classId }).sort({ name: 1 }).select('name _id classRef');
-    res.json(subjects);
+    const filter = classId ? { classRef: classId } : {};
+    const subjects = await Subject.find(filter).sort({ name: 1 }).select('name _id classRef');
+    
+    let subjectNames = subjects.map((s) => (s.name || '').trim()).filter(Boolean);
+
+    // Also collect subjects from published contents if Subject model has no entries
+    if (subjectNames.length === 0) {
+      const contents = await Content.find({ published: true })
+        .populate('subjectRef', 'name')
+        .select('subjectRef');
+      for (const c of contents) {
+        if (c.subjectRef && typeof c.subjectRef === 'object' && c.subjectRef.name) {
+          subjectNames.push(c.subjectRef.name.trim());
+        }
+      }
+    }
+
+    // Default subject list if DB has no subject entries yet
+    if (subjectNames.length === 0) {
+      subjectNames = [
+        'Physics',
+        'Mathematics',
+        'Literature',
+        'Science',
+        'Chemistry',
+        'Biology',
+        'English',
+        'History',
+      ];
+    }
+
+    // Deduplicate by lowercased name while preserving original casing
+    const seen = new Set();
+    const uniqueSubjects = [];
+    for (const name of subjectNames) {
+      const key = name.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueSubjects.push({ _id: key, name });
+      }
+    }
+
+    res.json(uniqueSubjects);
   } catch (err) {
     next(err);
   }

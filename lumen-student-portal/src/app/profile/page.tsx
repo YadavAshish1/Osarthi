@@ -21,7 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { api, BlogItem, mapContentToBlog } from "@/lib/api";
+import { api, BlogItem, mapContentToBlog, TeacherProfile, getTeacherSlug } from "@/lib/api";
 import BlogCard from "@/components/BlogCard";
 import { toast } from "sonner";
 
@@ -42,9 +42,11 @@ export default function ProfilePage() {
   const [savedBlogs, setSavedBlogs] = useState<BlogItem[]>([]);
   const [likedBlogs, setLikedBlogs] = useState<BlogItem[]>([]);
   const [commentedBlogs, setCommentedBlogs] = useState<BlogItem[]>([]);
+  const [savedTeachers, setSavedTeachers] = useState<TeacherProfile[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [removingTeacherId, setRemovingTeacherId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -54,17 +56,25 @@ export default function ProfilePage() {
 
     (async () => {
       try {
-        const { data } = await api.get("/profile/activity");
-        if (data) {
-          if (Array.isArray(data.savedBlogs)) {
-            setSavedBlogs(data.savedBlogs.map((item: any) => mapContentToBlog(item)));
+        const [activityRes, savedTeachersRes] = await Promise.all([
+          api.get("/profile/activity"),
+          api.get("/profile/saved-teachers").catch(() => ({ data: [] })),
+        ]);
+
+        if (activityRes.data) {
+          if (Array.isArray(activityRes.data.savedBlogs)) {
+            setSavedBlogs(activityRes.data.savedBlogs.map((item: any) => mapContentToBlog(item)));
           }
-          if (Array.isArray(data.likedBlogs)) {
-            setLikedBlogs(data.likedBlogs.map((item: any) => mapContentToBlog(item)));
+          if (Array.isArray(activityRes.data.likedBlogs)) {
+            setLikedBlogs(activityRes.data.likedBlogs.map((item: any) => mapContentToBlog(item)));
           }
-          if (Array.isArray(data.commentedBlogs)) {
-            setCommentedBlogs(data.commentedBlogs.map((item: any) => mapContentToBlog(item)));
+          if (Array.isArray(activityRes.data.commentedBlogs)) {
+            setCommentedBlogs(activityRes.data.commentedBlogs.map((item: any) => mapContentToBlog(item)));
           }
+        }
+
+        if (Array.isArray(savedTeachersRes.data)) {
+          setSavedTeachers(savedTeachersRes.data);
         }
       } catch (err) {
         console.error("Failed to load user activity:", err);
@@ -73,6 +83,22 @@ export default function ProfilePage() {
       }
     })();
   }, [user]);
+
+  const handleRemoveSavedTeacher = async (teacherId: string, teacherName: string) => {
+    setRemovingTeacherId(teacherId);
+    try {
+      await api.post("/profile/saved-teachers/toggle", { teacherId });
+      setSavedTeachers((prev) => prev.filter((t) => t._id !== teacherId));
+      if (user?.savedTeachers) {
+        updateUser({ savedTeachers: user.savedTeachers.filter((id) => id !== teacherId) });
+      }
+      toast.success(`Removed ${teacherName} from saved teachers.`);
+    } catch {
+      toast.error("Failed to remove teacher.");
+    } finally {
+      setRemovingTeacherId(null);
+    }
+  };
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -400,7 +426,114 @@ export default function ProfilePage() {
           )}
         </section>
 
-        {/* Section 2: Activity History (Swiper Carousel Tabs Section) */}
+        {/* Section 2: Liked & Saved Teachers */}
+        <section className="pt-4">
+          <div className="flex items-center justify-between pb-4 border-b border-[#E5E1D8] mb-6">
+            <div className="flex items-center gap-3">
+              <Heart className="h-5 w-5 text-red-500 fill-red-500" />
+              <h2 className="font-serif-display text-2xl md:text-3xl font-semibold text-[#1A1A1A]">
+                Liked & Saved Teachers ({savedTeachers.length})
+              </h2>
+            </div>
+            <Link
+              href="/teachers"
+              className="text-xs font-ui text-[#A84C32] hover:underline font-semibold flex items-center gap-1"
+            >
+              <span>Explore All Teachers</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+
+          {loading ? (
+            <div className="py-8 text-center font-serif-body text-[#5C5A55]">
+              Loading your saved teachers…
+            </div>
+          ) : savedTeachers.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {savedTeachers.map((teacher) => {
+                const slug = getTeacherSlug(teacher._id, teacher.name);
+                const profileHref = `/teachers/${slug}`;
+                const degree = teacher.education?.[0]?.degree || "Verified Educator";
+
+                return (
+                  <div
+                    key={teacher._id}
+                    className="bg-white rounded-2xl border border-[#E5E1D8] p-5 flex flex-col justify-between hover:border-[#A84C32] transition-all shadow-2xs hover:shadow-sm"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-3 mb-4">
+                        <Link href={profileHref} className="block shrink-0">
+                          {teacher.avatar ? (
+                            <img
+                              src={teacher.avatar}
+                              alt={teacher.name}
+                              className="w-14 h-14 rounded-xl object-cover border border-[#E5E1D8] shadow-xs"
+                            />
+                          ) : (
+                            <div className="w-14 h-14 rounded-xl bg-[#1A1A1A] text-white flex items-center justify-center text-xl font-bold uppercase shrink-0">
+                              {teacher.name?.[0] || "T"}
+                            </div>
+                          )}
+                        </Link>
+
+                        <button
+                          onClick={() => handleRemoveSavedTeacher(teacher._id, teacher.name)}
+                          disabled={removingTeacherId === teacher._id}
+                          title="Remove from saved teachers"
+                          className="p-1.5 rounded-full border border-[#E5E1D8] text-[#5C5A55] hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          <BookmarkX className="h-4 w-4 text-red-500" />
+                        </button>
+                      </div>
+
+                      <h3 className="font-serif-display text-lg font-semibold text-[#1A1A1A] hover:text-[#A84C32] transition-colors leading-snug">
+                        <Link href={profileHref}>{teacher.name}</Link>
+                      </h3>
+
+                      <p className="mt-1 font-serif-body text-xs text-[#5C5A55] line-clamp-2 leading-relaxed">
+                        {teacher.bio || "Educator at Medhashine."}
+                      </p>
+
+                      <div className="mt-3 pt-3 border-t border-[#E5E1D8]/60 flex items-center justify-between text-xs font-ui text-[#5C5A55]">
+                        <span className="truncate font-medium text-[#1A1A1A] max-w-[150px]">
+                          {degree}
+                        </span>
+                        <span className="text-[#A84C32] font-semibold">
+                          {teacher.blogsCount !== undefined ? `${teacher.blogsCount} Insights` : ""}
+                        </span>
+                      </div>
+                    </div>
+
+                    <Link
+                      href={profileHref}
+                      className="mt-4 w-full py-2 rounded-full bg-[#FAF8F5] border border-[#E5E1D8] text-center text-xs font-ui font-semibold text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-white hover:border-[#1A1A1A] transition-all"
+                    >
+                      View Educator Profile
+                    </Link>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-8 bg-white rounded-2xl border border-[#E5E1D8] p-6">
+              <UserIcon className="h-8 w-8 text-[#5C5A55] mx-auto mb-2 opacity-50" />
+              <h3 className="font-serif-display text-base font-semibold text-[#1A1A1A]">
+                No saved teachers yet
+              </h3>
+              <p className="font-serif-body text-xs text-[#5C5A55] mt-1 max-w-sm mx-auto">
+                Explore faculty profiles and click the Heart ❤️ button on teacher cards to save them to your profile.
+              </p>
+              <Link
+                href="/teachers"
+                className="mt-4 inline-block px-5 py-2 rounded-full bg-[#1A1A1A] text-white font-ui text-xs font-semibold hover:bg-[#A84C32] transition-colors"
+              >
+                Find Teachers
+              </Link>
+            </div>
+          )}
+        </section>
+
+        {/* Section 3: Activity History (Swiper Carousel Tabs Section) */}
         <section className="pt-6">
           <div className="flex items-center gap-3 mb-6">
             <Sparkles className="h-5 w-5 text-[#A84C32]" />
