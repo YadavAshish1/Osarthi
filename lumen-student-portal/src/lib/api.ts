@@ -87,6 +87,8 @@ export interface TeacherProfile {
   role?: string;
   education?: EducationItem[];
   experience?: ExperienceItem[];
+  blogsCount?: number;
+  subjects?: string[];
   createdAt?: string;
 }
 
