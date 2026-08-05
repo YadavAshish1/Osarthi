@@ -43,6 +43,7 @@ export default function ProfilePage() {
   const [likedBlogs, setLikedBlogs] = useState<BlogItem[]>([]);
   const [commentedBlogs, setCommentedBlogs] = useState<BlogItem[]>([]);
   const [savedTeachers, setSavedTeachers] = useState<TeacherProfile[]>([]);
+  const [teacherAppStatus, setTeacherAppStatus] = useState<any>(null);
 
   const [loading, setLoading] = useState(true);
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -56,9 +57,10 @@ export default function ProfilePage() {
 
     (async () => {
       try {
-        const [activityRes, savedTeachersRes] = await Promise.all([
+        const [activityRes, savedTeachersRes, appStatusRes] = await Promise.all([
           api.get("/profile/activity"),
           api.get("/profile/saved-teachers").catch(() => ({ data: [] })),
+          api.get("/teacher-applications/my-status").catch(() => ({ data: { application: null } })),
         ]);
 
         if (activityRes.data) {
@@ -75,6 +77,10 @@ export default function ProfilePage() {
 
         if (Array.isArray(savedTeachersRes.data)) {
           setSavedTeachers(savedTeachersRes.data);
+        }
+
+        if (appStatusRes.data?.application) {
+          setTeacherAppStatus(appStatusRes.data.application);
         }
       } catch (err) {
         console.error("Failed to load user activity:", err);
@@ -237,7 +243,13 @@ export default function ProfilePage() {
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mb-2">
                 <span className="text-xs font-ui uppercase tracking-wider bg-[#F5F2EB] text-[#A84C32] px-3 py-1 rounded-full border border-[#E5E1D8] font-semibold flex items-center gap-1.5">
                   <ShieldCheck className="h-3.5 w-3.5" />
-                  {user.role || "Student"}
+                  {user.role === "teacher"
+                    ? "Verified Teacher"
+                    : teacherAppStatus?.status === "pending"
+                    ? "Teacher Applicant (Pending Approval)"
+                    : user.role
+                    ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
+                    : "Student"}
                 </span>
               </div>
 
@@ -324,6 +336,60 @@ export default function ProfilePage() {
 
       {/* Main Profile Sections */}
       <main className="max-w-5xl mx-auto px-6 space-y-14">
+        {/* Section 0: Teacher Application Status (if user applied) */}
+        {teacherAppStatus && (
+          <section className="p-6 md:p-8 rounded-3xl border bg-white shadow-xs font-ui">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-[#A84C32]" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#A84C32]">
+                    Teacher Application Status
+                  </span>
+                  <span
+                    className={`px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
+                      teacherAppStatus.status === "approved"
+                        ? "bg-emerald-100 text-emerald-700 border border-emerald-300"
+                        : teacherAppStatus.status === "rejected"
+                        ? "bg-rose-100 text-rose-700 border border-rose-300"
+                        : "bg-amber-100 text-amber-700 border border-amber-300"
+                    }`}
+                  >
+                    {teacherAppStatus.status}
+                  </span>
+                </div>
+
+                <h3 className="font-serif-display text-xl md:text-2xl font-semibold text-[#1A1A1A]">
+                  {teacherAppStatus.status === "approved"
+                    ? "🎉 Congratulations! Application Approved"
+                    : teacherAppStatus.status === "rejected"
+                    ? "Application Status Update"
+                    : "Application Under Review"}
+                </h3>
+
+                <p className="text-xs text-[#5C5A55] max-w-2xl leading-relaxed">
+                  {teacherAppStatus.status === "approved"
+                    ? "You are an official Medhashine Teacher! You can now publish insights and connect with students."
+                    : teacherAppStatus.status === "rejected"
+                    ? `Reason: ${teacherAppStatus.rejectionReason || "Credentials did not meet current requirements."}`
+                    : "Our admin team is currently reviewing your education and teaching qualifications. You will receive an email once updated."}
+                </p>
+              </div>
+
+              {teacherAppStatus.status === "approved" && (
+                <a
+                  href="http://localhost:5173"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-sm shrink-0"
+                >
+                  Open Teacher Portal <ArrowRight className="h-4 w-4" />
+                </a>
+              )}
+            </div>
+          </section>
+        )}
+
         {/* Section 1: Saved Insights (Swiper Carousel) */}
         <section>
           <div className="flex items-center justify-between pb-4 border-b border-[#E5E1D8] mb-6">

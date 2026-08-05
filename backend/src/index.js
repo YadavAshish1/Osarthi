@@ -18,6 +18,7 @@ import profileRoutes from './routes/profile.js';
 import exploreRoutes from './routes/explore.js';
 import commentsRoutes from './routes/comments.js';
 import contactRoutes from './routes/contact.js';
+import teacherApplicationRoutes from './routes/teacherApplications.js';
 import { getStorageMode, isCloudinaryEnabled } from './services/storage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -88,6 +89,7 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/explore', exploreRoutes);
 app.use('/api/comments', commentsRoutes);
 app.use('/api/contact', contactRoutes);
+app.use('/api/teacher-applications', teacherApplicationRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
