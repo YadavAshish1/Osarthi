@@ -55,10 +55,19 @@ export async function sendOtpEmail(toEmail, otp, name) {
   }
 }
 
-export async function sendContactEmail({ name, email, message, isTeacher }) {
+function getAdminRecipientEmails() {
+  const raw = process.env.ADMIN_EMAIL || process.env.CONTACT_EMAIL || '';
+  const emails = raw
+    .split(',')
+    .map((e) => e.trim())
+    .filter(Boolean);
+  return emails.length > 0 ? emails : ['delivered@resend.dev'];
+}
+
+export async function sendContactEmail({ name, email, isTeacher, message }) {
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.EMAIL_FROM || 'Medhashine <onboarding@resend.dev>';
-  const toEmail = process.env.ADMIN_EMAIL || process.env.CONTACT_EMAIL;
+  const recipients = getAdminRecipientEmails();
 
   console.log(`[Contact Form Submission]\nFrom: ${name} <${email}>\nTeacher: ${isTeacher ? 'Yes' : 'No'}\nMessage: ${message}`);
 
@@ -67,7 +76,6 @@ export async function sendContactEmail({ name, email, message, isTeacher }) {
     return { success: true, devMode: true };
   }
 
-  const recipient = toEmail || 'delivered@resend.dev';
   const client = getResendClient();
 
   const html = `
@@ -89,7 +97,7 @@ export async function sendContactEmail({ name, email, message, isTeacher }) {
   try {
     const { data, error } = await client.emails.send({
       from: fromEmail,
-      to: [recipient],
+      to: recipients,
       replyTo: email,
       subject: `[Medhashine Contact] Message from ${name} (${isTeacher ? 'Teacher' : 'Reader'})`,
       html,
@@ -104,5 +112,150 @@ export async function sendContactEmail({ name, email, message, isTeacher }) {
   } catch (err) {
     console.error('[sendContactEmail Exception]', err);
     throw err;
+  }
+}
+
+// ─── Teacher Application Emails ─────────────────────────────────────────────
+
+export async function sendTeacherApplicationAdminNotification(applicantName, applicantEmail, adminDashboardLink) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.EMAIL_FROM || 'Medhashine <onboarding@resend.dev>';
+  const recipients = getAdminRecipientEmails();
+
+  console.log(`[Teacher Application] New application from ${applicantName} <${applicantEmail}>`);
+
+  if (!apiKey) {
+    console.warn('[Resend] RESEND_API_KEY or ADMIN_EMAIL not set. Notification logged to console.');
+    return { success: true, devMode: true };
+  }
+
+  const client = getResendClient();
+  const html = `
+    <div style="font-family: 'Inter', system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; border-radius: 16px; overflow: hidden; border: 1px solid #E5E1D8;">
+      <div style="background: linear-gradient(135deg, #A84C32 0%, #8B3A25 100%); padding: 32px 28px; text-align: center;">
+        <h1 style="color: #ffffff; font-size: 22px; font-weight: 700; margin: 0 0 6px 0; letter-spacing: -0.3px;">New Teacher Application</h1>
+        <p style="color: rgba(255,255,255,0.8); font-size: 14px; margin: 0;">A new educator wants to join Medhashine</p>
+      </div>
+      <div style="padding: 28px; background-color: #FAF8F5;">
+        <div style="background: #ffffff; border-radius: 12px; padding: 20px; border: 1px solid #E5E1D8; margin-bottom: 20px;">
+          <p style="margin: 0 0 8px 0; font-size: 15px; color: #1A1A1A;"><strong>Applicant:</strong> ${applicantName}</p>
+          <p style="margin: 0; font-size: 15px; color: #1A1A1A;"><strong>Email:</strong> <a href="mailto:${applicantEmail}" style="color: #A84C32;">${applicantEmail}</a></p>
+        </div>
+        <div style="text-align: center;">
+          <a href="${adminDashboardLink}" style="display: inline-block; background: linear-gradient(135deg, #A84C32 0%, #8B3A25 100%); color: #ffffff; padding: 14px 32px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 14px; letter-spacing: 0.3px;">Review Application →</a>
+        </div>
+      </div>
+    </div>
+  `;
+
+  try {
+    const { data, error } = await client.emails.send({
+      from: fromEmail,
+      to: recipients,
+      subject: `[Medhashine] New Teacher Application — ${applicantName}`,
+      html,
+    });
+    if (error) { console.error('[Resend Error]', error); throw new Error(error.message); }
+    return { success: true, data };
+  } catch (err) {
+    console.error('[sendTeacherApplicationAdminNotification Exception]', err);
+    // Don't throw — application should still succeed even if email fails
+    return { success: false, error: err.message };
+  }
+}
+
+export async function sendTeacherApprovalEmail(toEmail, name, teacherPortalLink) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.EMAIL_FROM || 'Medhashine <onboarding@resend.dev>';
+
+  console.log(`[Teacher Approved] ${name} <${toEmail}> — Portal: ${teacherPortalLink}`);
+
+  if (!apiKey) {
+    console.warn('[Resend] RESEND_API_KEY not set. Approval logged to console.');
+    return { success: true, devMode: true };
+  }
+
+  const client = getResendClient();
+  const html = `
+    <div style="font-family: 'Inter', system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; border-radius: 16px; overflow: hidden; border: 1px solid #E5E1D8;">
+      <div style="background: linear-gradient(135deg, #16A34A 0%, #15803D 100%); padding: 32px 28px; text-align: center;">
+        <div style="font-size: 40px; margin-bottom: 8px;">🎉</div>
+        <h1 style="color: #ffffff; font-size: 24px; font-weight: 700; margin: 0 0 6px 0;">Welcome Aboard, ${name}!</h1>
+        <p style="color: rgba(255,255,255,0.85); font-size: 14px; margin: 0;">Your teacher application has been approved</p>
+      </div>
+      <div style="padding: 28px; background-color: #FAF8F5;">
+        <div style="background: #ffffff; border-radius: 12px; padding: 24px; border: 1px solid #E5E1D8; margin-bottom: 20px;">
+          <p style="margin: 0 0 12px 0; font-size: 15px; color: #1A1A1A; line-height: 1.6;">Congratulations! You are now an official <strong>Medhashine Teacher</strong>. You can start creating and publishing insights for students right away.</p>
+          <p style="margin: 0; font-size: 15px; color: #5C5A55; line-height: 1.6;">Your expertise matters. Every insight you share helps shape the minds of tomorrow.</p>
+        </div>
+        <div style="text-align: center;">
+          <a href="${teacherPortalLink}" style="display: inline-block; background: linear-gradient(135deg, #16A34A 0%, #15803D 100%); color: #ffffff; padding: 14px 36px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 15px; letter-spacing: 0.3px;">Open Teacher Portal →</a>
+          <p style="margin: 16px 0 0 0; font-size: 12px; color: #9CA3AF;">Bookmark this link to access your teacher dashboard anytime</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  try {
+    const { data, error } = await client.emails.send({
+      from: fromEmail,
+      to: [toEmail],
+      subject: `🎉 You're Approved! Welcome to Medhashine, ${name}`,
+      html,
+    });
+    if (error) { console.error('[Resend Error]', error); throw new Error(error.message); }
+    return { success: true, data };
+  } catch (err) {
+    console.error('[sendTeacherApprovalEmail Exception]', err);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function sendTeacherRejectionEmail(toEmail, name, reason) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.EMAIL_FROM || 'Medhashine <onboarding@resend.dev>';
+
+  console.log(`[Teacher Rejected] ${name} <${toEmail}> — Reason: ${reason}`);
+
+  if (!apiKey) {
+    console.warn('[Resend] RESEND_API_KEY not set. Rejection logged to console.');
+    return { success: true, devMode: true };
+  }
+
+  const client = getResendClient();
+  const html = `
+    <div style="font-family: 'Inter', system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; border-radius: 16px; overflow: hidden; border: 1px solid #E5E1D8;">
+      <div style="background: linear-gradient(135deg, #6B7280 0%, #4B5563 100%); padding: 32px 28px; text-align: center;">
+        <h1 style="color: #ffffff; font-size: 22px; font-weight: 700; margin: 0 0 6px 0;">Application Update</h1>
+        <p style="color: rgba(255,255,255,0.8); font-size: 14px; margin: 0;">Regarding your Medhashine teacher application</p>
+      </div>
+      <div style="padding: 28px; background-color: #FAF8F5;">
+        <div style="background: #ffffff; border-radius: 12px; padding: 24px; border: 1px solid #E5E1D8; margin-bottom: 20px;">
+          <p style="margin: 0 0 12px 0; font-size: 15px; color: #1A1A1A; line-height: 1.6;">Hi ${name},</p>
+          <p style="margin: 0 0 16px 0; font-size: 15px; color: #1A1A1A; line-height: 1.6;">Thank you for your interest in becoming a teacher on Medhashine. After careful review, we are unable to approve your application at this time.</p>
+          ${reason ? `
+          <div style="background: #FEF2F2; border: 1px solid #FECACA; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+            <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: 600; color: #991B1B; text-transform: uppercase; letter-spacing: 0.5px;">Reason</p>
+            <p style="margin: 0; font-size: 14px; color: #7F1D1D; line-height: 1.5;">${reason}</p>
+          </div>
+          ` : ''}
+          <p style="margin: 0; font-size: 14px; color: #5C5A55; line-height: 1.6;">You are welcome to apply again in the future. If you have questions, please reach out via our contact page.</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  try {
+    const { data, error } = await client.emails.send({
+      from: fromEmail,
+      to: [toEmail],
+      subject: `Medhashine Teacher Application — Update for ${name}`,
+      html,
+    });
+    if (error) { console.error('[Resend Error]', error); throw new Error(error.message); }
+    return { success: true, data };
+  } catch (err) {
+    console.error('[sendTeacherRejectionEmail Exception]', err);
+    return { success: false, error: err.message };
   }
 }

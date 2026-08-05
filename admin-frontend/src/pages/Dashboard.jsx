@@ -170,7 +170,26 @@ export default function Dashboard() {
           <div className="header-logo-icon">M</div>
           <span className="header-logo-text">Medhashine Admin</span>
         </div>
-        <div className="header-actions">
+        <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <a
+            href="/applications"
+            className="btn"
+            style={{
+              padding: '7px 14px',
+              fontSize: 13,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              background: 'rgba(56,189,248,0.12)',
+              border: '1px solid rgba(56,189,248,0.3)',
+              color: '#38bdf8',
+              borderRadius: 8,
+              textDecoration: 'none',
+              fontWeight: 600,
+            }}
+          >
+            <User size={14} /> Teacher Applications
+          </a>
           <div className="header-user">
             <User size={13} />
             {user?.name || user?.email}

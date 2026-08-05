@@ -8,6 +8,7 @@ import FilterBar, { FilterState, TreeNode } from "@/components/FilterBar";
 import BlogCard from "@/components/BlogCard";
 import EmptyState from "@/components/EmptyState";
 import { api, BlogItem, FALLBACK_BLOGS, mapContentToBlog } from "@/lib/api";
+import BecomeTeacherBanner from "@/components/BecomeTeacherBanner";
 
 const PAGE_SIZE = 21;
 
@@ -285,6 +286,7 @@ export default function Home() {
           </>
         )}
       </section>
+      <BecomeTeacherBanner />
     </>
   );
 }
