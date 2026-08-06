@@ -1,28 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import AdminHeader from '../components/AdminHeader';
 import {
-  Send,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  BookOpen,
-  Layers,
-  Filter,
-  RefreshCw,
-  Search,
-  ArrowLeft,
-  LogOut,
-  AlertCircle,
-  Check,
-  X,
-  MessageSquare,
+  Send, Clock, CheckCircle2, XCircle, BookOpen, Layers,
+  RefreshCw, Search, AlertCircle, Check, X, MessageSquare,
 } from 'lucide-react';
 
 export default function TaxonomyRequests() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   const [requests, setRequests] = useState([]);
   const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
@@ -30,22 +16,18 @@ export default function TaxonomyRequests() {
   const [statusFilter, setStatusFilter] = useState('pending');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Approval Modal state
   const [approveModalOpen, setApproveModalOpen] = useState(false);
   const [approveRequestItem, setApproveRequestItem] = useState(null);
   const [approvedName, setApprovedName] = useState('');
   const [adminNote, setAdminNote] = useState('');
 
-  // Rejection Modal state
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [adminSuggestion, setAdminSuggestion] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
 
-  // Toast state
   const [toasts, setToasts] = useState([]);
-
   const addToast = useCallback((message, type = 'success') => {
     const id = Date.now();
     setToasts((prev) => [...prev, { id, message, type }]);
@@ -55,82 +37,47 @@ export default function TaxonomyRequests() {
   const fetchRequests = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get('/taxonomy-requests', {
-        params: { status: statusFilter },
-      });
+      const { data } = await api.get('/taxonomy-requests', { params: { status: statusFilter } });
       if (data?.requests) setRequests(data.requests);
       if (data?.stats) setStats(data.stats);
-    } catch (err) {
-      addToast(err?.response?.data?.message || 'Failed to fetch taxonomy requests', 'error');
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { addToast(err?.response?.data?.message || 'Failed to fetch requests', 'error'); }
+    finally { setLoading(false); }
   }, [statusFilter, addToast]);
 
-  useEffect(() => {
-    fetchRequests();
-  }, [fetchRequests]);
+  useEffect(() => { fetchRequests(); }, [fetchRequests]);
 
   const openApproveModal = (reqItem) => {
-    setApproveRequestItem(reqItem);
-    setApprovedName(reqItem.name);
-    setAdminNote('');
-    setApproveModalOpen(true);
+    setApproveRequestItem(reqItem); setApprovedName(reqItem.name); setAdminNote(''); setApproveModalOpen(true);
   };
 
   const handleApproveSubmit = async (e) => {
     e.preventDefault();
-    if (!approveRequestItem || !approvedName.trim()) {
-      addToast('Please enter a valid approved name', 'error');
-      return;
-    }
-
+    if (!approveRequestItem || !approvedName.trim()) { addToast('Enter a valid name', 'error'); return; }
     setSubmittingReview(true);
     try {
       const { data } = await api.put(`/taxonomy-requests/${approveRequestItem._id}/review`, {
-        action: 'approve',
-        approvedName: approvedName.trim(),
-        adminNote: adminNote.trim(),
+        action: 'approve', approvedName: approvedName.trim(), adminNote: adminNote.trim(),
       });
-      addToast(data?.message || 'Request approved successfully!', 'success');
-      setApproveModalOpen(false);
-      fetchRequests();
-    } catch (err) {
-      addToast(err?.response?.data?.message || 'Failed to approve request', 'error');
-    } finally {
-      setSubmittingReview(false);
-    }
+      addToast(data?.message || 'Approved!', 'success'); setApproveModalOpen(false); fetchRequests();
+    } catch (err) { addToast(err?.response?.data?.message || 'Failed to approve', 'error'); }
+    finally { setSubmittingReview(false); }
   };
 
   const openRejectModal = (reqItem) => {
-    setSelectedRequest(reqItem);
-    setRejectionReason('');
-    setAdminSuggestion('');
-    setRejectModalOpen(true);
+    setSelectedRequest(reqItem); setRejectionReason(''); setAdminSuggestion(''); setRejectModalOpen(true);
   };
 
   const handleRejectSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedRequest || !rejectionReason.trim()) {
-      addToast('Please enter a rejection reason', 'error');
-      return;
-    }
-
+    if (!selectedRequest || !rejectionReason.trim()) { addToast('Enter rejection reason', 'error'); return; }
     setSubmittingReview(true);
     try {
       const { data } = await api.put(`/taxonomy-requests/${selectedRequest._id}/review`, {
-        action: 'reject',
-        rejectionReason: rejectionReason.trim(),
-        adminSuggestion: adminSuggestion.trim(),
+        action: 'reject', rejectionReason: rejectionReason.trim(), adminSuggestion: adminSuggestion.trim(),
       });
-      addToast(data?.message || 'Request rejected and teacher notified', 'success');
-      setRejectModalOpen(false);
-      fetchRequests();
-    } catch (err) {
-      addToast(err?.response?.data?.message || 'Failed to reject request', 'error');
-    } finally {
-      setSubmittingReview(false);
-    }
+      addToast(data?.message || 'Rejected', 'success'); setRejectModalOpen(false); fetchRequests();
+    } catch (err) { addToast(err?.response?.data?.message || 'Failed to reject', 'error'); }
+    finally { setSubmittingReview(false); }
   };
 
   const filteredRequests = requests.filter(
@@ -140,330 +87,199 @@ export default function TaxonomyRequests() {
       r.requestedBy?.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const statusBadge = (status) => {
+    const map = {
+      approved: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+      rejected: 'bg-red-500/15 text-red-400 border-red-500/30',
+      pending: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+    };
+    return map[status] || map.pending;
+  };
+
+  const typeBadge = (type) => type === 'class'
+    ? 'bg-sky-500/15 text-sky-400 border-sky-500/30'
+    : 'bg-purple-500/15 text-purple-400 border-purple-500/30';
+
   return (
-    <div style={{ minHeight: '100vh', background: '#0f172a', color: '#f8fafc', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-      {/* Toast Notifications */}
-      <div style={{ position: 'fixed', top: 20, right: 20, zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div className="min-h-screen bg-slate-950 text-slate-50 font-sans">
+      {/* Toasts */}
+      <div className="fixed top-4 right-4 z-[10000] flex flex-col gap-2">
         {toasts.map((t) => (
-          <div
-            key={t.id}
-            style={{
-              padding: '12px 20px',
-              borderRadius: 10,
-              fontSize: 13,
-              fontWeight: 600,
-              background: t.type === 'error' ? '#ef4444' : '#10b981',
-              color: '#fff',
-              boxShadow: '0 10px 30px rgba(0,0,0,0.4)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-            }}
-          >
-            {t.type === 'error' ? <AlertCircle size={16} /> : <CheckCircle2 size={16} />}
-            <span>{t.message}</span>
+          <div key={t.id} className={`px-4 py-3 rounded-xl text-sm font-semibold shadow-2xl flex items-center gap-2 ${t.type === 'error' ? 'bg-red-500' : 'bg-emerald-500'} text-white`}>
+            {t.type === 'success' ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />} {t.message}
           </div>
         ))}
       </div>
 
-      {/* Header */}
       <AdminHeader activePage="taxonomy-requests" />
 
-      {/* Main Content Container */}
-      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 24px' }}>
-        {/* Stat Overview Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 28 }}>
-          <div
-            onClick={() => setStatusFilter('all')}
-            style={{
-              padding: 20,
-              borderRadius: 14,
-              background: '#1e293b',
-              border: statusFilter === 'all' ? '2px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-            }}
-          >
-            <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Total Requests</div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: '#f8fafc', marginTop: 4 }}>{stats.total}</div>
-          </div>
-
-          <div
-            onClick={() => setStatusFilter('pending')}
-            style={{
-              padding: 20,
-              borderRadius: 14,
-              background: 'rgba(245,158,11,0.08)',
-              border: statusFilter === 'pending' ? '2px solid #f59e0b' : '1px solid rgba(245,158,11,0.25)',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-            }}
-          >
-            <div style={{ fontSize: 12, color: '#fbbf24', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Pending Review</div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: '#fef08a', marginTop: 4 }}>{stats.pending}</div>
-          </div>
-
-          <div
-            onClick={() => setStatusFilter('approved')}
-            style={{
-              padding: 20,
-              borderRadius: 14,
-              background: 'rgba(16,185,129,0.08)',
-              border: statusFilter === 'approved' ? '2px solid #10b981' : '1px solid rgba(10,185,129,0.25)',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-            }}
-          >
-            <div style={{ fontSize: 12, color: '#34d399', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Approved & Created</div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: '#a7f3d0', marginTop: 4 }}>{stats.approved}</div>
-          </div>
-
-          <div
-            onClick={() => setStatusFilter('rejected')}
-            style={{
-              padding: 20,
-              borderRadius: 14,
-              background: 'rgba(239,68,68,0.08)',
-              border: statusFilter === 'rejected' ? '2px solid #ef4444' : '1px solid rgba(239,68,68,0.25)',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-            }}
-          >
-            <div style={{ fontSize: 12, color: '#f87171', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Rejected</div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: '#fca5a5', marginTop: 4 }}>{stats.rejected}</div>
-          </div>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Page Title */}
+        <div className="mb-8">
+          <p className="text-[11px] font-bold text-sky-400 uppercase tracking-widest mb-1">Taxonomy Governance</p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Subject & Class Requests</h1>
+          <p className="text-sm text-slate-400 mt-1">Review new subject/class requests from teachers.</p>
         </div>
 
-        {/* Top Control Bar */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 24 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            {['pending', 'approved', 'rejected', 'all'].map((st) => (
-              <button
-                key={st}
-                onClick={() => setStatusFilter(st)}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: 20,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  textTransform: 'capitalize',
-                  border: statusFilter === st ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)',
-                  background: statusFilter === st ? '#38bdf8' : 'rgba(255,255,255,0.04)',
-                  color: statusFilter === st ? '#0f172a' : '#94a3b8',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}
-              >
-                {st === 'all' ? 'All Statuses' : st}
-              </button>
-            ))}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ position: 'relative' }}>
-              <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-              <input
-                type="text"
-                placeholder="Search name, teacher, or email..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ padding: '9px 14px 9px 36px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: 13, width: 240 }}
-              />
-            </div>
-
-            <button
-              onClick={fetchRequests}
-              style={{ padding: '9px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer' }}
-              title="Refresh Requests"
-            >
-              <RefreshCw size={16} />
+        {/* Stat Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {[
+            { id: 'all', label: 'Total', value: stats.total, icon: Send, color: 'text-sky-400', border: 'border-sky-500/30' },
+            { id: 'pending', label: 'Pending', value: stats.pending, icon: Clock, color: 'text-amber-400', border: 'border-amber-500/30' },
+            { id: 'approved', label: 'Approved', value: stats.approved, icon: CheckCircle2, color: 'text-emerald-400', border: 'border-emerald-500/30' },
+            { id: 'rejected', label: 'Rejected', value: stats.rejected, icon: XCircle, color: 'text-red-400', border: 'border-red-500/30' },
+          ].map(({ id, label, value, icon: Icon, color, border }) => (
+            <button key={id} onClick={() => setStatusFilter(id)}
+              className={`bg-slate-900 rounded-2xl p-5 text-left cursor-pointer transition-all ${
+                statusFilter === id ? `border-2 ${border}` : 'border border-white/[0.06]'
+              }`}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-slate-400 uppercase">{label}</span>
+                <Icon size={16} className={color} />
+              </div>
+              <div className={`text-2xl font-extrabold ${color}`}>{value}</div>
             </button>
-          </div>
+          ))}
         </div>
 
-        {/* Table Container */}
-        <div style={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, overflow: 'hidden' }}>
-          <div style={{ padding: '16px 24px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <h3 style={{ fontSize: 15, fontWeight: 600, margin: 0, opacity: 0.9 }}>
-              Category Requests ({filteredRequests.length})
-            </h3>
+        {/* Filter + Search Bar */}
+        <div className="bg-slate-900 border border-white/[0.06] rounded-2xl p-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="relative flex-1 max-w-xs">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search requests..."
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white text-xs focus:outline-none focus:border-sky-500/50 placeholder:text-slate-500" />
           </div>
+          <button onClick={fetchRequests} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-400 text-xs font-semibold hover:text-white transition-all cursor-pointer">
+            <RefreshCw size={13} /> Refresh
+          </button>
+        </div>
 
+        {/* Requests List */}
+        <div className="bg-slate-900 border border-white/[0.06] rounded-2xl overflow-hidden">
           {loading ? (
-            <div style={{ padding: 48, textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>
-              Loading taxonomy requests...
-            </div>
+            <div className="p-16 text-center text-slate-500">Loading requests…</div>
           ) : filteredRequests.length === 0 ? (
-            <div style={{ padding: 48, textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>
-              No requests found matching the selected filter.
-            </div>
+            <div className="p-16 text-center text-slate-600">No requests found.</div>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
-              <thead>
-                <tr style={{ background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid rgba(255,255,255,0.08)', color: '#94a3b8', textTransform: 'uppercase', fontSize: 11, letterSpacing: 0.5 }}>
-                  <th style={{ padding: '14px 20px' }}>Teacher Info</th>
-                  <th style={{ padding: '14px 20px' }}>Type</th>
-                  <th style={{ padding: '14px 20px' }}>Requested Name</th>
-                  <th style={{ padding: '14px 20px' }}>Parent Class</th>
-                  <th style={{ padding: '14px 20px' }}>Status</th>
-                  <th style={{ padding: '14px 20px' }}>Date</th>
-                  <th style={{ padding: '14px 20px', textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRequests.map((r) => (
-                  <tr key={r._id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', transition: 'background 0.15s' }}>
-                    <td style={{ padding: '14px 20px' }}>
-                      <div style={{ fontWeight: 600, color: '#f8fafc' }}>{r.requestedBy?.name || 'Teacher'}</div>
-                      <div style={{ fontSize: 12, color: '#94a3b8' }}>{r.requestedBy?.email}</div>
-                    </td>
+            <>
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-black/20 text-slate-500 text-[11px] uppercase tracking-wider text-left">
+                      <th className="px-5 py-3.5">Requested Name</th>
+                      <th className="px-5 py-3.5">Type</th>
+                      <th className="px-5 py-3.5">Requested By</th>
+                      <th className="px-5 py-3.5">Reason</th>
+                      <th className="px-5 py-3.5">Status</th>
+                      <th className="px-5 py-3.5">Date</th>
+                      <th className="px-5 py-3.5 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRequests.map((req) => (
+                      <tr key={req._id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                        <td className="px-5 py-4 font-bold text-white">{req.name}</td>
+                        <td className="px-5 py-4">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${typeBadge(req.type)}`}>
+                            {req.type === 'class' ? <BookOpen size={10} /> : <Layers size={10} />} {req.type}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="font-semibold text-white text-xs">{req.requestedBy?.name || '—'}</div>
+                          <div className="text-[11px] text-slate-500">{req.requestedBy?.email}</div>
+                        </td>
+                        <td className="px-5 py-4 text-slate-400 text-xs max-w-[200px] truncate">{req.reason || '—'}</td>
+                        <td className="px-5 py-4">
+                          <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border ${statusBadge(req.status)}`}>{req.status}</span>
+                        </td>
+                        <td className="px-5 py-4 text-slate-400 text-xs">{new Date(req.createdAt).toLocaleDateString()}</td>
+                        <td className="px-5 py-4 text-right">
+                          {req.status === 'pending' ? (
+                            <div className="flex items-center justify-end gap-2">
+                              <button onClick={() => openApproveModal(req)}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/20 transition-all cursor-pointer">
+                                <Check size={11} /> Approve
+                              </button>
+                              <button onClick={() => openRejectModal(req)}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-semibold hover:bg-red-500/20 transition-all cursor-pointer">
+                                <X size={11} /> Reject
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-600">Reviewed</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
-                    <td style={{ padding: '14px 20px' }}>
-                      <span
-                        style={{
-                          padding: '4px 10px',
-                          borderRadius: 20,
-                          fontSize: 11,
-                          fontWeight: 600,
-                          textTransform: 'uppercase',
-                          background: r.type === 'class' ? 'rgba(56,189,248,0.15)' : 'rgba(168,85,247,0.15)',
-                          border: r.type === 'class' ? '1px solid rgba(56,189,248,0.4)' : '1px solid rgba(168,85,247,0.4)',
-                          color: r.type === 'class' ? '#7dd3fc' : '#c084fc',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4,
-                        }}
-                      >
-                        {r.type === 'class' ? <BookOpen size={12} /> : <Layers size={12} />}
-                        {r.type}
+              {/* Mobile Card View */}
+              <div className="md:hidden p-4 space-y-3">
+                {filteredRequests.map((req) => (
+                  <div key={`m-${req._id}`} className="bg-slate-800/60 border border-white/[0.06] rounded-xl p-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h4 className="font-bold text-white text-sm">{req.name}</h4>
+                        <p className="text-xs text-slate-500">{req.requestedBy?.name} • {req.requestedBy?.email}</p>
+                      </div>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${typeBadge(req.type)}`}>
+                        {req.type}
                       </span>
-                    </td>
-
-                    <td style={{ padding: '14px 20px', color: '#fff' }}>
-                      <div style={{ fontWeight: 700 }}>{r.approvedName || r.name}</div>
-                      {r.originalName && r.approvedName && r.originalName.toLowerCase() !== r.approvedName.toLowerCase() && (
-                        <div style={{ fontSize: 10, color: '#38bdf8', marginTop: 2, background: 'rgba(56,189,248,0.1)', padding: '2px 6px', borderRadius: 4, display: 'inline-block' }}>
-                          Standardised from "{r.originalName}"
-                        </div>
-                      )}
-                    </td>
-
-                    <td style={{ padding: '14px 20px', color: '#94a3b8', fontSize: 12 }}>
-                      {r.className || r.classRef?.name || '—'}
-                    </td>
-
-                    <td style={{ padding: '14px 20px' }}>
-                      {r.status === 'pending' && (
-                        <span style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)', color: '#fef08a', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                          <Clock size={12} /> Pending Review
-                        </span>
-                      )}
-                      {r.status === 'approved' && (
-                        <span style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#a7f3d0', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                          <CheckCircle2 size={12} /> Approved & Created
-                        </span>
-                      )}
-                      {r.status === 'rejected' && (
-                        <span style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#fca5a5', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                          <XCircle size={12} /> Rejected
-                        </span>
-                      )}
-                    </td>
-
-                    <td style={{ padding: '14px 20px', color: '#94a3b8', fontSize: 12 }}>
-                      {new Date(r.createdAt).toLocaleDateString()}
-                    </td>
-
-                    <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                      {r.status === 'pending' ? (
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
-                          <button
-                            onClick={() => openApproveModal(r)}
-                            style={{ padding: '6px 14px', borderRadius: 8, background: '#10b981', color: '#fff', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-                          >
-                            Approve
-                          </button>
-                          <button
-                            onClick={() => openRejectModal(r)}
-                            style={{ padding: '6px 14px', borderRadius: 8, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#fca5a5', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      ) : (
-                        <span style={{ fontSize: 11, color: '#64748b' }}>Reviewed</span>
-                      )}
-                    </td>
-                  </tr>
+                    </div>
+                    {req.reason && <p className="text-xs text-slate-400 mb-2 leading-relaxed line-clamp-2">{req.reason}</p>}
+                    <div className="flex items-center justify-between text-xs text-slate-500 mb-3">
+                      <span>{new Date(req.createdAt).toLocaleDateString()}</span>
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${statusBadge(req.status)}`}>{req.status}</span>
+                    </div>
+                    {req.status === 'pending' && (
+                      <div className="flex gap-2">
+                        <button onClick={() => openApproveModal(req)}
+                          className="flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold cursor-pointer">
+                          <Check size={12} /> Approve
+                        </button>
+                        <button onClick={() => openRejectModal(req)}
+                          className="flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-semibold cursor-pointer">
+                          <X size={12} /> Reject
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </>
           )}
         </div>
       </main>
 
-      {/* Approve Modal with Name Standardisation */}
+      {/* Approve Modal */}
       {approveModalOpen && approveRequestItem && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, zIndex: 9999 }}>
-          <div style={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 16, width: '100%', maxWidth: 460, padding: 24, boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)', pb: 12 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#34d399', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <CheckCircle2 size={18} /> Approve & Standardise Category
-              </h3>
-              <button onClick={() => setApproveModalOpen(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 20, cursor: 'pointer' }}>×</button>
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold text-emerald-400 flex items-center gap-2"><CheckCircle2 size={18} /> Approve Request</h3>
+              <button onClick={() => setApproveModalOpen(false)} className="text-slate-500 hover:text-white text-xl cursor-pointer">×</button>
             </div>
-
-            <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 16 }}>
-              Approving <strong style={{ color: '#fff' }}>"{approveRequestItem.name}"</strong> ({approveRequestItem.type}) requested by <strong style={{ color: '#fff' }}>{approveRequestItem.requestedBy?.name}</strong>.
-            </p>
-
-            <form onSubmit={handleApproveSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="bg-white/[0.03] rounded-lg p-3 mb-4 text-sm text-slate-300">
+              <strong className="text-white">{approveRequestItem.requestedBy?.name}</strong> requested to add <strong className="text-emerald-400">{approveRequestItem.name}</strong> as a new {approveRequestItem.type}.
+            </div>
+            <form onSubmit={handleApproveSubmit} className="space-y-4">
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#f8fafc', marginBottom: 6 }}>
-                  Standardised Approved Name <span style={{ color: '#10b981' }}>*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={approvedName}
-                  onChange={(e) => setApprovedName(e.target.value)}
-                  placeholder="e.g. Mathematics, Class 10"
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: 13, fontWeight: 600 }}
-                />
-                {approveRequestItem.name.toLowerCase() !== approvedName.trim().toLowerCase() && (
-                  <p style={{ fontSize: 11, color: '#38bdf8', marginTop: 4 }}>
-                    Notice: Name will be updated from "{approveRequestItem.name}" to "{approvedName.trim()}".
-                  </p>
-                )}
+                <label className="block text-xs font-semibold text-white mb-1.5">Approved Name <span className="text-red-400">*</span></label>
+                <input type="text" required value={approvedName} onChange={(e) => setApprovedName(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg bg-black/30 border border-white/10 text-white text-sm font-semibold focus:outline-none focus:border-emerald-500/50" />
               </div>
-
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#f8fafc', marginBottom: 6 }}>
-                  Admin Note / Message for Teacher (Optional)
-                </label>
-                <textarea
-                  rows={2}
-                  value={adminNote}
-                  onChange={(e) => setAdminNote(e.target.value)}
-                  placeholder="e.g. Standardised to match official curriculum naming conventions..."
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: 13, resize: 'vertical' }}
-                />
+                <label className="block text-xs font-semibold text-white mb-1.5">Admin Note (Optional)</label>
+                <textarea rows={3} value={adminNote} onChange={(e) => setAdminNote(e.target.value)} placeholder="e.g. Standardized name to match taxonomy..."
+                  className="w-full px-3 py-2.5 rounded-lg bg-black/30 border border-white/10 text-white text-sm resize-y focus:outline-none focus:border-emerald-500/50 placeholder:text-slate-600" />
               </div>
-
-              <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-                <button
-                  type="button"
-                  onClick={() => setApproveModalOpen(false)}
-                  style={{ flex: 1, padding: 10, borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: '#94a3b8', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingReview || !approvedName.trim()}
-                  style={{ flex: 1, padding: 10, borderRadius: 8, border: 'none', background: '#10b981', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: submittingReview || !approvedName.trim() ? 0.5 : 1 }}
-                >
-                  {submittingReview ? 'Approving...' : 'Confirm Approval'}
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setApproveModalOpen(false)} className="flex-1 py-2.5 rounded-lg border border-white/10 text-slate-400 text-sm font-semibold cursor-pointer hover:bg-white/5 transition-all">Cancel</button>
+                <button type="submit" disabled={submittingReview || !approvedName.trim()} className="flex-1 py-2.5 rounded-lg bg-emerald-500 text-slate-950 text-sm font-bold cursor-pointer hover:bg-emerald-400 disabled:opacity-40 transition-all">
+                  {submittingReview ? 'Approving...' : 'Approve & Create'}
                 </button>
               </div>
             </form>
@@ -473,61 +289,27 @@ export default function TaxonomyRequests() {
 
       {/* Reject Modal */}
       {rejectModalOpen && selectedRequest && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justify: 'center', padding: 20, zIndex: 9999 }}>
-          <div style={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 16, width: '100%', maxWidth: 460, padding: 24, boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)', pb: 12 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#f87171', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <AlertCircle size={18} /> Reject Request
-              </h3>
-              <button onClick={() => setRejectModalOpen(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 20, cursor: 'pointer' }}>×</button>
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-red-500/30 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold text-red-400 flex items-center gap-2"><XCircle size={18} /> Reject Request</h3>
+              <button onClick={() => setRejectModalOpen(false)} className="text-slate-500 hover:text-white text-xl cursor-pointer">×</button>
             </div>
-
-            <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 16 }}>
-              Rejecting <strong style={{ color: '#fff' }}>"{selectedRequest.name}"</strong> requested by <strong style={{ color: '#fff' }}>{selectedRequest.requestedBy?.name}</strong>.
-            </p>
-
-            <form onSubmit={handleRejectSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <form onSubmit={handleRejectSubmit} className="space-y-4">
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#f8fafc', marginBottom: 6 }}>
-                  Rejection Reason <span style={{ color: '#ef4444' }}>*</span>
-                </label>
-                <textarea
-                  required
-                  rows={3}
-                  value={rejectionReason}
-                  onChange={(e) => setRejectionReason(e.target.value)}
-                  placeholder="Reason why this Class/Subject cannot be added..."
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: 13, resize: 'vertical' }}
-                />
+                <label className="block text-xs font-semibold text-white mb-1.5">Rejection Reason <span className="text-red-400">*</span></label>
+                <textarea rows={3} required value={rejectionReason} onChange={(e) => setRejectionReason(e.target.value)} placeholder="Why is this request being rejected?"
+                  className="w-full px-3 py-2.5 rounded-lg bg-black/30 border border-white/10 text-white text-sm resize-y focus:outline-none focus:border-red-500/50 placeholder:text-slate-600" />
               </div>
-
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#f8fafc', marginBottom: 6 }}>
-                  Admin Suggestion / Alternative (Optional)
-                </label>
-                <textarea
-                  rows={2}
-                  value={adminSuggestion}
-                  onChange={(e) => setAdminSuggestion(e.target.value)}
-                  placeholder="Recommend an existing Class or Subject to use instead..."
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: 13, resize: 'vertical' }}
-                />
+                <label className="block text-xs font-semibold text-white mb-1.5">Suggestion for Teacher (Optional)</label>
+                <textarea rows={2} value={adminSuggestion} onChange={(e) => setAdminSuggestion(e.target.value)} placeholder="e.g. Please use 'Applied Physics' instead..."
+                  className="w-full px-3 py-2.5 rounded-lg bg-black/30 border border-white/10 text-white text-sm resize-y focus:outline-none focus:border-red-500/50 placeholder:text-slate-600" />
               </div>
-
-              <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-                <button
-                  type="button"
-                  onClick={() => setRejectModalOpen(false)}
-                  style={{ flex: 1, padding: 10, borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: '#94a3b8', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingReview || !rejectionReason.trim()}
-                  style={{ flex: 1, padding: 10, borderRadius: 8, border: 'none', background: '#ef4444', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: submittingReview || !rejectionReason.trim() ? 0.5 : 1 }}
-                >
-                  {submittingReview ? 'Submitting...' : 'Confirm Rejection'}
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setRejectModalOpen(false)} className="flex-1 py-2.5 rounded-lg border border-white/10 text-slate-400 text-sm font-semibold cursor-pointer hover:bg-white/5 transition-all">Cancel</button>
+                <button type="submit" disabled={submittingReview || !rejectionReason.trim()} className="flex-1 py-2.5 rounded-lg bg-red-500 text-white text-sm font-bold cursor-pointer hover:bg-red-400 disabled:opacity-40 transition-all">
+                  {submittingReview ? 'Rejecting...' : 'Confirm Rejection'}
                 </button>
               </div>
             </form>
