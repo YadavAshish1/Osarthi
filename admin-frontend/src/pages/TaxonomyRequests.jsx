@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import AdminHeader from '../components/AdminHeader';
 import {
   Send,
   Clock,
@@ -166,32 +167,7 @@ export default function TaxonomyRequests() {
       </div>
 
       {/* Header */}
-      <header style={{ display: 'flex', alignItems: 'center', justify: 'space-between', justifyContent: 'space-between', padding: '16px 32px', borderBottom: '1px solid rgba(255,255,255,0.1)', background: '#1e293b' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <Link to="/dashboard" style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, textDecoration: 'none' }}>
-            <ArrowLeft size={16} /> Back to Dashboard
-          </Link>
-          <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Send size={20} color="#38bdf8" />
-            <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>
-              Category & Taxonomy Requests
-            </h1>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <span style={{ fontSize: 12, padding: '4px 12px', borderRadius: 20, background: 'rgba(56,189,248,0.15)', border: '1px solid rgba(56,189,248,0.4)', color: '#7dd3fc', fontWeight: 600 }}>
-            Role: {user?.role === 'super_admin' ? 'Super Admin' : 'Admin'}
-          </span>
-          <button
-            onClick={logout}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#f8fafc', fontSize: 13, cursor: 'pointer' }}
-          >
-            <LogOut size={14} /> Sign Out
-          </button>
-        </div>
-      </header>
+      <AdminHeader activePage="taxonomy-requests" />
 
       {/* Main Content Container */}
       <main style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 24px' }}>
