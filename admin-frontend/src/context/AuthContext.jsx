@@ -12,7 +12,7 @@ export function AuthProvider({ children }) {
     if (!token) { setLoading(false); return; }
     api.get('/auth/me')
       .then((res) => {
-        if (res.data?.user?.role === 'admin') {
+        if (['admin', 'super_admin'].includes(res.data?.user?.role)) {
           setUser(res.data.user);
         } else {
           localStorage.removeItem('adminToken');
@@ -25,7 +25,9 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => {
     const res = await api.post('/auth/login', { email, password });
     const { accessToken, user: u } = res.data;
-    if (u.role !== 'admin') throw new Error('Access denied. Admin account required.');
+    if (!['admin', 'super_admin'].includes(u.role)) {
+      throw new Error('Access denied. Admin or Super Admin account required.');
+    }
     localStorage.setItem('adminToken', accessToken);
     setUser(u);
     return u;

@@ -426,7 +426,7 @@ export default function BlogDetailClient({
       <div className="max-w-3xl mx-auto px-6 font-serif-body text-lg md:text-xl leading-relaxed text-[#2A2A2A] space-y-6">
         {hasBlocks ? (
           blog.blocks!.map((block) => (
-            <div key={block.id}>
+            <div key={block.id} style={{ textAlign: (block as any).align || "left" }}>
               {block.type === "heading" && (
                 <h2 className={`font-serif-display font-semibold text-[#1A1A1A] pt-6 pb-2 border-b border-[#E5E1D8]/60 ${
                   block.level === 1 ? "text-3xl md:text-4xl" : "text-2xl md:text-3xl"

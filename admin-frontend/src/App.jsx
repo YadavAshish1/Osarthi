@@ -2,9 +2,10 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute, GuestOnly } from './components/ProtectedRoute';
 import Login from './pages/Login';
-import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import TeacherApplications from './pages/TeacherApplications';
+import UserManagement from './pages/UserManagement';
+import TaxonomyRequests from './pages/TaxonomyRequests';
 
 export default function App() {
   return (
@@ -17,7 +18,7 @@ export default function App() {
           />
           <Route
             path="/signup"
-            element={<GuestOnly><Signup /></GuestOnly>}
+            element={<Navigate to="/login" replace />}
           />
           <Route
             path="/dashboard"
@@ -26,6 +27,14 @@ export default function App() {
           <Route
             path="/applications"
             element={<ProtectedRoute><TeacherApplications /></ProtectedRoute>}
+          />
+          <Route
+            path="/users"
+            element={<ProtectedRoute><UserManagement /></ProtectedRoute>}
+          />
+          <Route
+            path="/taxonomy-requests"
+            element={<ProtectedRoute><TaxonomyRequests /></ProtectedRoute>}
           />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>

@@ -172,6 +172,25 @@ export default function Dashboard() {
         </div>
         <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <a
+            href="/users"
+            className="btn"
+            style={{
+              padding: '7px 14px',
+              fontSize: 13,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              background: user?.role === 'super_admin' ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.06)',
+              border: user?.role === 'super_admin' ? '1px solid rgba(239,68,68,0.4)' : '1px solid rgba(255,255,255,0.15)',
+              color: user?.role === 'super_admin' ? '#fca5a5' : '#f8fafc',
+              borderRadius: 8,
+              textDecoration: 'none',
+              fontWeight: 600,
+            }}
+          >
+            <User size={14} /> User Directory & Roles
+          </a>
+          <a
             href="/applications"
             className="btn"
             style={{
@@ -190,9 +209,33 @@ export default function Dashboard() {
           >
             <User size={14} /> Teacher Applications
           </a>
+          <a
+            href="/taxonomy-requests"
+            className="btn"
+            style={{
+              padding: '7px 14px',
+              fontSize: 13,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              background: 'rgba(168,85,247,0.12)',
+              border: '1px solid rgba(168,85,247,0.3)',
+              color: '#c084fc',
+              borderRadius: 8,
+              textDecoration: 'none',
+              fontWeight: 600,
+            }}
+          >
+            <Tag size={14} /> Category Requests
+          </a>
           <div className="header-user">
             <User size={13} />
             {user?.name || user?.email}
+            {user?.role === 'super_admin' && (
+              <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 10, background: '#ef4444', color: '#fff', marginLeft: 4, fontWeight: 700 }}>
+                SUPER ADMIN
+              </span>
+            )}
           </div>
           <button
             className="btn btn-ghost"

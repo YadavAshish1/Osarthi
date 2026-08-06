@@ -9,7 +9,7 @@ import { fileURLToPath } from 'url';
 import { connectDB } from './config/db.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import authRoutes from './routes/auth.js';
-import taxonomyRoutes from './routes/taxonomy.js';
+import taxonomyRoutes, { seedDefaultTaxonomy } from './routes/taxonomy.js';
 import contentRoutes from './routes/content.js';
 import quizRoutes from './routes/quiz.js';
 import notificationRoutes from './routes/notifications.js';
@@ -19,6 +19,8 @@ import exploreRoutes from './routes/explore.js';
 import commentsRoutes from './routes/comments.js';
 import contactRoutes from './routes/contact.js';
 import teacherApplicationRoutes from './routes/teacherApplications.js';
+import superAdminRoutes, { seedSuperAdmin } from './routes/superAdmin.js';
+import taxonomyRequestRoutes from './routes/taxonomyRequests.js';
 import { getStorageMode, isCloudinaryEnabled } from './services/storage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -26,6 +28,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 await connectDB();
+await seedSuperAdmin();
+await seedDefaultTaxonomy();
 
 // Behind Render/other reverse proxies, allow Express to trust X-Forwarded-* headers.
 // This is required for express-rate-limit to correctly identify clients.
@@ -90,6 +94,8 @@ app.use('/api/explore', exploreRoutes);
 app.use('/api/comments', commentsRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/teacher-applications', teacherApplicationRoutes);
+app.use('/api/superadmin', superAdminRoutes);
+app.use('/api/taxonomy-requests', taxonomyRequestRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 

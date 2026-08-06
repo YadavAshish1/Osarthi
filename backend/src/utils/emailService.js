@@ -259,3 +259,134 @@ export async function sendTeacherRejectionEmail(toEmail, name, reason) {
     return { success: false, error: err.message };
   }
 }
+
+// ─── Taxonomy Request Emails (Class & Subject Requests) ─────────────────────
+
+export async function sendTaxonomyRequestAdminNotification({ type, name, teacherName, teacherEmail, className }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.EMAIL_FROM || 'Medhashine <onboarding@resend.dev>';
+  const recipients = getAdminRecipientEmails();
+
+  console.log(`[Taxonomy Request] New ${type} request "${name}" from ${teacherName} <${teacherEmail}>`);
+
+  if (!apiKey) {
+    console.warn('[Resend] RESEND_API_KEY or ADMIN_EMAIL not set. Notification logged to console.');
+    return { success: true, devMode: true };
+  }
+
+  const client = getResendClient();
+  const html = `
+    <div style="font-family: 'Inter', system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; border-radius: 16px; overflow: hidden; border: 1px solid #E5E1D8;">
+      <div style="background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%); padding: 32px 28px; text-align: center;">
+        <h1 style="color: #ffffff; font-size: 22px; font-weight: 700; margin: 0 0 6px 0;">New ${type.toUpperCase()} Request</h1>
+        <p style="color: rgba(255,255,255,0.85); font-size: 14px; margin: 0;">Teacher ${teacherName} requested a new academic category</p>
+      </div>
+      <div style="padding: 28px; background-color: #FAF8F5;">
+        <div style="background: #ffffff; border-radius: 12px; padding: 24px; border: 1px solid #E5E1D8; margin-bottom: 20px;">
+          <p style="margin: 0 0 10px 0; font-size: 15px; color: #1A1A1A;"><strong>Request Type:</strong> ${type === 'class' ? 'Class Level' : 'Subject'}</p>
+          <p style="margin: 0 0 10px 0; font-size: 15px; color: #1A1A1A;"><strong>Requested Name:</strong> <span style="color: #0284C7; font-weight: bold;">${name}</span></p>
+          ${className ? `<p style="margin: 0 0 10px 0; font-size: 15px; color: #1A1A1A;"><strong>Under Class:</strong> ${className}</p>` : ''}
+          <hr style="border: none; border-top: 1px solid #E5E1D8; margin: 16px 0;" />
+          <p style="margin: 0 0 6px 0; font-size: 14px; color: #5C5A55;"><strong>Teacher:</strong> ${teacherName}</p>
+          <p style="margin: 0; font-size: 14px; color: #5C5A55;"><strong>Email:</strong> ${teacherEmail}</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  try {
+    const { data, error } = await client.emails.send({
+      from: fromEmail,
+      to: recipients,
+      subject: `[Medhashine] New ${type.toUpperCase()} Request: ${name} (from ${teacherName})`,
+      html,
+    });
+    if (error) throw new Error(error.message);
+    return { success: true, data };
+  } catch (err) {
+    console.error('[sendTaxonomyRequestAdminNotification Exception]', err);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function sendTaxonomyRequestStatusEmail({ teacherEmail, teacherName, type, name, originalName, approvedName, status, rejectionReason, adminSuggestion, adminNote }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.EMAIL_FROM || 'Medhashine <onboarding@resend.dev>';
+
+  const finalName = approvedName || name;
+  const wasStandardised = originalName && approvedName && originalName.toLowerCase() !== approvedName.toLowerCase();
+
+  console.log(`[Taxonomy Request Updated] ${type} "${finalName}" status: ${status} for ${teacherEmail}`);
+
+  if (!apiKey) {
+    console.warn('[Resend] RESEND_API_KEY not set. Logged to console.');
+    return { success: true, devMode: true };
+  }
+
+  const client = getResendClient();
+  const isApproved = status === 'approved';
+
+  const html = `
+    <div style="font-family: 'Inter', system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; border-radius: 16px; overflow: hidden; border: 1px solid #E5E1D8;">
+      <div style="background: ${isApproved ? 'linear-gradient(135deg, #16A34A 0%, #15803D 100%)' : 'linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)'}; padding: 32px 28px; text-align: center;">
+        <h1 style="color: #ffffff; font-size: 22px; font-weight: 700; margin: 0 0 6px 0;">
+          ${isApproved ? '🎉 Request Approved!' : 'Request Status Update'}
+        </h1>
+        <p style="color: rgba(255,255,255,0.85); font-size: 14px; margin: 0;">Regarding your ${type} request for "${originalName || name}"</p>
+      </div>
+      <div style="padding: 28px; background-color: #FAF8F5;">
+        <div style="background: #ffffff; border-radius: 12px; padding: 24px; border: 1px solid #E5E1D8; margin-bottom: 20px;">
+          <p style="margin: 0 0 12px 0; font-size: 15px; color: #1A1A1A;">Hi ${teacherName || 'Teacher'},</p>
+          ${isApproved ? `
+            <p style="margin: 0 0 12px 0; font-size: 15px; color: #1A1A1A; line-height: 1.6;">
+              Great news! Your request for <strong>${originalName || name}</strong> (${type}) has been approved by the Admin team and added to the official Medhashine academic taxonomy.
+            </p>
+            ${wasStandardised ? `
+              <div style="background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 8px; padding: 14px; margin-bottom: 12px;">
+                <p style="margin: 0 0 4px 0; font-size: 11px; font-weight: 700; color: #1E40AF; text-transform: uppercase;">Standardised Name Notice</p>
+                <p style="margin: 0; font-size: 14px; color: #1E3A8A;">The requested name <strong>"${originalName}"</strong> was standardized to <strong>"${approvedName}"</strong> for official curriculum consistency.</p>
+              </div>
+            ` : ''}
+            ${adminNote ? `
+              <div style="background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 8px; padding: 14px; margin-bottom: 12px;">
+                <p style="margin: 0 0 4px 0; font-size: 11px; font-weight: 700; color: #166534; text-transform: uppercase;">Admin Note</p>
+                <p style="margin: 0; font-size: 14px; color: #14532D;">${adminNote}</p>
+              </div>
+            ` : ''}
+            <p style="margin: 0; font-size: 14px; color: #16A34A; font-weight: 600;">You can now select ${finalName} when creating new educational insights!</p>
+          ` : `
+            <p style="margin: 0 0 16px 0; font-size: 15px; color: #1A1A1A; line-height: 1.6;">
+              Your request for <strong>${originalName || name}</strong> (${type}) was not approved at this time.
+            </p>
+            ${rejectionReason ? `
+              <div style="background: #FEF2F2; border: 1px solid #FECACA; border-radius: 8px; padding: 14px; margin-bottom: 12px;">
+                <p style="margin: 0 0 4px 0; font-size: 11px; font-weight: 700; color: #991B1B; text-transform: uppercase;">Rejection Reason</p>
+                <p style="margin: 0; font-size: 14px; color: #7F1D1D;">${rejectionReason}</p>
+              </div>
+            ` : ''}
+            ${adminSuggestion ? `
+              <div style="background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 8px; padding: 14px;">
+                <p style="margin: 0 0 4px 0; font-size: 11px; font-weight: 700; color: #1E40AF; text-transform: uppercase;">Admin Suggestion</p>
+                <p style="margin: 0; font-size: 14px; color: #1E3A8A;">${adminSuggestion}</p>
+              </div>
+            ` : ''}
+          `}
+        </div>
+      </div>
+    </div>
+  `;
+
+  try {
+    const { data, error } = await client.emails.send({
+      from: fromEmail,
+      to: [teacherEmail],
+      subject: `Medhashine Request Update — ${type.toUpperCase()}: ${name} (${isApproved ? 'Approved' : 'Rejected'})`,
+      html,
+    });
+    if (error) throw new Error(error.message);
+    return { success: true, data };
+  } catch (err) {
+    console.error('[sendTaxonomyRequestStatusEmail Exception]', err);
+    return { success: false, error: err.message };
+  }
+}

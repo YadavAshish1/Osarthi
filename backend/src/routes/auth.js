@@ -344,4 +344,73 @@ router.post('/oauth-register', async (req, res, next) => {
   }
 });
 
+/** POST /api/auth/forgot-password — Send OTP code for password reset */
+router.post('/forgot-password', async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ message: 'Valid email address is required' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: cleanEmail });
+    if (!user) {
+      // Return 200 for security, avoid leaking user existence
+      return res.json({ message: 'If an account exists, a reset verification code has been sent.' });
+    }
+
+    if (user.isActive === false) {
+      return res.status(403).json({ message: 'Account is deactivated. Please contact Super Admin.' });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    await OtpVerification.deleteMany({ email: cleanEmail });
+    await OtpVerification.create({
+      email: cleanEmail,
+      otp,
+    });
+
+    await sendOtpEmail(cleanEmail, otp, user.name);
+
+    res.json({ message: 'Password reset code sent to your email.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** POST /api/auth/reset-password — Verify OTP and reset password */
+router.post('/reset-password', async (req, res, next) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({ message: 'Email, OTP code, and new password are required' });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ message: 'New password must be at least 8 characters' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const otpRecord = await OtpVerification.findOne({ email: cleanEmail, otp: otp.trim() });
+    if (!otpRecord) {
+      return res.status(400).json({ message: 'Invalid or expired reset code' });
+    }
+
+    const user = await User.findOne({ email: cleanEmail });
+    if (!user) {
+      return res.status(404).json({ message: 'User account not found' });
+    }
+
+    user.passwordHash = await hashPassword(newPassword);
+    await user.save();
+
+    await OtpVerification.deleteMany({ email: cleanEmail });
+
+    res.json({ message: 'Password reset successfully! You can now log in with your new password.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

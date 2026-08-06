@@ -147,6 +147,11 @@ router.post('/bookmarks/toggle', async (req, res, next) => {
 
     await user.save();
 
+    if (mongoose.Types.ObjectId.isValid(blogId)) {
+      const inc = isAlreadySaved ? -1 : 1;
+      await Content.findByIdAndUpdate(blogId, { $inc: { bookmarksCount: inc } });
+    }
+
     res.json({
       saved: !isAlreadySaved,
       message: !isAlreadySaved ? 'Saved to bookmarks' : 'Removed from bookmarks',
@@ -217,7 +222,7 @@ router.post('/likes/toggle', async (req, res, next) => {
     // Also update likes_count on Content document if valid ObjectId
     if (mongoose.Types.ObjectId.isValid(blogId)) {
       const inc = isAlreadyLiked ? -1 : 1;
-      await Content.findByIdAndUpdate(blogId, { $inc: { likes_count: inc } });
+      await Content.findByIdAndUpdate(blogId, { $inc: { likes_count: inc, likesCount: inc } });
     }
 
     res.json({

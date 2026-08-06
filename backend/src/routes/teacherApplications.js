@@ -24,25 +24,9 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ message: 'Name and email are required' });
     }
 
-    // Check for existing pending/approved application with this email
-    const existing = await TeacherApplication.findOne({
-      email: email.toLowerCase().trim(),
-      status: { $in: ['pending', 'approved'] },
-    });
-    if (existing) {
-      if (existing.status === 'approved') {
-        return res.status(409).json({ message: 'This email has already been approved as a teacher' });
-      }
-      return res.status(409).json({ message: 'You already have a pending application. Please wait for review.' });
-    }
+    const cleanEmail = email.toLowerCase().trim();
 
-    // Check if user is already a teacher
-    const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
-    if (existingUser && existingUser.role === 'teacher') {
-      return res.status(409).json({ message: 'This email is already registered as a teacher' });
-    }
-
-    // Try to link to an authenticated user
+    // Link to authenticated or existing user account
     let applicantRef = null;
     const header = req.headers.authorization;
     if (header?.startsWith('Bearer ')) {
@@ -51,25 +35,56 @@ router.post('/', async (req, res, next) => {
         const decoded = verifyAccessToken(header.slice(7));
         const user = await User.findById(decoded.userId);
         if (user) applicantRef = user._id;
-      } catch {
-        // Not authenticated — that's fine for guest applications
-      }
+      } catch {}
     }
 
-    const application = await TeacherApplication.create({
-      applicantRef,
-      name: name.trim(),
-      email: email.toLowerCase().trim(),
-      phone: phone?.trim() || '',
-      dateOfBirth: dateOfBirth || undefined,
-      avatar: avatar || '',
-      education: Array.isArray(education) ? education : [],
-      subjects: Array.isArray(subjects) ? subjects : [],
-      requestedSubjects: Array.isArray(requestedSubjects) ? requestedSubjects : [],
-      experience: Array.isArray(experience) ? experience : [],
-      bio: bio?.trim() || '',
-      motivation: motivation?.trim() || '',
-    });
+    const existingUser = await User.findOne({ email: cleanEmail });
+    if (existingUser && !applicantRef) {
+      applicantRef = existingUser._id;
+    }
+
+    // Upsert (create or update) application
+    let application = await TeacherApplication.findOne({ email: cleanEmail });
+
+    if (application) {
+      application.name = name.trim();
+      application.phone = phone?.trim() || application.phone || '';
+      if (dateOfBirth) application.dateOfBirth = dateOfBirth;
+      if (avatar) application.avatar = avatar;
+      if (Array.isArray(education)) application.education = education;
+      if (Array.isArray(subjects)) application.subjects = subjects;
+      if (Array.isArray(requestedSubjects)) application.requestedSubjects = requestedSubjects;
+      if (Array.isArray(experience)) application.experience = experience;
+      if (bio?.trim()) application.bio = bio.trim();
+      if (motivation?.trim()) application.motivation = motivation.trim();
+      if (applicantRef) application.applicantRef = applicantRef;
+      await application.save();
+    } else {
+      application = await TeacherApplication.create({
+        applicantRef,
+        name: name.trim(),
+        email: cleanEmail,
+        phone: phone?.trim() || '',
+        dateOfBirth: dateOfBirth || undefined,
+        avatar: avatar || '',
+        education: Array.isArray(education) ? education : [],
+        subjects: Array.isArray(subjects) ? subjects : [],
+        requestedSubjects: Array.isArray(requestedSubjects) ? requestedSubjects : [],
+        experience: Array.isArray(experience) ? experience : [],
+        bio: bio?.trim() || '',
+        motivation: motivation?.trim() || '',
+        status: 'pending',
+      });
+    }
+
+    // Sync updated bio, education, experience to User model if user exists
+    if (existingUser) {
+      if (bio?.trim()) existingUser.bio = bio.trim();
+      if (Array.isArray(education) && education.length > 0) existingUser.education = education;
+      if (Array.isArray(experience) && experience.length > 0) existingUser.experience = experience;
+      if (avatar) existingUser.avatar = avatar;
+      await existingUser.save();
+    }
 
     // Notify admin via email (non-blocking)
     const adminUrl = process.env.ADMIN_URL || 'http://localhost:5174';
@@ -80,7 +95,7 @@ router.post('/', async (req, res, next) => {
     ).catch(() => {});
 
     res.status(201).json({
-      message: 'Application submitted successfully! Our team will review it shortly.',
+      message: 'Teacher profile details & application submitted successfully!',
       applicationId: application._id,
       status: application.status,
     });
