@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import TeacherApplications from './pages/TeacherApplications';
 import UserManagement from './pages/UserManagement';
 import TaxonomyRequests from './pages/TaxonomyRequests';
+import TaxonomyManagement from './pages/TaxonomyManagement';
 
 export default function App() {
   return (
@@ -35,6 +36,10 @@ export default function App() {
           <Route
             path="/taxonomy-requests"
             element={<ProtectedRoute><TaxonomyRequests /></ProtectedRoute>}
+          />
+          <Route
+            path="/taxonomy"
+            element={<ProtectedRoute><TaxonomyManagement /></ProtectedRoute>}
           />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>

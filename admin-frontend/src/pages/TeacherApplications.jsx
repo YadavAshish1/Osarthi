@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import AdminHeader from '../components/AdminHeader';
 import {
   Users, CheckCircle2, XCircle, Clock, Search, Filter,
   RefreshCw, Check, X, Eye, GraduationCap, Briefcase,
@@ -96,25 +97,7 @@ export default function TeacherApplications() {
   return (
     <div className="admin-layout" style={{ minHeight: '100vh', background: 'var(--bg-primary, #0f172a)', color: 'var(--text-primary, #f8fafc)' }}>
       {/* Header */}
-      <header className="dashboard-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 32px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <a href="/dashboard" style={{ color: 'inherit', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, opacity: 0.8 }}>
-            <ArrowLeft size={16} /> Back to Dashboard
-          </a>
-          <span style={{ opacity: 0.3 }}>|</span>
-          <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Teacher Applications</h2>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ fontSize: 13, opacity: 0.8 }}>
-            <ShieldCheck size={14} style={{ display: 'inline', marginRight: 6 }} />
-            {user?.name || user?.email}
-          </div>
-          <button className="btn btn-ghost" onClick={logout} style={{ padding: '6px 12px', fontSize: 12 }}>
-            <LogOut size={14} /> Sign out
-          </button>
-        </div>
-      </header>
+      <AdminHeader activePage="applications" />
 
       {/* Main Body */}
       <div style={{ padding: '32px', maxWidth: 1280, margin: '0 auto' }}>

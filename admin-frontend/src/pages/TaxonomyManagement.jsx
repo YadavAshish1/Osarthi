@@ -1,0 +1,484 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { api } from '../api/client';
+import AdminHeader from '../components/AdminHeader';
+import {
+  BookOpen, Layers, Plus, Edit2, Power, History,
+  CheckCircle2, XCircle, Search, AlertCircle,
+} from 'lucide-react';
+
+export default function TaxonomyManagement() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const [classes, setClasses] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const [activeTab, setActiveTab] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  const [addClassModalOpen, setAddClassModalOpen] = useState(false);
+  const [addSubjectModalOpen, setAddSubjectModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+
+  const [newClassName, setNewClassName] = useState('');
+  const [newSubjectName, setNewSubjectName] = useState('');
+  const [selectedClassId, setSelectedClassId] = useState('');
+  const [editName, setEditName] = useState('');
+  const [editIsActive, setEditIsActive] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  const [toasts, setToasts] = useState([]);
+  const addToast = useCallback((message, type = 'success') => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
+  }, []);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get('/taxonomy/admin/overview');
+      if (data?.classes) setClasses(data.classes);
+      if (data?.subjects) setSubjects(data.subjects);
+      if (data?.auditLogs) setAuditLogs(data.auditLogs);
+    } catch (err) {
+      addToast(err?.response?.data?.message || 'Failed to fetch taxonomy data', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [addToast]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const handleAddClassSubmit = async (e) => {
+    e.preventDefault();
+    if (!newClassName.trim()) return;
+    setSubmitting(true);
+    try {
+      const { data } = await api.post('/taxonomy/admin/classes', { name: newClassName.trim() });
+      addToast(data.message || 'Class created!', 'success');
+      setNewClassName('');
+      setAddClassModalOpen(false);
+      fetchData();
+    } catch (err) { addToast(err?.response?.data?.message || 'Failed to create class', 'error'); }
+    finally { setSubmitting(false); }
+  };
+
+  const handleAddSubjectSubmit = async (e) => {
+    e.preventDefault();
+    if (!newSubjectName.trim() || !selectedClassId) { addToast('Enter subject name and select class', 'error'); return; }
+    setSubmitting(true);
+    try {
+      const { data } = await api.post('/taxonomy/admin/subjects', { name: newSubjectName.trim(), classId: selectedClassId });
+      addToast(data.message || 'Subject created!', 'success');
+      setNewSubjectName(''); setSelectedClassId(''); setAddSubjectModalOpen(false); fetchData();
+    } catch (err) { addToast(err?.response?.data?.message || 'Failed to create subject', 'error'); }
+    finally { setSubmitting(false); }
+  };
+
+  const openEditModal = (item, type) => {
+    setSelectedItem({ ...item, type });
+    setEditName(item.name);
+    setEditIsActive(item.isActive !== false);
+    setSelectedClassId(item.classRef?._id || item.classRef || '');
+    setEditModalOpen(true);
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedItem || !editName.trim()) return;
+    setSubmitting(true);
+    try {
+      const endpoint = selectedItem.type === 'class' ? `/taxonomy/admin/classes/${selectedItem._id}` : `/taxonomy/admin/subjects/${selectedItem._id}`;
+      const payload = { name: editName.trim(), isActive: editIsActive, ...(selectedItem.type === 'subject' && { classId: selectedClassId }) };
+      const { data } = await api.put(endpoint, payload);
+      addToast(data.message || 'Updated!', 'success');
+      setEditModalOpen(false); fetchData();
+    } catch (err) { addToast(err?.response?.data?.message || 'Failed to update', 'error'); }
+    finally { setSubmitting(false); }
+  };
+
+  const toggleActiveStatus = async (item, type) => {
+    const nextStatus = item.isActive === false;
+    const actionText = nextStatus ? 'activate' : 'deactivate';
+    if (!confirm(`Are you sure you want to ${actionText} "${item.name}"?`)) return;
+    try {
+      const endpoint = type === 'class' ? `/taxonomy/admin/classes/${item._id}` : `/taxonomy/admin/subjects/${item._id}`;
+      const { data } = await api.put(endpoint, { isActive: nextStatus });
+      addToast(data.message || `Successfully ${actionText}d`, 'success'); fetchData();
+    } catch (err) { addToast(err?.response?.data?.message || `Failed to ${actionText}`, 'error'); }
+  };
+
+  const allCategoryItems = [
+    ...classes.map((c) => ({ ...c, itemType: 'class' })),
+    ...subjects.map((s) => ({ ...s, itemType: 'subject' })),
+  ];
+
+  const filteredItems = allCategoryItems.filter((item) => {
+    const matchesTab = activeTab === 'all' || (activeTab === 'classes' && item.itemType === 'class') || (activeTab === 'subjects' && item.itemType === 'subject');
+    const matchesStatus = statusFilter === 'all' || (statusFilter === 'active' && item.isActive !== false) || (statusFilter === 'deactivated' && item.isActive === false);
+    const q = searchQuery.toLowerCase().trim();
+    const matchesQuery = !q || item.name.toLowerCase().includes(q) || (item.classRef?.name && item.classRef.name.toLowerCase().includes(q));
+    return matchesTab && matchesStatus && matchesQuery;
+  });
+
+  const totalClassesCount = classes.length;
+  const totalSubjectsCount = subjects.length;
+  const activeCount = allCategoryItems.filter((i) => i.isActive !== false).length;
+  const deactivatedCount = allCategoryItems.filter((i) => i.isActive === false).length;
+
+  const actionBadge = (action) => {
+    const map = {
+      create: 'bg-sky-500/15 text-sky-400 border-sky-500/30',
+      edit: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+      activate: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+      deactivate: 'bg-red-500/15 text-red-400 border-red-500/30',
+    };
+    return map[action] || 'bg-slate-700 text-slate-400 border-slate-600';
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-50 font-sans">
+      {/* Toasts */}
+      <div className="fixed top-4 right-4 z-[10000] flex flex-col gap-2">
+        {toasts.map((t) => (
+          <div key={t.id} className={`px-4 py-3 rounded-xl text-sm font-semibold shadow-2xl animate-slide-in ${t.type === 'error' ? 'bg-red-500' : 'bg-emerald-500'} text-white`}>
+            {t.message}
+          </div>
+        ))}
+      </div>
+
+      <AdminHeader activePage="taxonomy" />
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Page Title & Actions */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <div>
+            <p className="text-[11px] font-bold text-sky-400 uppercase tracking-widest mb-1">Academic Structure</p>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Class & Subject Governance</h1>
+            <p className="text-sm text-slate-400 mt-1">Manage official classes, subjects, and audit history.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setAddClassModalOpen(true)} className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-400 text-xs font-bold hover:bg-sky-500/25 transition-all cursor-pointer">
+              <Plus size={15} /> Add Class
+            </button>
+            <button onClick={() => { if (!classes.length) { addToast('Create a class first', 'error'); return; } setSelectedClassId(classes[0]._id); setAddSubjectModalOpen(true); }}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-sky-500 text-slate-950 text-xs font-bold hover:bg-sky-400 transition-all shadow-lg shadow-sky-500/25 cursor-pointer">
+              <Plus size={15} /> Add Subject
+            </button>
+          </div>
+        </div>
+
+        {/* Stat Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+          {[
+            { label: 'Total Classes', value: totalClassesCount, icon: BookOpen, color: 'text-sky-400' },
+            { label: 'Total Subjects', value: totalSubjectsCount, icon: Layers, color: 'text-purple-400' },
+            { label: 'Active', value: activeCount, icon: CheckCircle2, color: 'text-emerald-400' },
+            { label: 'Deactivated', value: deactivatedCount, icon: Power, color: 'text-red-400' },
+            { label: 'Audit Logs', value: auditLogs.length, icon: History, color: 'text-amber-400' },
+          ].map(({ label, value, icon: Icon, color }) => (
+            <div key={label} className="bg-slate-900 border border-white/[0.06] rounded-2xl p-5">
+              <div className={`flex items-center gap-2 text-xs font-semibold text-slate-400 mb-2`}>
+                <Icon size={15} className={color} /> {label}
+              </div>
+              <div className={`text-2xl font-extrabold ${color}`}>{value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Filter Tabs & Search */}
+        <div className="bg-slate-900 border border-white/[0.06] rounded-2xl p-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            {[
+              { id: 'all', label: `All (${allCategoryItems.length})` },
+              { id: 'classes', label: `Classes (${totalClassesCount})` },
+              { id: 'subjects', label: `Subjects (${totalSubjectsCount})` },
+              { id: 'history', label: `History (${auditLogs.length})`, isHistory: true },
+            ].map((tab) => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === tab.id
+                    ? tab.isHistory ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' : 'bg-sky-500 text-slate-950'
+                    : 'bg-white/5 text-slate-400 hover:text-white border border-transparent'
+                }`}>
+                {tab.isHistory && <History size={12} className="inline mr-1 -mt-0.5" />}
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {activeTab !== 'history' && (
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search..."
+                  className="pl-9 pr-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white text-xs w-48 focus:outline-none focus:border-sky-500/50 placeholder:text-slate-500" />
+              </div>
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-3 py-2 rounded-lg bg-slate-950 border border-white/10 text-white text-xs focus:outline-none focus:border-sky-500/50 cursor-pointer">
+                <option value="all">All Statuses</option>
+                <option value="active">Active</option>
+                <option value="deactivated">Deactivated</option>
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* Content */}
+        {activeTab === 'history' ? (
+          /* Audit History */
+          <div className="bg-slate-900 border border-white/[0.06] rounded-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
+              <h3 className="text-base font-bold text-amber-400 flex items-center gap-2"><History size={16} /> Audit Trail</h3>
+              <span className="text-xs text-slate-500">{auditLogs.length} records</span>
+            </div>
+            {auditLogs.length === 0 ? (
+              <div className="p-16 text-center text-slate-600">No audit records yet.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-black/20 text-slate-500 text-[11px] uppercase tracking-wider text-left">
+                      <th className="px-5 py-3.5">Date</th>
+                      <th className="px-5 py-3.5">Item</th>
+                      <th className="px-5 py-3.5">Type</th>
+                      <th className="px-5 py-3.5">Action</th>
+                      <th className="px-5 py-3.5">Details</th>
+                      <th className="px-5 py-3.5">Admin</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditLogs.map((log) => (
+                      <tr key={log._id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                        <td className="px-5 py-4 text-slate-400 text-xs whitespace-nowrap">{new Date(log.createdAt).toLocaleString()}</td>
+                        <td className="px-5 py-4 font-bold text-white">{log.targetName}</td>
+                        <td className="px-5 py-4">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${log.targetType === 'class' ? 'bg-sky-500/15 text-sky-400 border-sky-500/30' : 'bg-purple-500/15 text-purple-400 border-purple-500/30'}`}>
+                            {log.targetType}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4">
+                          <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border ${actionBadge(log.action)}`}>
+                            {log.action}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 text-slate-300 text-xs max-w-xs truncate">{log.details || '—'}</td>
+                        <td className="px-5 py-4">
+                          <div className="font-semibold text-white text-xs">{log.performedBy?.name || 'Admin'}</div>
+                          <div className="text-[11px] text-slate-500">{log.performedBy?.email}</div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Category Table */
+          <div className="bg-slate-900 border border-white/[0.06] rounded-2xl overflow-hidden">
+            {loading ? (
+              <div className="p-16 text-center text-slate-500">Loading...</div>
+            ) : filteredItems.length === 0 ? (
+              <div className="p-16 text-center text-slate-600">No matching categories found.</div>
+            ) : (
+              <>
+                {/* Desktop Table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-black/20 text-slate-500 text-[11px] uppercase tracking-wider text-left">
+                        <th className="px-5 py-3.5">Name</th>
+                        <th className="px-5 py-3.5">Type</th>
+                        <th className="px-5 py-3.5">Parent Class</th>
+                        <th className="px-5 py-3.5">Status</th>
+                        <th className="px-5 py-3.5">Created</th>
+                        <th className="px-5 py-3.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredItems.map((item) => (
+                        <tr key={`${item.itemType}-${item._id}`} className={`border-b border-white/5 hover:bg-white/[0.02] transition-colors ${item.isActive === false ? 'opacity-50' : ''}`}>
+                          <td className="px-5 py-4 font-bold text-white">{item.name}</td>
+                          <td className="px-5 py-4">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${item.itemType === 'class' ? 'bg-sky-500/15 text-sky-400 border-sky-500/30' : 'bg-purple-500/15 text-purple-400 border-purple-500/30'}`}>
+                              {item.itemType === 'class' ? <BookOpen size={10} /> : <Layers size={10} />} {item.itemType}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-slate-400 text-xs">{item.itemType === 'subject' ? (item.classRef?.name || '—') : '—'}</td>
+                          <td className="px-5 py-4">
+                            {item.isActive !== false ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                <CheckCircle2 size={10} /> Active
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/15 text-red-400 border border-red-500/30">
+                                <XCircle size={10} /> Off
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-5 py-4 text-slate-400 text-xs">{new Date(item.createdAt).toLocaleDateString()}</td>
+                          <td className="px-5 py-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button onClick={() => openEditModal(item, item.itemType)}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white text-xs font-semibold hover:bg-white/10 transition-all cursor-pointer">
+                                <Edit2 size={11} /> Edit
+                              </button>
+                              <button onClick={() => toggleActiveStatus(item, item.itemType)}
+                                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${item.isActive !== false ? 'bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20' : 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'}`}>
+                                <Power size={11} /> {item.isActive !== false ? 'Deactivate' : 'Activate'}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="md:hidden p-4 space-y-3">
+                  {filteredItems.map((item) => (
+                    <div key={`m-${item.itemType}-${item._id}`} className={`bg-slate-800/60 border border-white/[0.06] rounded-xl p-4 ${item.isActive === false ? 'opacity-50' : ''}`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-bold text-white text-sm">{item.name}</h4>
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${item.itemType === 'class' ? 'bg-sky-500/15 text-sky-400 border-sky-500/30' : 'bg-purple-500/15 text-purple-400 border-purple-500/30'}`}>
+                          {item.itemType}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-slate-400 mb-3">
+                        <span>{item.itemType === 'subject' ? `Under: ${item.classRef?.name || '—'}` : 'Class Level'}</span>
+                        {item.isActive !== false ? (
+                          <span className="text-emerald-400 font-semibold">● Active</span>
+                        ) : (
+                          <span className="text-red-400 font-semibold">● Off</span>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => openEditModal(item, item.itemType)}
+                          className="flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-xs font-semibold cursor-pointer">
+                          <Edit2 size={12} /> Edit
+                        </button>
+                        <button onClick={() => toggleActiveStatus(item, item.itemType)}
+                          className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer ${item.isActive !== false ? 'bg-red-500/10 border border-red-500/30 text-red-400' : 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'}`}>
+                          <Power size={12} /> {item.isActive !== false ? 'Deactivate' : 'Activate'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* Modal: Add Class */}
+      {addClassModalOpen && (
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold text-sky-400 flex items-center gap-2"><BookOpen size={18} /> Add New Class</h3>
+              <button onClick={() => setAddClassModalOpen(false)} className="text-slate-500 hover:text-white text-xl cursor-pointer">×</button>
+            </div>
+            <form onSubmit={handleAddClassSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-white mb-1.5">Class Name <span className="text-red-400">*</span></label>
+                <input type="text" required value={newClassName} onChange={(e) => setNewClassName(e.target.value)} placeholder="e.g. Class 11, Competitive Exam"
+                  className="w-full px-3 py-2.5 rounded-lg bg-black/30 border border-white/10 text-white text-sm focus:outline-none focus:border-sky-500/50 placeholder:text-slate-600" />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setAddClassModalOpen(false)} className="flex-1 py-2.5 rounded-lg border border-white/10 text-slate-400 text-sm font-semibold cursor-pointer hover:bg-white/5 transition-all">Cancel</button>
+                <button type="submit" disabled={submitting || !newClassName.trim()} className="flex-1 py-2.5 rounded-lg bg-sky-500 text-slate-950 text-sm font-bold cursor-pointer hover:bg-sky-400 disabled:opacity-40 transition-all">
+                  {submitting ? 'Creating...' : 'Create Class'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Add Subject */}
+      {addSubjectModalOpen && (
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold text-purple-400 flex items-center gap-2"><Layers size={18} /> Add New Subject</h3>
+              <button onClick={() => setAddSubjectModalOpen(false)} className="text-slate-500 hover:text-white text-xl cursor-pointer">×</button>
+            </div>
+            <form onSubmit={handleAddSubjectSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-white mb-1.5">Parent Class <span className="text-red-400">*</span></label>
+                <select required value={selectedClassId} onChange={(e) => setSelectedClassId(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg bg-slate-950 border border-white/10 text-white text-sm focus:outline-none focus:border-sky-500/50 cursor-pointer">
+                  <option value="">Select Class</option>
+                  {classes.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-white mb-1.5">Subject Name <span className="text-red-400">*</span></label>
+                <input type="text" required value={newSubjectName} onChange={(e) => setNewSubjectName(e.target.value)} placeholder="e.g. Physics, Mathematics"
+                  className="w-full px-3 py-2.5 rounded-lg bg-black/30 border border-white/10 text-white text-sm focus:outline-none focus:border-sky-500/50 placeholder:text-slate-600" />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setAddSubjectModalOpen(false)} className="flex-1 py-2.5 rounded-lg border border-white/10 text-slate-400 text-sm font-semibold cursor-pointer hover:bg-white/5 transition-all">Cancel</button>
+                <button type="submit" disabled={submitting || !newSubjectName.trim() || !selectedClassId} className="flex-1 py-2.5 rounded-lg bg-purple-500 text-white text-sm font-bold cursor-pointer hover:bg-purple-400 disabled:opacity-40 transition-all">
+                  {submitting ? 'Creating...' : 'Create Subject'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit */}
+      {editModalOpen && selectedItem && (
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold text-sky-400 flex items-center gap-2"><Edit2 size={18} /> Edit {selectedItem.type === 'class' ? 'Class' : 'Subject'}</h3>
+              <button onClick={() => setEditModalOpen(false)} className="text-slate-500 hover:text-white text-xl cursor-pointer">×</button>
+            </div>
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-white mb-1.5">Name <span className="text-red-400">*</span></label>
+                <input type="text" required value={editName} onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg bg-black/30 border border-white/10 text-white text-sm font-semibold focus:outline-none focus:border-sky-500/50" />
+              </div>
+              {selectedItem.type === 'subject' && (
+                <div>
+                  <label className="block text-xs font-semibold text-white mb-1.5">Parent Class</label>
+                  <select value={selectedClassId} onChange={(e) => setSelectedClassId(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-lg bg-slate-950 border border-white/10 text-white text-sm focus:outline-none focus:border-sky-500/50 cursor-pointer">
+                    {classes.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
+                  </select>
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-semibold text-white mb-1.5">Status</label>
+                <select value={editIsActive ? 'true' : 'false'} onChange={(e) => setEditIsActive(e.target.value === 'true')}
+                  className="w-full px-3 py-2.5 rounded-lg bg-slate-950 border border-white/10 text-white text-sm focus:outline-none focus:border-sky-500/50 cursor-pointer">
+                  <option value="true">Active</option>
+                  <option value="false">Deactivated</option>
+                </select>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setEditModalOpen(false)} className="flex-1 py-2.5 rounded-lg border border-white/10 text-slate-400 text-sm font-semibold cursor-pointer hover:bg-white/5 transition-all">Cancel</button>
+                <button type="submit" disabled={submitting || !editName.trim()} className="flex-1 py-2.5 rounded-lg bg-sky-500 text-slate-950 text-sm font-bold cursor-pointer hover:bg-sky-400 disabled:opacity-40 transition-all">
+                  {submitting ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
