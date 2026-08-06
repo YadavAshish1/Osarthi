@@ -19,6 +19,7 @@ import {
   Camera,
   Trash2,
   X,
+  PenSquare,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api, BlogItem, mapContentToBlog, TeacherProfile, getTeacherSlug } from "@/lib/api";
@@ -246,10 +247,10 @@ export default function ProfilePage() {
                   {user.role === "teacher"
                     ? "Verified Teacher"
                     : teacherAppStatus?.status === "pending"
-                    ? "Teacher Applicant (Pending Approval)"
-                    : user.role
-                    ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
-                    : "Student"}
+                      ? "Teacher Applicant (Pending Approval)"
+                      : user.role
+                        ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
+                        : "Student"}
                 </span>
               </div>
 
@@ -347,13 +348,12 @@ export default function ProfilePage() {
                     Teacher Application Status
                   </span>
                   <span
-                    className={`px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
-                      teacherAppStatus.status === "approved"
+                    className={`px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${teacherAppStatus.status === "approved"
                         ? "bg-emerald-100 text-emerald-700 border border-emerald-300"
                         : teacherAppStatus.status === "rejected"
-                        ? "bg-rose-100 text-rose-700 border border-rose-300"
-                        : "bg-amber-100 text-amber-700 border border-amber-300"
-                    }`}
+                          ? "bg-rose-100 text-rose-700 border border-rose-300"
+                          : "bg-amber-100 text-amber-700 border border-amber-300"
+                      }`}
                   >
                     {teacherAppStatus.status}
                   </span>
@@ -363,28 +363,36 @@ export default function ProfilePage() {
                   {teacherAppStatus.status === "approved"
                     ? "🎉 Congratulations! Application Approved"
                     : teacherAppStatus.status === "rejected"
-                    ? "Application Status Update"
-                    : "Application Under Review"}
+                      ? "Application Status Update"
+                      : "Application Under Review"}
                 </h3>
 
                 <p className="text-xs text-[#5C5A55] max-w-2xl leading-relaxed">
                   {teacherAppStatus.status === "approved"
                     ? "You are an official Medhashine Teacher! You can now publish insights and connect with students."
                     : teacherAppStatus.status === "rejected"
-                    ? `Reason: ${teacherAppStatus.rejectionReason || "Credentials did not meet current requirements."}`
-                    : "Our admin team is currently reviewing your education and teaching qualifications. You will receive an email once updated."}
+                      ? `Reason: ${teacherAppStatus.rejectionReason || "Credentials did not meet current requirements."}`
+                      : "Our admin team is currently reviewing your education and teaching qualifications. You will receive an email once updated."}
                 </p>
               </div>
 
               {teacherAppStatus.status === "approved" && (
-                <a
-                  href="http://localhost:5173"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-sm shrink-0"
-                >
-                  Open Teacher Portal <ArrowRight className="h-4 w-4" />
-                </a>
+                <div className="flex flex-wrap items-center gap-3 shrink-0">
+                  <Link
+                    href="/teacher/write"
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-[#A84C32] text-white text-xs font-semibold hover:bg-[#8C3A27] transition-colors shadow-2xs"
+                  >
+                    <PenSquare className="h-3.5 w-3.5" />
+                    <span>Write Insight</span>
+                  </Link>
+                  <Link
+                    href="/teacher/dashboard"
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-[#1A1A1A] text-white text-xs font-semibold hover:bg-[#A84C32] transition-colors shadow-2xs"
+                  >
+                    <span>Educator Dashboard</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
               )}
             </div>
           </section>
@@ -612,11 +620,10 @@ export default function ProfilePage() {
           <div className="flex items-center gap-2 border-b border-[#E5E1D8] mb-8 overflow-x-auto pb-1 scrollbar-none">
             <button
               onClick={() => setActiveActivityTab("liked")}
-              className={`flex items-center gap-2 px-5 py-3 font-ui text-sm font-semibold rounded-t-xl transition-all cursor-pointer border-b-2 whitespace-nowrap ${
-                activeActivityTab === "liked"
+              className={`flex items-center gap-2 px-5 py-3 font-ui text-sm font-semibold rounded-t-xl transition-all cursor-pointer border-b-2 whitespace-nowrap ${activeActivityTab === "liked"
                   ? "border-[#A84C32] text-[#A84C32] bg-white shadow-2xs"
                   : "border-transparent text-[#5C5A55] hover:text-[#1A1A1A] hover:bg-[#F5F2EB]/50"
-              }`}
+                }`}
             >
               <Heart className={`h-4 w-4 ${activeActivityTab === "liked" ? "fill-[#A84C32]" : ""}`} />
               <span>Appreciates</span>
@@ -627,11 +634,10 @@ export default function ProfilePage() {
 
             <button
               onClick={() => setActiveActivityTab("commented")}
-              className={`flex items-center gap-2 px-5 py-3 font-ui text-sm font-semibold rounded-t-xl transition-all cursor-pointer border-b-2 whitespace-nowrap ${
-                activeActivityTab === "commented"
+              className={`flex items-center gap-2 px-5 py-3 font-ui text-sm font-semibold rounded-t-xl transition-all cursor-pointer border-b-2 whitespace-nowrap ${activeActivityTab === "commented"
                   ? "border-[#A84C32] text-[#A84C32] bg-white shadow-2xs"
                   : "border-transparent text-[#5C5A55] hover:text-[#1A1A1A] hover:bg-[#F5F2EB]/50"
-              }`}
+                }`}
             >
               <MessageSquare className="h-4 w-4" />
               <span>Comments</span>

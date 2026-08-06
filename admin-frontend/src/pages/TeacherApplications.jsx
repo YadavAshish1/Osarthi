@@ -44,7 +44,7 @@ export default function TeacherApplications() {
       }
     } catch {
       addToast('Failed to load applications', 'error');
-    } fontFinally: {
+    } finally {
       setLoading(false);
     }
   }, [filterStatus, addToast]);
@@ -331,6 +331,8 @@ export default function TeacherApplications() {
                     ))}
                   </div>
                 ) : <span style={{ fontSize: 12, opacity: 0.5 }}>None provided</span>}
+              </div>
+
               {/* Subjects */}
               <div style={{ marginBottom: 20 }}>
                 <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#38bdf8', marginBottom: 8 }}>

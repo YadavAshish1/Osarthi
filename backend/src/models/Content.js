@@ -27,6 +27,7 @@ const blockSchema = new mongoose.Schema(
     ordered: { type: Boolean, default: false },
     url: { type: String },
     caption: { type: String },
+    align: { type: String, enum: ['left', 'center', 'right'], default: 'left' },
     marks: [markSchema],
   },
   { _id: false }
@@ -42,6 +43,9 @@ const contentSchema = new mongoose.Schema(
     blocks: [blockSchema],
     published: { type: Boolean, default: false },
     order: { type: Number, default: 0 },
+    viewsCount: { type: Number, default: 0 },
+    likesCount: { type: Number, default: 0 },
+    bookmarksCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

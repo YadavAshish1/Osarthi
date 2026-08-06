@@ -81,7 +81,7 @@ export default function BecomeTeacherClient() {
 
     setSendingOtp(true);
     try {
-      const res = await sendOtp(name.trim(), email.toLowerCase().trim(), password, "teacher");
+      const res = await sendOtp(name.trim(), email.toLowerCase().trim(), password, "student");
       if (res.ok) {
         setOtpSent(true);
         toast.success("Verification code sent to " + email);
@@ -103,7 +103,7 @@ export default function BecomeTeacherClient() {
 
     setVerifyingOtp(true);
     try {
-      const res = await register(name.trim(), email.toLowerCase().trim(), password, "teacher", otp.trim());
+      const res = await register(name.trim(), email.toLowerCase().trim(), password, "student", otp.trim());
       if (res.ok) {
         toast.success("Account created & email verified! Continue filling your details.");
       } else {

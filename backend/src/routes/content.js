@@ -48,6 +48,66 @@ router.get('/topic/:topicId', async (req, res, next) => {
   }
 });
 
+/** GET /api/content/teacher/analytics — Real analytics from DB for logged-in teacher */
+router.get('/teacher/analytics', requireRole('teacher'), async (req, res, next) => {
+  try {
+    const teacherId = req.user._id;
+    const contents = await Content.find({ createdBy: teacherId })
+      .populate('classRef', 'name code')
+      .populate('subjectRef', 'name')
+      .populate('topicRef', 'name')
+      .sort({ createdAt: -1 });
+
+    const totalInsights = contents.length;
+    const publishedCount = contents.filter((c) => c.published).length;
+    const draftCount = contents.filter((c) => !c.published).length;
+
+    let totalReach = 0;
+    let totalAppreciations = 0;
+    let totalBookmarks = 0;
+
+    const classReachMap = {};
+
+    for (const item of contents) {
+      const views = item.viewsCount || 0;
+      const likes = item.likesCount || 0;
+      const bookmarks = item.bookmarksCount || 0;
+
+      totalReach += views;
+      totalAppreciations += likes;
+      totalBookmarks += bookmarks;
+
+      const className = item.classRef?.name || 'General';
+      classReachMap[className] = (classReachMap[className] || 0) + views;
+    }
+
+    res.json({
+      totalInsights,
+      publishedCount,
+      draftCount,
+      totalReach,
+      totalAppreciations,
+      totalBookmarks,
+      classReachMap,
+      contents: contents.map((c) => ({
+        _id: c._id,
+        title: c.title,
+        published: c.published,
+        viewsCount: c.viewsCount || 0,
+        likesCount: c.likesCount || 0,
+        bookmarksCount: c.bookmarksCount || 0,
+        className: c.classRef?.name || '',
+        subjectName: c.subjectRef?.name || '',
+        topicName: c.topicRef?.name || '',
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 /** Get single post with full blocks */
 router.get('/:contentId', async (req, res, next) => {
   try {
@@ -59,6 +119,8 @@ router.get('/:contentId', async (req, res, next) => {
       if (content.classRef.toString() !== req.user.classRef?.toString()) {
         return res.status(403).json({ message: 'Not authorized for this class' });
       }
+      // Increment view counter for student views
+      await Content.findByIdAndUpdate(content._id, { $inc: { viewsCount: 1 } });
     } else if (req.user.role === 'teacher') {
       if (content.createdBy.toString() !== req.user._id.toString()) {
         return res.status(403).json({ message: 'Forbidden' });

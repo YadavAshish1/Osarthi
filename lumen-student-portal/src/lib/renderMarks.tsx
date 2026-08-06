@@ -132,14 +132,7 @@ export function renderMarkedText(text: string = "", marks: Mark[] = []): React.R
     if (seg.mark.backgroundColor) style.backgroundColor = seg.mark.backgroundColor;
 
     if (seg.mark.color) {
-      // Guard: Only apply light/white text colors if there is an explicit dark background
-      if (isLightColor(seg.mark.color)) {
-        if (seg.mark.backgroundColor && isDarkColor(seg.mark.backgroundColor)) {
-          style.color = seg.mark.color;
-        }
-      } else {
-        style.color = seg.mark.color;
-      }
+      style.color = seg.mark.color;
     }
 
     return seg.text.split("\n").flatMap((line, i, arr) => {
