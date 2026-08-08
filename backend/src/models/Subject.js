@@ -6,6 +6,9 @@ const subjectSchema = new mongoose.Schema(
     classRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     isActive: { type: Boolean, default: true },
+    deletedAt: { type: Date, default: null },
+    deletedUntil: { type: Date, default: null },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

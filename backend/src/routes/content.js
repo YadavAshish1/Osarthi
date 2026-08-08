@@ -8,6 +8,16 @@ const router = Router();
 
 router.use(authenticate);
 
+// Auto cleanup expired bin insights (>30 days retention)
+async function cleanupExpiredBinInsights() {
+  try {
+    const now = new Date();
+    await Content.deleteMany({ deletedAt: { $ne: null }, deletedUntil: { $lte: now } });
+  } catch (err) {
+    console.error('[Bin Cleanup] Error cleaning up insights:', err.message);
+  }
+}
+
 async function assertTopicAccess(topicId, user) {
   const topic = await Topic.findById(topicId);
   if (!topic) return { error: { status: 404, message: 'Topic not found' } };
@@ -18,6 +28,9 @@ async function assertTopicAccess(topicId, user) {
     }
   } else if (user.role === 'student') {
     const subject = await Subject.findById(topic.subjectRef);
+    if (!subject || subject.deletedAt) {
+      return { error: { status: 404, message: 'Subject not found' } };
+    }
     if (subject.classRef.toString() !== user.classRef?.toString()) {
       return { error: { status: 403, message: 'Forbidden' } };
     }
@@ -26,13 +39,13 @@ async function assertTopicAccess(topicId, user) {
   return { topic, subject: await Subject.findById(topic.subjectRef) };
 }
 
-/** List all blogs/posts in a topic */
+/** List all active blogs/posts in a topic */
 router.get('/topic/:topicId', async (req, res, next) => {
   try {
     const { topic, subject, error } = await assertTopicAccess(req.params.topicId, req.user);
     if (error) return res.status(error.status).json({ message: error.message });
 
-    const filter = { topicRef: topic._id };
+    const filter = { topicRef: topic._id, deletedAt: null };
     if (req.user.role === 'student') {
       filter.published = true;
       filter.classRef = req.user.classRef;
@@ -48,11 +61,14 @@ router.get('/topic/:topicId', async (req, res, next) => {
   }
 });
 
-/** GET /api/content/teacher/analytics — Real analytics from DB for logged-in teacher */
+/** GET /api/content/teacher/analytics — Real analytics & active insights for logged-in teacher */
 router.get('/teacher/analytics', requireRole('teacher'), async (req, res, next) => {
   try {
+    await cleanupExpiredBinInsights();
     const teacherId = req.user._id;
-    const contents = await Content.find({ createdBy: teacherId })
+
+    // Only active (non-soft-deleted) insights
+    const contents = await Content.find({ createdBy: teacherId, deletedAt: null })
       .populate('classRef', 'name code')
       .populate('subjectRef', 'name')
       .populate('topicRef', 'name')
@@ -108,11 +124,47 @@ router.get('/teacher/analytics', requireRole('teacher'), async (req, res, next) 
   }
 });
 
+/** GET /api/content/teacher/bin — List soft-deleted insights in Teacher Recycle Bin */
+router.get('/teacher/bin', requireRole('teacher'), async (req, res, next) => {
+  try {
+    await cleanupExpiredBinInsights();
+    const teacherId = req.user._id;
+    const now = new Date();
+
+    const binContents = await Content.find({ createdBy: teacherId, deletedAt: { $ne: null } })
+      .populate('classRef', 'name')
+      .populate('subjectRef', 'name')
+      .populate('topicRef', 'name')
+      .sort({ deletedAt: -1 })
+      .lean();
+
+    const result = binContents.map((c) => {
+      const until = new Date(c.deletedUntil || now);
+      const daysLeft = Math.max(0, Math.ceil((until.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+      return {
+        _id: c._id,
+        title: c.title,
+        deletedAt: c.deletedAt,
+        deletedUntil: c.deletedUntil,
+        daysLeft,
+        className: c.classRef?.name || '',
+        subjectName: c.subjectRef?.name || '',
+        topicName: c.topicRef?.name || '',
+        createdAt: c.createdAt,
+      };
+    });
+
+    res.json({ bin: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
 /** Get single post with full blocks */
 router.get('/:contentId', async (req, res, next) => {
   try {
     const content = await Content.findById(req.params.contentId);
-    if (!content) return res.status(404).json({ message: 'Content not found' });
+    if (!content || content.deletedAt) return res.status(404).json({ message: 'Content not found' });
 
     if (req.user.role === 'student') {
       if (!content.published) return res.status(403).json({ message: 'Content not published' });
@@ -141,11 +193,10 @@ router.put('/reorder', requireRole('teacher'), async (req, res, next) => {
       return res.status(400).json({ message: 'orderedIds must be an array' });
     }
 
-    // Process updates in parallel
     await Promise.all(
       orderedIds.map((id, index) =>
         Content.findOneAndUpdate(
-          { _id: id, createdBy: req.user._id }, // Ensure user owns the content
+          { _id: id, createdBy: req.user._id, deletedAt: null },
           { $set: { order: index } }
         )
       )
@@ -185,7 +236,7 @@ router.post('/topic/:topicId', requireRole('teacher'), async (req, res, next) =>
 router.put('/:contentId', requireRole('teacher'), async (req, res, next) => {
   try {
     const existing = await Content.findById(req.params.contentId);
-    if (!existing) return res.status(404).json({ message: 'Content not found' });
+    if (!existing || existing.deletedAt) return res.status(404).json({ message: 'Content not found' });
     if (existing.createdBy.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Forbidden' });
     }
@@ -211,7 +262,29 @@ router.put('/:contentId', requireRole('teacher'), async (req, res, next) => {
   }
 });
 
-/** Delete blog */
+/** Toggle Publish / Unpublish Insight */
+router.patch('/:contentId/publish', requireRole('teacher'), async (req, res, next) => {
+  try {
+    const existing = await Content.findById(req.params.contentId);
+    if (!existing || existing.deletedAt) return res.status(404).json({ message: 'Content not found' });
+    if (existing.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    const targetStatus = req.body.published !== undefined ? Boolean(req.body.published) : !existing.published;
+    existing.published = targetStatus;
+    await existing.save();
+
+    res.json({
+      message: `Insight ${existing.published ? 'published' : 'unpublished'} successfully`,
+      published: existing.published,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Soft Delete blog (Move to Teacher Bin) */
 router.delete('/:contentId', requireRole('teacher'), async (req, res, next) => {
   try {
     const existing = await Content.findById(req.params.contentId);
@@ -220,8 +293,50 @@ router.delete('/:contentId', requireRole('teacher'), async (req, res, next) => {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
+    const now = new Date();
+    const retention30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    existing.deletedAt = now;
+    existing.deletedUntil = retention30Days;
+    existing.published = false; // Automatically unpublish when moving to bin
+    await existing.save();
+
+    res.json({ message: `Insight "${existing.title}" moved to Recycle Bin (30-day retention).` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Restore blog from Recycle Bin (Unbin) */
+router.post('/:contentId/restore', requireRole('teacher'), async (req, res, next) => {
+  try {
+    const existing = await Content.findById(req.params.contentId);
+    if (!existing || !existing.deletedAt) return res.status(404).json({ message: 'Insight not found in Recycle Bin' });
+    if (existing.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    existing.deletedAt = null;
+    existing.deletedUntil = null;
+    await existing.save();
+
+    res.json({ message: `Insight "${existing.title}" restored successfully from Recycle Bin!` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Permanent Delete blog */
+router.delete('/:contentId/permanent', requireRole('teacher'), async (req, res, next) => {
+  try {
+    const existing = await Content.findById(req.params.contentId);
+    if (!existing) return res.status(404).json({ message: 'Content not found' });
+    if (existing.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
     await Content.findByIdAndDelete(req.params.contentId);
-    res.json({ message: 'Deleted' });
+    res.json({ message: `Insight "${existing.title}" permanently deleted.` });
   } catch (err) {
     next(err);
   }

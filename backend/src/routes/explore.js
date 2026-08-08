@@ -106,7 +106,7 @@ router.get('/teachers/:id', async (req, res, next) => {
 /** GET /api/explore/classes - all classes (public) */
 router.get('/classes', async (req, res, next) => {
   try {
-    const classes = await Class.find().sort({ name: 1 }).select('name _id');
+    const classes = await Class.find({ deletedAt: null }).sort({ name: 1 }).select('name _id');
     // deduplicate by lowercased name
     const seen = new Set();
     const unique = classes.filter((c) => {
@@ -125,7 +125,7 @@ router.get('/classes', async (req, res, next) => {
 router.get('/subjects', async (req, res, next) => {
   try {
     const { classId } = req.query;
-    const filter = classId ? { classRef: classId } : {};
+    const filter = classId ? { classRef: classId, deletedAt: null } : { deletedAt: null };
     const subjects = await Subject.find(filter).sort({ name: 1 }).select('name _id classRef');
     
     let subjectNames = subjects.map((s) => (s.name || '').trim()).filter(Boolean);
@@ -277,8 +277,8 @@ router.get('/blogs/:id', async (req, res, next) => {
 router.get('/tree', async (req, res, next) => {
   try {
     const [classes, subjects, topics] = await Promise.all([
-      Class.find().sort({ name: 1 }).select('name _id'),
-      Subject.find().sort({ name: 1 }).select('name _id classRef'),
+      Class.find({ deletedAt: null }).sort({ name: 1 }).select('name _id'),
+      Subject.find({ deletedAt: null }).sort({ name: 1 }).select('name _id classRef'),
       Topic.find().sort({ name: 1 }).select('name _id subjectRef'),
     ]);
 

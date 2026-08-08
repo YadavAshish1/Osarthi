@@ -39,6 +39,7 @@ import {
   AlignCenter,
   AlignRight,
   RotateCcw,
+  GlobeOff,
 } from "lucide-react";
 
 interface Block {
@@ -107,6 +108,79 @@ export default function NativeContentEditor({
     initialData?.blocks?.length ? initialData.blocks : [newBlock("paragraph")]
   );
   const [published, setPublished] = useState(initialData?.published ?? false);
+  // Auto-Save / Crash Recovery Storage Key
+  const storageKey = `medhashine_unsaved_draft_${user?._id || "guest"}_${contentId || "new"}`;
+  const [restoredFromLocal, setRestoredFromLocal] = useState(false);
+  const [lastAutoSaveTime, setLastAutoSaveTime] = useState<string | null>(null);
+  const isInitialMount = useRef(true);
+
+  // Auto-Recovery on Mount: Restore unsaved draft from localStorage if present
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (
+          parsed &&
+          (parsed.title?.trim() || (parsed.blocks && parsed.blocks.some((b: any) => Boolean(b.text?.trim()) || Boolean(b.items?.length))))
+        ) {
+          setTitle(parsed.title || "");
+          if (parsed.blocks && parsed.blocks.length) {
+            setBlocks(parsed.blocks);
+          }
+          setRestoredFromLocal(true);
+          const timeStr = parsed.updatedAt
+            ? new Date(parsed.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            : "recently";
+          setLastAutoSaveTime(timeStr);
+          toast.info(`Restored unsaved draft from your previous session (${timeStr})`);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to restore draft from localStorage", err);
+    }
+  }, [storageKey]);
+
+  // Debounced Auto-Save to localStorage (1s after typing stops)
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      const hasContent =
+        title.trim() ||
+        blocks.some((b) => Boolean(b.text?.trim()) || Boolean(b.items?.length) || Boolean(b.url));
+
+      if (hasContent) {
+        const now = Date.now();
+        const timeStr = new Date(now).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const draftPayload = {
+          title,
+          blocks,
+          topicId,
+          updatedAt: now,
+        };
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(draftPayload));
+          setLastAutoSaveTime(timeStr);
+        } catch (e) {
+          console.error("Error saving to localStorage", e);
+        }
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [title, blocks, topicId, storageKey]);
+
+  const clearLocalDraft = () => {
+    try {
+      localStorage.removeItem(storageKey);
+    } catch {}
+    setRestoredFromLocal(false);
+    setLastAutoSaveTime(null);
+  };
 
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -263,6 +337,13 @@ export default function NativeContentEditor({
     }
   };
 
+  // Auto-expand textarea height as content grows to eliminate internal scrollbars
+  const adjustTextareaHeight = (el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.max(el.scrollHeight, 44)}px`;
+  };
+
   // Upload Media (Image/Video)
   const triggerMediaUpload = (blockId: string) => {
     activeMediaBlockId.current = blockId;
@@ -345,8 +426,16 @@ export default function NativeContentEditor({
         resultData = data;
       }
 
+      const wasPublished = published;
       setPublished(publishStatus);
-      toast.success(publishStatus ? "Insight Published Successfully! 🎉" : "Draft Saved!");
+      clearLocalDraft();
+      toast.success(
+        publishStatus
+          ? "Insight Published Successfully! 🎉"
+          : wasPublished
+          ? "Insight Unpublished! Moved to Drafts."
+          : "Draft Saved!"
+      );
       if (onSaved) onSaved(resultData);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to save insight");
@@ -381,6 +470,29 @@ export default function NativeContentEditor({
             <span>{estimatedReadTime} min read</span>
             <span>•</span>
             <span>{blocks.length} content blocks</span>
+            {lastAutoSaveTime && (
+              <>
+                <span>•</span>
+                <span className="text-[11px] text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 font-semibold inline-flex items-center gap-1">
+                  <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Auto-saved ({lastAutoSaveTime})
+                </span>
+              </>
+            )}
+            {restoredFromLocal && (
+              <button
+                type="button"
+                onClick={() => {
+                  clearLocalDraft();
+                  setTitle(initialData?.title || "");
+                  setBlocks(initialData?.blocks?.length ? initialData.blocks : [newBlock("paragraph")]);
+                  toast.success("Discarded unsaved local draft");
+                }}
+                className="text-[11px] text-rose-700 hover:underline cursor-pointer font-bold ml-1"
+                title="Click to discard local cache and restore original"
+              >
+                Discard Unsaved Draft
+              </button>
+            )}
           </p>
         </div>
 
@@ -400,27 +512,39 @@ export default function NativeContentEditor({
             <span>{showPreview ? "Exit Live" : "Live View"}</span>
           </button>
 
-          {/* Save Draft */}
+          {/* Save Draft / Save Changes */}
           <button
             type="button"
             disabled={saving}
-            onClick={() => handleSave(false)}
+            onClick={() => handleSave(published ? true : false)}
             className="px-3.5 py-2.5 rounded-full bg-white border border-[#E5E1D8] text-[#1A1A1A] text-xs font-semibold hover:border-[#A84C32] transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-2xs"
           >
             <Save className="h-4 w-4 text-[#5C5A55]" />
-            <span>Save Draft</span>
+            <span>{published ? "Save Changes" : "Save Draft"}</span>
           </button>
 
-          {/* Publish Insight (Full-width on mobile grid, auto width on sm+) */}
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => handleSave(true)}
-            className="col-span-2 sm:col-span-1 px-5 py-2.5 rounded-full bg-[#A84C32] text-white text-xs font-semibold hover:bg-[#8C3A27] transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs"
-          >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4 text-emerald-300" />}
-            <span>{published ? "Update Live" : "Publish Insight"}</span>
-          </button>
+          {/* Publish / Unpublish Insight */}
+          {published ? (
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => handleSave(false)}
+              className="col-span-2 sm:col-span-1 px-5 py-2.5 rounded-full bg-amber-600 text-white text-xs font-semibold hover:bg-amber-700 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <GlobeOff className="h-4 w-4" />}
+              <span>Unpublish</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => handleSave(true)}
+              className="col-span-2 sm:col-span-1 px-5 py-2.5 rounded-full bg-[#A84C32] text-white text-xs font-semibold hover:bg-[#8C3A27] transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4 text-emerald-300" />}
+              <span>Publish Live</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -735,13 +859,18 @@ export default function NativeContentEditor({
                 {block.type === "paragraph" && (
                   <div className="space-y-2">
                     <textarea
-                      rows={3}
+                      ref={adjustTextareaHeight}
+                      rows={1}
                       data-block-id={block.id}
                       value={block.text || ""}
-                      onChange={(e) => updateBlock(block.id, { text: e.target.value })}
+                      onChange={(e) => {
+                        updateBlock(block.id, { text: e.target.value });
+                        adjustTextareaHeight(e.target);
+                      }}
+                      onInput={(e) => adjustTextareaHeight(e.currentTarget)}
                       placeholder="Write paragraph content…"
-                      style={{ textAlign: block.align || "left" }}
-                      className="w-full font-serif-body text-[#1A1A1A] focus:outline-none resize-none leading-relaxed p-1"
+                      style={{ textAlign: block.align || "left", overflowY: "hidden" }}
+                      className="w-full font-serif-body text-[#1A1A1A] focus:outline-none resize-none leading-relaxed p-1 min-h-[44px]"
                     />
                     {/* Live Formatted Output Line in Edit Mode */}
                     {block.marks && block.marks.length > 0 && block.text && (
@@ -756,13 +885,18 @@ export default function NativeContentEditor({
                 {block.type === "quote" && (
                   <div className="pl-4 border-l-2 border-[#A84C32] space-y-2">
                     <textarea
-                      rows={2}
+                      ref={adjustTextareaHeight}
+                      rows={1}
                       data-block-id={block.id}
                       value={block.text || ""}
-                      onChange={(e) => updateBlock(block.id, { text: e.target.value })}
+                      onChange={(e) => {
+                        updateBlock(block.id, { text: e.target.value });
+                        adjustTextareaHeight(e.target);
+                      }}
+                      onInput={(e) => adjustTextareaHeight(e.currentTarget)}
                       placeholder="Enter quote text…"
-                      style={{ textAlign: block.align || "left" }}
-                      className="w-full font-serif-display italic text-lg text-[#1A1A1A] focus:outline-none resize-none"
+                      style={{ textAlign: block.align || "left", overflowY: "hidden" }}
+                      className="w-full font-serif-display italic text-lg text-[#1A1A1A] focus:outline-none resize-none min-h-[40px]"
                     />
                     {/* Live Formatted Output Line in Edit Mode */}
                     {block.marks && block.marks.length > 0 && block.text && (
