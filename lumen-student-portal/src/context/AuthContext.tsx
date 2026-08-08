@@ -14,7 +14,7 @@ export interface User {
 
 interface AuthModalState {
   open: boolean;
-  mode: "login" | "register";
+  mode: "login" | "register" | "forgot";
   onSuccess: (() => void) | null;
 }
 
@@ -25,9 +25,11 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   sendOtp: (name: string, email: string, password: string, role: string) => Promise<{ ok: boolean; error?: string }>;
   register: (name: string, email: string, password: string, role: string, otp: string) => Promise<{ ok: boolean; error?: string }>;
+  forgotPassword: (email: string) => Promise<{ ok: boolean; error?: string }>;
+  resetPassword: (email: string, otp: string, newPassword: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
   requireAuth: (onSuccess?: () => void) => boolean;
-  openAuth: (mode?: "login" | "register") => void;
+  openAuth: (mode?: "login" | "register" | "forgot") => void;
   closeAuth: () => void;
   setAuthModal: React.Dispatch<React.SetStateAction<AuthModalState>>;
   updateUser: (updates: Partial<User>) => void;
@@ -165,6 +167,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  const forgotPassword = useCallback(async (email: string) => {
+    try {
+      await api.post("/auth/forgot-password", { email });
+      return { ok: true };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error:
+          formatApiErrorDetail(e?.response?.data?.message) ||
+          formatApiErrorDetail(e?.response?.data?.detail) ||
+          e.message ||
+          "Failed to send reset code",
+      };
+    }
+  }, []);
+
+  const resetPassword = useCallback(async (email: string, otp: string, newPassword: string) => {
+    try {
+      await api.post("/auth/reset-password", { email, otp, newPassword });
+      return { ok: true };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error:
+          formatApiErrorDetail(e?.response?.data?.message) ||
+          formatApiErrorDetail(e?.response?.data?.detail) ||
+          e.message ||
+          "Failed to reset password",
+      };
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await api.post("/auth/logout");
@@ -188,7 +222,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [user]
   );
 
-  const openAuth = useCallback((mode: "login" | "register" = "login") => {
+  const openAuth = useCallback((mode: "login" | "register" | "forgot" = "login") => {
     setAuthModal({
       open: true,
       mode,
@@ -213,6 +247,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         sendOtp,
         register,
+        forgotPassword,
+        resetPassword,
         logout,
         requireAuth,
         openAuth,
