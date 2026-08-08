@@ -46,6 +46,8 @@ const contentSchema = new mongoose.Schema(
     viewsCount: { type: Number, default: 0 },
     likesCount: { type: Number, default: 0 },
     bookmarksCount: { type: Number, default: 0 },
+    deletedAt: { type: Date, default: null },
+    deletedUntil: { type: Date, default: null },
   },
   { timestamps: true }
 );

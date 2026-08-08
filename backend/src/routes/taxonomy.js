@@ -8,12 +8,39 @@ import { authenticate, requireRole } from '../middleware/auth.js';
 
 const router = Router();
 
+// Auto cleanup subjects/classes in recycle bin older than 30 days
+export async function cleanupExpiredBinItems() {
+  try {
+    const now = new Date();
+    const expiredSubjects = await Subject.find({ deletedAt: { $ne: null }, deletedUntil: { $lte: now } });
+    for (const sub of expiredSubjects) {
+      await Topic.deleteMany({ subjectRef: sub._id });
+      await Subject.findByIdAndDelete(sub._id);
+      console.log(`[Bin Cleanup] Auto permanently deleted subject "${sub.name}" after 30-day retention.`);
+    }
+
+    const expiredClasses = await Class.find({ deletedAt: { $ne: null }, deletedUntil: { $lte: now } });
+    for (const cls of expiredClasses) {
+      const subs = await Subject.find({ classRef: cls._id });
+      for (const s of subs) {
+        await Topic.deleteMany({ subjectRef: s._id });
+      }
+      await Subject.deleteMany({ classRef: cls._id });
+      await Class.findByIdAndDelete(cls._id);
+      console.log(`[Bin Cleanup] Auto permanently deleted class "${cls.name}" after 30-day retention.`);
+    }
+  } catch (err) {
+    console.error('[Bin Cleanup] Error during auto cleanup:', err.message);
+  }
+}
+
 export async function seedDefaultTaxonomy() {
   try {
+    await cleanupExpiredBinItems();
     const superAdmin = await User.findOne({ role: 'super_admin' });
     const defaultClasses = ['Class 9', 'Class 10', 'Class 11', 'Class 12', 'General'];
     for (const name of defaultClasses) {
-      const existing = await Class.findOne({ name: { $regex: new RegExp(`^${name}$`, 'i') } });
+      const existing = await Class.findOne({ name: { $regex: new RegExp(`^${name}$`, 'i') }, deletedAt: null });
       if (!existing) {
         await Class.create({ name, ...(superAdmin && { createdBy: superAdmin._id }) });
       }
@@ -25,7 +52,7 @@ export async function seedDefaultTaxonomy() {
 
 router.get('/classes/public', async (req, res, next) => {
   try {
-    const classes = await Class.find().sort({ name: 1 }).select('name _id');
+    const classes = await Class.find({ deletedAt: null }).sort({ name: 1 }).select('name _id');
     const unique = [...new Map(classes.map((c) => [c.name.toLowerCase(), c])).values()];
     res.json(unique);
   } catch (err) {
@@ -38,11 +65,11 @@ router.use(authenticate);
 router.get('/classes', async (req, res, next) => {
   try {
     if (req.user.role === 'student') {
-      const cls = await Class.findById(req.user.classRef);
+      const cls = await Class.findOne({ _id: req.user.classRef, deletedAt: null });
       return res.json(cls ? [cls] : []);
     }
-    // Return all classes from database
-    const classes = await Class.find().sort({ name: 1 });
+    // Return all active classes
+    const classes = await Class.find({ deletedAt: null }).sort({ name: 1 });
     const unique = [...new Map(classes.map((c) => [c.name.toLowerCase().trim(), c])).values()];
     res.json(unique);
   } catch (err) {
@@ -56,6 +83,7 @@ router.post('/classes', requireRole('teacher'), async (req, res, next) => {
     if (!name) return res.status(400).json({ message: 'Name required' });
     const existing = await Class.findOne({
       name: { $regex: new RegExp(`^${name}$`, 'i') },
+      deletedAt: null,
     });
     if (existing) return res.json(existing);
     const cls = await Class.create({ name, createdBy: req.user._id });
@@ -69,7 +97,7 @@ router.get('/subjects', async (req, res, next) => {
   try {
     const { classId } = req.query;
     if (!classId) return res.status(400).json({ message: 'classId required' });
-    const filter = { classRef: classId };
+    const filter = { classRef: classId, deletedAt: null };
     const subjects = await Subject.find(filter).sort({ name: 1 });
     const unique = [...new Map(subjects.map((s) => [s.name.toLowerCase().trim(), s])).values()];
     res.json(unique);
@@ -86,6 +114,7 @@ router.post('/subjects', requireRole('teacher'), async (req, res, next) => {
     const existing = await Subject.findOne({
       name: { $regex: new RegExp(`^${name}$`, 'i') },
       classRef: classId,
+      deletedAt: null,
     });
     if (existing) return res.json(existing);
     const subject = await Subject.create({
@@ -142,8 +171,9 @@ router.post('/topics', requireRole('teacher'), async (req, res, next) => {
 // Get full taxonomy overview (Classes, Subjects, Audit Logs)
 router.get('/admin/overview', requireRole('admin'), async (req, res, next) => {
   try {
-    const classes = await Class.find().sort({ name: 1 }).populate('createdBy', 'name email');
-    const subjects = await Subject.find().sort({ name: 1 }).populate('classRef', 'name').populate('createdBy', 'name email');
+    await cleanupExpiredBinItems();
+    const classes = await Class.find({ deletedAt: null }).sort({ name: 1 }).populate('createdBy', 'name email');
+    const subjects = await Subject.find({ deletedAt: null }).sort({ name: 1 }).populate('classRef', 'name').populate('createdBy', 'name email');
     const auditLogs = await TaxonomyAuditLog.find()
       .sort({ createdAt: -1 })
       .limit(100)
@@ -161,7 +191,7 @@ router.post('/admin/classes', requireRole('admin'), async (req, res, next) => {
     const name = req.body.name?.trim();
     if (!name) return res.status(400).json({ message: 'Class name required' });
 
-    const existing = await Class.findOne({ name: { $regex: new RegExp(`^${name}$`, 'i') } });
+    const existing = await Class.findOne({ name: { $regex: new RegExp(`^${name}$`, 'i') }, deletedAt: null });
     if (existing) return res.status(400).json({ message: `Class "${name}" already exists` });
 
     const cls = await Class.create({ name, createdBy: req.user._id, isActive: true });
@@ -186,7 +216,7 @@ router.post('/admin/classes', requireRole('admin'), async (req, res, next) => {
 router.put('/admin/classes/:id', requireRole('admin'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const cls = await Class.findById(id);
+    const cls = await Class.findOne({ _id: id, deletedAt: null });
     if (!cls) return res.status(404).json({ message: 'Class not found' });
 
     const previousName = cls.name;
@@ -238,12 +268,13 @@ router.post('/admin/subjects', requireRole('admin'), async (req, res, next) => {
     const { classId } = req.body;
     if (!name || !classId) return res.status(400).json({ message: 'Subject name and Class ID required' });
 
-    const cls = await Class.findById(classId);
+    const cls = await Class.findOne({ _id: classId, deletedAt: null });
     if (!cls) return res.status(400).json({ message: 'Invalid Class specified' });
 
     const existing = await Subject.findOne({
       name: { $regex: new RegExp(`^${name}$`, 'i') },
       classRef: classId,
+      deletedAt: null,
     });
     if (existing) return res.status(400).json({ message: `Subject "${name}" already exists under ${cls.name}` });
 
@@ -274,7 +305,7 @@ router.post('/admin/subjects', requireRole('admin'), async (req, res, next) => {
 router.put('/admin/subjects/:id', requireRole('admin'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const subject = await Subject.findById(id).populate('classRef', 'name');
+    const subject = await Subject.findOne({ _id: id, deletedAt: null }).populate('classRef', 'name');
     if (!subject) return res.status(404).json({ message: 'Subject not found' });
 
     const previousName = subject.name;
@@ -317,6 +348,345 @@ router.put('/admin/subjects/:id', requireRole('admin'), async (req, res, next) =
     }
 
     res.json({ message: 'Subject updated successfully', subjectItem: subject });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── ADMIN: SUBJECTS WITH BLOG COUNTS (class-wise) ─────────────────────────
+
+/** GET /api/taxonomy/admin/subjects-with-counts — All classes with their active subjects + blog/topic counts */
+router.get('/admin/subjects-with-counts', requireRole('admin'), async (req, res, next) => {
+  try {
+    await cleanupExpiredBinItems();
+    const classes = await Class.find({ deletedAt: null }).sort({ name: 1 }).lean();
+    const allSubjects = await Subject.find({ deletedAt: null }).sort({ name: 1 }).lean();
+
+    const Content = (await import('../models/Content.js')).default;
+
+    const blogCounts = await Content.aggregate([
+      { $group: { _id: '$subjectRef', count: { $sum: 1 } } },
+    ]);
+    const blogCountMap = {};
+    blogCounts.forEach((b) => { blogCountMap[b._id.toString()] = b.count; });
+
+    const topicCounts = await Topic.aggregate([
+      { $group: { _id: '$subjectRef', count: { $sum: 1 } } },
+    ]);
+    const topicCountMap = {};
+    topicCounts.forEach((t) => { topicCountMap[t._id.toString()] = t.count; });
+
+    const result = classes.map((cls) => {
+      const classSubjects = allSubjects
+        .filter((s) => s.classRef.toString() === cls._id.toString())
+        .map((s) => ({
+          _id: s._id,
+          name: s.name,
+          isActive: s.isActive,
+          createdAt: s.createdAt,
+          createdBy: s.createdBy,
+          blogCount: blogCountMap[s._id.toString()] || 0,
+          topicCount: topicCountMap[s._id.toString()] || 0,
+        }));
+
+      return {
+        _id: cls._id,
+        name: cls.name,
+        isActive: cls.isActive,
+        subjects: classSubjects,
+        totalBlogs: classSubjects.reduce((sum, s) => sum + s.blogCount, 0),
+      };
+    });
+
+    res.json({ classes: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── RECYCLE BIN / SOFT DELETE ENDPOINTS ────────────────────────────────────
+
+/** GET /api/taxonomy/admin/bin — List soft-deleted subjects & classes in Recycle Bin */
+router.get('/admin/bin', requireRole('admin'), async (req, res, next) => {
+  try {
+    await cleanupExpiredBinItems();
+    const now = new Date();
+    const deletedSubjects = await Subject.find({ deletedAt: { $ne: null } })
+      .populate('classRef', 'name')
+      .populate('deletedBy', 'name email')
+      .sort({ deletedAt: -1 })
+      .lean();
+
+    const Content = (await import('../models/Content.js')).default;
+
+    const subjectsInBin = await Promise.all(
+      deletedSubjects.map(async (s) => {
+        const blogCount = await Content.countDocuments({ subjectRef: s._id });
+        const topicCount = await Topic.countDocuments({ subjectRef: s._id });
+        const until = new Date(s.deletedUntil);
+        const daysLeft = Math.max(0, Math.ceil((until.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+        return {
+          ...s,
+          blogCount,
+          topicCount,
+          daysLeft,
+        };
+      })
+    );
+
+    res.json({ subjects: subjectsInBin });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** DELETE /api/taxonomy/admin/subjects/:id — Move Subject to Recycle Bin (Super Admin only) */
+router.delete('/admin/subjects/:id', requireRole('super_admin'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const subject = await Subject.findById(id).populate('classRef', 'name');
+    if (!subject) return res.status(404).json({ message: 'Subject not found' });
+
+    if (subject.deletedAt) {
+      return res.status(400).json({ message: 'Subject is already in the Recycle Bin' });
+    }
+
+    const Content = (await import('../models/Content.js')).default;
+    const blogCount = await Content.countDocuments({ subjectRef: id });
+
+    const now = new Date();
+    const retention30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    subject.deletedAt = now;
+    subject.deletedUntil = retention30Days;
+    subject.deletedBy = req.user._id;
+    subject.isActive = false;
+    await subject.save();
+
+    await TaxonomyAuditLog.create({
+      targetType: 'subject',
+      targetId: subject._id,
+      targetName: subject.name,
+      action: 'soft_delete',
+      performedBy: req.user._id,
+      details: `Moved Subject "${subject.name}" (${blogCount} blogs) to Recycle Bin (30 days retention until ${retention30Days.toLocaleDateString()})`,
+    });
+
+    res.json({
+      message: `Subject "${subject.name}" moved to Recycle Bin. It will be retained for 30 days before permanent deletion.`,
+      retentionUntil: retention30Days,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** POST /api/taxonomy/admin/subjects/:id/restore — Restore Subject from Recycle Bin (Unbin) — Admin & Super Admin */
+router.post('/admin/subjects/:id/restore', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const subject = await Subject.findById(id).populate('classRef', 'name');
+    if (!subject) return res.status(404).json({ message: 'Subject not found in Recycle Bin' });
+
+    subject.deletedAt = null;
+    subject.deletedUntil = null;
+    subject.deletedBy = null;
+    subject.isActive = true;
+    await subject.save();
+
+    await TaxonomyAuditLog.create({
+      targetType: 'subject',
+      targetId: subject._id,
+      targetName: subject.name,
+      action: 'restore',
+      performedBy: req.user._id,
+      details: `Restored Subject "${subject.name}" from Recycle Bin back to active subjects in ${subject.classRef?.name || 'Class'}`,
+    });
+
+    res.json({ message: `Subject "${subject.name}" restored successfully from Recycle Bin!` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** DELETE /api/taxonomy/admin/subjects/:id/permanent — Permanently Delete Subject (Super Admin only) */
+router.delete('/admin/subjects/:id/permanent', requireRole('super_admin'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const subject = await Subject.findById(id).populate('classRef', 'name');
+    if (!subject) return res.status(404).json({ message: 'Subject not found' });
+
+    const topicDeleteResult = await Topic.deleteMany({ subjectRef: id });
+    await Subject.findByIdAndDelete(id);
+
+    await TaxonomyAuditLog.create({
+      targetType: 'subject',
+      targetId: subject._id,
+      targetName: subject.name,
+      action: 'permanent_delete',
+      performedBy: req.user._id,
+      details: `Permanently deleted Subject "${subject.name}" (${topicDeleteResult.deletedCount} orphan topics removed)`,
+    });
+
+    res.json({ message: `Subject "${subject.name}" permanently deleted.` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── ADMIN: DELETE CLASS (Soft Delete — Super Admin only) ──────────────────────
+
+router.delete('/admin/classes/:id', requireRole('super_admin'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const cls = await Class.findById(id);
+    if (!cls) return res.status(404).json({ message: 'Class not found' });
+
+    const now = new Date();
+    const retention30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    cls.deletedAt = now;
+    cls.deletedUntil = retention30Days;
+    cls.deletedBy = req.user._id;
+    cls.isActive = false;
+    await cls.save();
+
+    await Subject.updateMany(
+      { classRef: id, deletedAt: null },
+      { $set: { deletedAt: now, deletedUntil: retention30Days, deletedBy: req.user._id, isActive: false } }
+    );
+
+    await TaxonomyAuditLog.create({
+      targetType: 'class',
+      targetId: cls._id,
+      targetName: cls.name,
+      action: 'soft_delete',
+      performedBy: req.user._id,
+      details: `Moved Class "${cls.name}" and its subjects to Recycle Bin (30-day retention)`,
+    });
+
+    res.json({ message: `Class "${cls.name}" moved to Recycle Bin (30-day retention).` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── ADMIN: MERGE SUBJECTS (within same class) ─────────────────────────────
+
+router.post('/admin/subjects/merge', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { sourceId, targetId } = req.body;
+    if (!sourceId || !targetId) return res.status(400).json({ message: 'sourceId and targetId are required' });
+    if (sourceId === targetId) return res.status(400).json({ message: 'Cannot merge a subject into itself' });
+
+    const source = await Subject.findById(sourceId).populate('classRef', 'name');
+    const target = await Subject.findById(targetId).populate('classRef', 'name');
+    if (!source) return res.status(404).json({ message: 'Source subject not found' });
+    if (!target) return res.status(404).json({ message: 'Target subject not found' });
+
+    if (source.classRef._id.toString() !== target.classRef._id.toString()) {
+      return res.status(400).json({ message: 'Both subjects must belong to the same class to merge' });
+    }
+
+    const Content = (await import('../models/Content.js')).default;
+
+    // 1. Reassign Content (blogs) from source to target
+    const contentResult = await Content.updateMany(
+      { subjectRef: sourceId },
+      { $set: { subjectRef: targetId } }
+    );
+
+    // 2. Handle Topics: merge or move
+    const sourceTopics = await Topic.find({ subjectRef: sourceId });
+    const targetTopics = await Topic.find({ subjectRef: targetId });
+    const targetTopicNames = new Map(targetTopics.map((t) => [t.name.toLowerCase().trim(), t]));
+
+    let topicsMoved = 0;
+    let topicsMerged = 0;
+    for (const srcTopic of sourceTopics) {
+      const existingTarget = targetTopicNames.get(srcTopic.name.toLowerCase().trim());
+      if (existingTarget) {
+        await Content.updateMany(
+          { topicRef: srcTopic._id },
+          { $set: { topicRef: existingTarget._id } }
+        );
+        await Topic.findByIdAndDelete(srcTopic._id);
+        topicsMerged++;
+      } else {
+        srcTopic.subjectRef = targetId;
+        await srcTopic.save();
+        topicsMoved++;
+      }
+    }
+
+    // 3. Hard delete source subject after merge
+    await Subject.findByIdAndDelete(sourceId);
+
+    await TaxonomyAuditLog.create({
+      targetType: 'subject',
+      targetId: target._id,
+      targetName: target.name,
+      action: 'merge',
+      previousName: source.name,
+      newName: target.name,
+      performedBy: req.user._id,
+      details: `Merged "${source.name}" → "${target.name}" in ${source.classRef.name} (${contentResult.modifiedCount} blogs, ${topicsMoved} topics moved, ${topicsMerged} topics merged)`,
+    });
+
+    res.json({
+      message: `Successfully merged "${source.name}" into "${target.name}"`,
+      stats: {
+        blogsReassigned: contentResult.modifiedCount,
+        topicsMoved,
+        topicsMerged,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── ADMIN: BULK DELETE ALL EMPTY SUBJECTS (Super Admin only) ─────────────
+
+router.post('/admin/subjects/clean-empty', requireRole('super_admin'), async (req, res, next) => {
+  try {
+    const Content = (await import('../models/Content.js')).default;
+    const allSubjects = await Subject.find({ deletedAt: null }).populate('classRef', 'name').lean();
+
+    const emptySubjects = [];
+    for (const sub of allSubjects) {
+      const count = await Content.countDocuments({ subjectRef: sub._id });
+      if (count === 0) emptySubjects.push(sub);
+    }
+
+    if (emptySubjects.length === 0) {
+      return res.json({ message: 'No empty subjects found. Everything is clean!', deletedCount: 0 });
+    }
+
+    const now = new Date();
+    const retention30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const emptyIds = emptySubjects.map((s) => s._id);
+
+    await Subject.updateMany(
+      { _id: { $in: emptyIds } },
+      { $set: { deletedAt: now, deletedUntil: retention30Days, deletedBy: req.user._id, isActive: false } }
+    );
+
+    const names = emptySubjects.map((s) => `"${s.name}" (${s.classRef?.name || '?'})`).join(', ');
+    await TaxonomyAuditLog.create({
+      targetType: 'subject',
+      targetId: emptySubjects[0]._id,
+      targetName: `Bulk move to bin: ${emptySubjects.length} subjects`,
+      action: 'soft_delete',
+      performedBy: req.user._id,
+      details: `Moved ${emptySubjects.length} empty subjects to Recycle Bin (30-day retention): ${names}`,
+    });
+
+    res.json({
+      message: `Moved ${emptySubjects.length} empty subjects to Recycle Bin (30-day retention).`,
+      deletedCount: emptySubjects.length,
+      deletedSubjects: emptySubjects.map((s) => ({ name: s.name, class: s.classRef?.name })),
+    });
   } catch (err) {
     next(err);
   }
