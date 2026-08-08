@@ -109,7 +109,7 @@ export default function NativeContentEditor({
   );
   const [published, setPublished] = useState(initialData?.published ?? false);
   // Auto-Save / Crash Recovery Storage Key
-  const storageKey = `medhashine_unsaved_draft_${user?._id || "guest"}_${contentId || "new"}`;
+  const storageKey = `medhashine_unsaved_draft_${user?.id || (user as any)?._id || "guest"}_${contentId || "new"}`;
   const [restoredFromLocal, setRestoredFromLocal] = useState(false);
   const [lastAutoSaveTime, setLastAutoSaveTime] = useState<string | null>(null);
   const isInitialMount = useRef(true);
