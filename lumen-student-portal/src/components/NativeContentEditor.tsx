@@ -108,7 +108,7 @@ function ContentEditableBlock({
   const editorRef = useRef<HTMLDivElement | null>(null);
   const isComposingRef = useRef(false);
 
-  // Sync state to DOM innerHTML on mount and when block id changes
+  // Sync state to DOM innerHTML on mount and when block updates from external / remount
   useEffect(() => {
     if (editorRef.current && !isComposingRef.current) {
       const html = markedTextToHtml(block.text || "", block.marks || []);
@@ -116,7 +116,7 @@ function ContentEditableBlock({
         editorRef.current.innerHTML = html;
       }
     }
-  }, [block.id]);
+  }, [block.id, block.marks, block.text]);
 
   const handleInput = () => {
     if (!editorRef.current) return;
@@ -337,6 +337,32 @@ export default function NativeContentEditor({
     setBlocks(newBlocks);
   };
 
+  // Sync all currently mounted contentEditable DOM elements to React state
+  const syncMountedBlocksToState = (): Block[] => {
+    if (typeof document === "undefined") return blocks;
+    const editorEls = document.querySelectorAll<HTMLElement>("[data-block-id]");
+    if (!editorEls.length) return blocks;
+
+    const blockMap = new Map<string, { text: string; marks: any[] }>();
+    editorEls.forEach((el) => {
+      const id = el.getAttribute("data-block-id");
+      if (id) {
+        blockMap.set(id, domToMarkedText(el));
+      }
+    });
+
+    const updated = blocks.map((b) => {
+      const synced = blockMap.get(b.id);
+      if (synced) {
+        return { ...b, text: synced.text, marks: synced.marks };
+      }
+      return b;
+    });
+
+    setBlocks(updated);
+    return updated;
+  };
+
   // Robust Text Formatting on ContentEditable DOM (Bold, Italic, Underline, Color, Highlight, Clear)
   const applyMark = (
     markType: "bold" | "italic" | "underline" | "color" | "highlight" | "clear",
@@ -366,18 +392,34 @@ export default function NativeContentEditor({
         document.execCommand("removeFormat", false);
       }
 
-      // Sync active contentEditable element to React blocks state
-      let node: Node | null = selection.anchorNode;
+      // Find the active block element
+      let blockEl: HTMLElement | null = null;
+      let node: Node | null = selection.anchorNode || selection.focusNode;
       while (node && node !== document.body) {
         if (node instanceof HTMLElement && node.getAttribute("data-block-id")) {
-          const blockId = node.getAttribute("data-block-id");
-          if (blockId) {
-            const { text, marks } = domToMarkedText(node);
-            updateBlock(blockId, { text, marks });
-          }
+          blockEl = node;
           break;
         }
         node = node.parentNode;
+      }
+      if (!blockEl && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        let common: Node | null = range.commonAncestorContainer;
+        while (common && common !== document.body) {
+          if (common instanceof HTMLElement && common.getAttribute("data-block-id")) {
+            blockEl = common;
+            break;
+          }
+          common = common.parentNode;
+        }
+      }
+
+      if (blockEl) {
+        const blockId = blockEl.getAttribute("data-block-id");
+        if (blockId) {
+          const { text, marks } = domToMarkedText(blockEl);
+          updateBlock(blockId, { text, marks });
+        }
       }
 
       if (markType === "clear") {
@@ -426,11 +468,14 @@ export default function NativeContentEditor({
       return;
     }
 
+    // Sync any actively focused block from the DOM before saving
+    const currentBlocks = syncMountedBlocksToState();
+
     setSaving(true);
     try {
       // 1. Process media uploads first
       const updatedBlocks = await Promise.all(
-        blocks.map(async (block) => {
+        currentBlocks.map(async (block) => {
           if (block.pendingFile) {
             const formData = new FormData();
             formData.append("file", block.pendingFile);
@@ -554,7 +599,12 @@ export default function NativeContentEditor({
           {/* Toggle Live Preview */}
           <button
             type="button"
-            onClick={() => setShowPreview((prev) => !prev)}
+            onClick={() => {
+              if (!showPreview) {
+                syncMountedBlocksToState();
+              }
+              setShowPreview((prev) => !prev);
+            }}
             className={`px-3.5 py-2.5 rounded-full text-xs font-semibold border transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs ${
               showPreview
                 ? "bg-[#1A1A1A] text-white border-[#1A1A1A]"
@@ -1046,7 +1096,7 @@ export default function NativeContentEditor({
                   <h2 className={`font-serif-display font-semibold text-[#1A1A1A] pt-6 pb-2 border-b border-[#E5E1D8]/60 ${
                     block.level === 1 ? "text-3xl md:text-4xl" : "text-2xl md:text-3xl"
                   }`}>
-                    {block.text}
+                    {renderMarkedText(block.text || "", block.marks || [])}
                   </h2>
                 )}
                 {block.type === "paragraph" && (
@@ -1056,7 +1106,7 @@ export default function NativeContentEditor({
                 )}
                 {block.type === "quote" && (
                   <blockquote className="border-l-4 border-[#A84C32] pl-4 italic text-[#5C5A55]">
-                    {block.text}
+                    {renderMarkedText(block.text || "", block.marks || [])}
                   </blockquote>
                 )}
                 {block.type === "list" && (

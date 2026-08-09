@@ -407,26 +407,53 @@ router.get('/admin/subjects-with-counts', requireRole('admin'), async (req, res,
 // ─── RECYCLE BIN / SOFT DELETE ENDPOINTS ────────────────────────────────────
 
 /** GET /api/taxonomy/admin/bin — List soft-deleted subjects & classes in Recycle Bin */
+/** GET /api/taxonomy/admin/bin — List soft-deleted subjects & classes in Recycle Bin */
 router.get('/admin/bin', requireRole('admin'), async (req, res, next) => {
   try {
     await cleanupExpiredBinItems();
     const now = new Date();
-    const deletedSubjects = await Subject.find({ deletedAt: { $ne: null } })
-      .populate('classRef', 'name')
+    const Content = (await import('../models/Content.js')).default;
+
+    // Fetch Deleted Classes
+    const deletedClasses = await Class.find({ deletedAt: { $ne: null } })
       .populate('deletedBy', 'name email')
       .sort({ deletedAt: -1 })
       .lean();
 
-    const Content = (await import('../models/Content.js')).default;
+    const classesInBin = await Promise.all(
+      deletedClasses.map(async (c) => {
+        const subjectCount = await Subject.countDocuments({ classRef: c._id });
+        const subjects = await Subject.find({ classRef: c._id }).select('_id');
+        const subIds = subjects.map((s) => s._id);
+        const blogCount = await Content.countDocuments({ subjectRef: { $in: subIds } });
+        const until = new Date(c.deletedUntil || c.deletedAt.getTime() + 30 * 24 * 60 * 60 * 1000);
+        const daysLeft = Math.max(0, Math.ceil((until.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+        return {
+          ...c,
+          type: 'class',
+          subjectCount,
+          blogCount,
+          daysLeft,
+        };
+      })
+    );
+
+    // Fetch Deleted Subjects
+    const deletedSubjects = await Subject.find({ deletedAt: { $ne: null } })
+      .populate('classRef', 'name deletedAt')
+      .populate('deletedBy', 'name email')
+      .sort({ deletedAt: -1 })
+      .lean();
 
     const subjectsInBin = await Promise.all(
       deletedSubjects.map(async (s) => {
         const blogCount = await Content.countDocuments({ subjectRef: s._id });
         const topicCount = await Topic.countDocuments({ subjectRef: s._id });
-        const until = new Date(s.deletedUntil);
+        const until = new Date(s.deletedUntil || s.deletedAt.getTime() + 30 * 24 * 60 * 60 * 1000);
         const daysLeft = Math.max(0, Math.ceil((until.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
         return {
           ...s,
+          type: 'subject',
           blogCount,
           topicCount,
           daysLeft,
@@ -434,7 +461,70 @@ router.get('/admin/bin', requireRole('admin'), async (req, res, next) => {
       })
     );
 
-    res.json({ subjects: subjectsInBin });
+    res.json({ classes: classesInBin, subjects: subjectsInBin });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** POST /api/taxonomy/admin/classes/:id/restore — Restore Class from Recycle Bin (Unbin) — Admin & Super Admin */
+router.post('/admin/classes/:id/restore', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const cls = await Class.findById(id);
+    if (!cls) return res.status(404).json({ message: 'Class not found in Recycle Bin' });
+
+    cls.deletedAt = null;
+    cls.deletedUntil = null;
+    cls.deletedBy = null;
+    cls.isActive = true;
+    await cls.save();
+
+    // Also restore any subjects belonging to this class that were in the bin
+    await Subject.updateMany(
+      { classRef: id, deletedAt: { $ne: null } },
+      { $set: { deletedAt: null, deletedUntil: null, deletedBy: null, isActive: true } }
+    );
+
+    await TaxonomyAuditLog.create({
+      targetType: 'class',
+      targetId: cls._id,
+      targetName: cls.name,
+      action: 'restore',
+      performedBy: req.user._id,
+      details: `Restored Class "${cls.name}" and its subjects from Recycle Bin back to active classes`,
+    });
+
+    res.json({ message: `Class "${cls.name}" restored successfully from Recycle Bin!` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** DELETE /api/taxonomy/admin/classes/:id/permanent — Permanently Delete Class (Super Admin only) */
+router.delete('/admin/classes/:id/permanent', requireRole('super_admin'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const cls = await Class.findById(id);
+    if (!cls) return res.status(404).json({ message: 'Class not found' });
+
+    const subjects = await Subject.find({ classRef: id });
+    for (const sub of subjects) {
+      await Topic.deleteMany({ subjectRef: sub._id });
+    }
+    await Subject.deleteMany({ classRef: id });
+    await Class.findByIdAndDelete(id);
+
+    await TaxonomyAuditLog.create({
+      targetType: 'class',
+      targetId: cls._id,
+      targetName: cls.name,
+      action: 'permanent_delete',
+      performedBy: req.user._id,
+      details: `Permanently deleted Class "${cls.name}" and all its subjects & topics`,
+    });
+
+    res.json({ message: `Class "${cls.name}" permanently deleted.` });
   } catch (err) {
     next(err);
   }
@@ -485,7 +575,7 @@ router.delete('/admin/subjects/:id', requireRole('super_admin'), async (req, res
 router.post('/admin/subjects/:id/restore', requireRole('admin'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const subject = await Subject.findById(id).populate('classRef', 'name');
+    const subject = await Subject.findById(id).populate('classRef');
     if (!subject) return res.status(404).json({ message: 'Subject not found in Recycle Bin' });
 
     subject.deletedAt = null;
@@ -494,16 +584,27 @@ router.post('/admin/subjects/:id/restore', requireRole('admin'), async (req, res
     subject.isActive = true;
     await subject.save();
 
+    // If parent class was also soft-deleted in the bin, auto-restore parent class too!
+    let parentRestored = false;
+    if (subject.classRef && subject.classRef.deletedAt) {
+      await Class.findByIdAndUpdate(subject.classRef._id, {
+        $set: { deletedAt: null, deletedUntil: null, deletedBy: null, isActive: true },
+      });
+      parentRestored = true;
+    }
+
     await TaxonomyAuditLog.create({
       targetType: 'subject',
       targetId: subject._id,
       targetName: subject.name,
       action: 'restore',
       performedBy: req.user._id,
-      details: `Restored Subject "${subject.name}" from Recycle Bin back to active subjects in ${subject.classRef?.name || 'Class'}`,
+      details: `Restored Subject "${subject.name}" from Recycle Bin back to active subjects in ${subject.classRef?.name || 'Class'}${parentRestored ? ' (Parent Class also auto-restored)' : ''}`,
     });
 
-    res.json({ message: `Subject "${subject.name}" restored successfully from Recycle Bin!` });
+    res.json({
+      message: `Subject "${subject.name}" restored successfully!${parentRestored ? ` (Class "${subject.classRef?.name}" also restored)` : ''}`,
+    });
   } catch (err) {
     next(err);
   }

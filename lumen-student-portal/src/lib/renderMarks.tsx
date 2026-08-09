@@ -102,8 +102,8 @@ export function renderMarkedText(text: string = "", marks: Mark[] = []): React.R
   // Build boundary-based segments for overlapping marks
   const boundaries = new Set([0, text.length]);
   marks.forEach((mark) => {
-    boundaries.add(mark.start);
-    boundaries.add(mark.end);
+    boundaries.add(Math.max(0, Math.min(mark.start, text.length)));
+    boundaries.add(Math.max(0, Math.min(mark.end, text.length)));
   });
   const sortedBoundaries = Array.from(boundaries).sort((a, b) => a - b);
 
@@ -130,17 +130,7 @@ export function renderMarkedText(text: string = "", marks: Mark[] = []): React.R
     }
     const style: React.CSSProperties = {};
     if (seg.mark.backgroundColor) style.backgroundColor = seg.mark.backgroundColor;
-
-    if (seg.mark.color) {
-      // If text color is very light (white/near-white) and there's no dark
-      // background to contrast against, override to a readable dark color
-      // so it doesn't appear invisible on the white page background.
-      if (isLightColor(seg.mark.color) && !isDarkColor(seg.mark.backgroundColor)) {
-        style.color = "#1A1A1A";
-      } else {
-        style.color = seg.mark.color;
-      }
-    }
+    if (seg.mark.color) style.color = seg.mark.color;
 
     return seg.text.split("\n").flatMap((line, i, arr) => {
       const classes = [
@@ -215,6 +205,28 @@ export function markedTextToHtml(text: string = "", marks: Mark[] = []): string 
   return segments.join("");
 }
 
+// ─── Color Normalization Helper ─────────────────────────────────────────────
+
+function normalizeColor(colorStr?: string | null): string | undefined {
+  if (!colorStr) return undefined;
+  const trimmed = colorStr.trim();
+  if (!trimmed || trimmed === "inherit" || trimmed === "initial" || trimmed === "transparent") {
+    return undefined;
+  }
+  // Convert rgb(r, g, b) to #RRGGBB
+  const rgbMatch = trimmed.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (rgbMatch) {
+    const r = Math.min(255, parseInt(rgbMatch[1], 10)).toString(16).padStart(2, "0");
+    const g = Math.min(255, parseInt(rgbMatch[2], 10)).toString(16).padStart(2, "0");
+    const b = Math.min(255, parseInt(rgbMatch[3], 10)).toString(16).padStart(2, "0");
+    return `#${r}${g}${b}`.toUpperCase();
+  }
+  if (trimmed.startsWith("#")) {
+    return trimmed.toUpperCase();
+  }
+  return trimmed;
+}
+
 // ─── Convert ContentEditable DOM tree back to clean { text, marks } ─────────
 
 export function domToMarkedText(root: HTMLElement): { text: string; marks: Mark[] } {
@@ -259,7 +271,7 @@ export function domToMarkedText(root: HTMLElement): { text: string; marks: Mark[
         return;
       }
 
-      // If div or p, prepend a newline if not at start
+      // If div or p or li, prepend a newline if not at start
       const isBlockLevel = tag === "div" || tag === "p" || tag === "li";
       if (isBlockLevel && fullText.length > 0 && !fullText.endsWith("\n")) {
         fullText += "\n";
@@ -268,6 +280,7 @@ export function domToMarkedText(root: HTMLElement): { text: string; marks: Mark[
       // Inherit and merge styles
       const computedStyles = { ...activeStyles };
 
+      // Bold detection
       if (
         tag === "b" ||
         tag === "strong" ||
@@ -277,6 +290,8 @@ export function domToMarkedText(root: HTMLElement): { text: string; marks: Mark[
       ) {
         computedStyles.bold = true;
       }
+
+      // Italic detection
       if (
         tag === "i" ||
         tag === "em" ||
@@ -285,18 +300,33 @@ export function domToMarkedText(root: HTMLElement): { text: string; marks: Mark[
       ) {
         computedStyles.italic = true;
       }
+
+      // Underline detection
       if (
         tag === "u" ||
         el.style.textDecoration?.includes("underline") ||
+        el.style.textDecorationLine?.includes("underline") ||
         el.classList.contains("underline")
       ) {
         computedStyles.underline = true;
       }
-      if (el.style.color) {
-        computedStyles.color = el.style.color;
+
+      // Text color detection: style.color or <font color="..."> or color attribute
+      const rawColor = el.style.color || el.getAttribute("color");
+      const normalizedColor = normalizeColor(rawColor);
+      if (normalizedColor) {
+        computedStyles.color = normalizedColor;
       }
-      if (el.style.backgroundColor) {
-        computedStyles.backgroundColor = el.style.backgroundColor;
+
+      // Background highlight detection: style.backgroundColor, style.background, bgcolor attribute, or <mark>
+      const rawBg =
+        el.style.backgroundColor ||
+        el.style.background ||
+        el.getAttribute("bgcolor") ||
+        (tag === "mark" ? "#FEF08A" : null);
+      const normalizedBg = normalizeColor(rawBg);
+      if (normalizedBg) {
+        computedStyles.backgroundColor = normalizedBg;
       }
 
       // Traverse children
