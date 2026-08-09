@@ -431,7 +431,7 @@ export default function BlogDetailClient({
                 <h2 className={`font-serif-display font-semibold text-[#1A1A1A] pt-6 pb-2 border-b border-[#E5E1D8]/60 ${
                   block.level === 1 ? "text-3xl md:text-4xl" : "text-2xl md:text-3xl"
                 }`}>
-                  {block.text}
+                  {renderMarkedText(block.text || "", block.marks || [])}
                 </h2>
               )}
               {block.type === "paragraph" && (
@@ -441,7 +441,7 @@ export default function BlogDetailClient({
               )}
               {block.type === "quote" && (
                 <blockquote className="border-l-4 border-[#A84C32] pl-4 italic text-[#5C5A55]">
-                  {block.text}
+                  {renderMarkedText(block.text || "", block.marks || [])}
                 </blockquote>
               )}
               {block.type === "list" && (

@@ -26,6 +26,8 @@ export default function TaxonomyManagement() {
 
   // Recycle Bin state
   const [binSubjects, setBinSubjects] = useState([]);
+  const [binClasses, setBinClasses] = useState([]);
+  const [binFilter, setBinFilter] = useState('all'); // 'all' | 'classes' | 'subjects'
   const [binLoading, setBinLoading] = useState(false);
 
   const [activeTab, setActiveTab] = useState('class-wise');
@@ -102,6 +104,7 @@ export default function TaxonomyManagement() {
     try {
       const { data } = await api.get('/taxonomy/admin/bin');
       if (data?.subjects) setBinSubjects(data.subjects);
+      if (data?.classes) setBinClasses(data.classes);
     } catch (err) {
       addToast(err?.response?.data?.message || 'Failed to fetch recycle bin', 'error');
     } finally {
@@ -216,25 +219,27 @@ export default function TaxonomyManagement() {
   };
 
   // ─── RECYCLE BIN HANDLERS (RESTORE & PERMANENT DELETE) ──────────────────────
-
-  const handleRestoreFromBin = async (subject) => {
+  const handleRestoreFromBin = async (item, type = 'subject') => {
     setSubmitting(true);
     try {
-      const { data } = await api.post(`/taxonomy/admin/subjects/${subject._id}/restore`);
+      const endpoint = type === 'class'
+        ? `/taxonomy/admin/classes/${item._id}/restore`
+        : `/taxonomy/admin/subjects/${item._id}/restore`;
+      const { data } = await api.post(endpoint);
       addToast(data.message || 'Restored successfully!', 'success');
       refreshAll();
     } catch (err) {
-      addToast(err?.response?.data?.message || 'Failed to restore subject', 'error');
+      addToast(err?.response?.data?.message || 'Failed to restore item', 'error');
     } finally { setSubmitting(false); }
   };
 
   // Open Permanent Delete Modal
-  const openPermDeleteModal = (subject) => {
+  const openPermDeleteModal = (item, type = 'subject') => {
     if (!isSuperAdmin) {
       addToast('Only Super Admin can permanently delete items', 'error');
       return;
     }
-    setPermDeleteItem(subject);
+    setPermDeleteItem({ ...item, itemType: type });
     setPermConfirmInput('');
     setPermDeleteModalOpen(true);
   };
@@ -243,12 +248,15 @@ export default function TaxonomyManagement() {
   const handleConfirmPermanentDelete = async () => {
     if (!permDeleteItem || !isSuperAdmin) return;
     if (permConfirmInput.trim().toLowerCase() !== permDeleteItem.name.trim().toLowerCase()) {
-      addToast('Subject name does not match confirmation input', 'error');
+      addToast('Name does not match confirmation input', 'error');
       return;
     }
     setSubmitting(true);
     try {
-      const { data } = await api.delete(`/taxonomy/admin/subjects/${permDeleteItem._id}/permanent`);
+      const endpoint = permDeleteItem.itemType === 'class'
+        ? `/taxonomy/admin/classes/${permDeleteItem._id}/permanent`
+        : `/taxonomy/admin/subjects/${permDeleteItem._id}/permanent`;
+      const { data } = await api.delete(endpoint);
       addToast(data.message || 'Permanently deleted forever.', 'success');
       setPermDeleteModalOpen(false);
       setPermDeleteItem(null);
@@ -407,7 +415,7 @@ export default function TaxonomyManagement() {
             { label: 'Total Subjects', value: totalSubjectsCount, icon: Layers, color: 'text-purple-400' },
             { label: 'Active', value: activeCount, icon: CheckCircle2, color: 'text-emerald-400' },
             { label: 'Deactivated', value: deactivatedCount, icon: Power, color: 'text-red-400' },
-            { label: 'Recycle Bin', value: binSubjects.length, icon: Trash2, color: binSubjects.length > 0 ? 'text-orange-400' : 'text-slate-500' },
+            { label: 'Recycle Bin', value: binClasses.length + binSubjects.length, icon: Trash2, color: (binClasses.length + binSubjects.length) > 0 ? 'text-orange-400' : 'text-slate-500' },
             { label: 'Audit Logs', value: auditLogs.length, icon: History, color: 'text-amber-400' },
           ].map(({ label, value, icon: Icon, color }) => (
             <div key={label} className="bg-slate-900 border border-white/[0.06] rounded-2xl p-5">
@@ -427,7 +435,7 @@ export default function TaxonomyManagement() {
               { id: 'all', label: `All (${allCategoryItems.length})` },
               { id: 'classes', label: `Classes (${totalClassesCount})` },
               { id: 'subjects', label: `Subjects (${totalSubjectsCount})` },
-              { id: 'bin', label: `Recycle Bin (${binSubjects.length})`, isBin: true },
+              { id: 'bin', label: `Recycle Bin (${binClasses.length + binSubjects.length})`, isBin: true },
               { id: 'history', label: `History (${auditLogs.length})`, isHistory: true },
             ].map((tab) => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)}
@@ -646,34 +654,68 @@ export default function TaxonomyManagement() {
         {/* ─── RECYCLE BIN VIEW (ACCESSIBLE TO ADMIN & SUPER ADMIN) ───────────── */}
         {activeTab === 'bin' && (
           <div className="bg-slate-900 border border-white/[0.06] rounded-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
+            <div className="px-6 py-4 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h3 className="text-base font-bold text-orange-400 flex items-center gap-2">
                   <Trash2 size={16} /> Recycle Bin (30-Day Retention Period)
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Items deleted remain in the bin for 30 days. Both Admins and Super Admins can view & restore (unbin) them.
+                  Classes and subjects deleted remain here for 30 days. Both Admins and Super Admins can view & restore (unbin) them.
                 </p>
               </div>
-              <span className="text-xs text-slate-500">{binSubjects.length} deleted items</span>
+
+              {/* Sub-filter tabs inside Recycle Bin */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setBinFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    binFilter === 'all'
+                      ? 'bg-orange-500/20 text-orange-300 border border-orange-500/40'
+                      : 'bg-white/5 text-slate-400 hover:text-white border border-transparent'
+                  }`}
+                >
+                  All ({binClasses.length + binSubjects.length})
+                </button>
+                <button
+                  onClick={() => setBinFilter('classes')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    binFilter === 'classes'
+                      ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
+                      : 'bg-white/5 text-slate-400 hover:text-white border border-transparent'
+                  }`}
+                >
+                  Classes ({binClasses.length})
+                </button>
+                <button
+                  onClick={() => setBinFilter('subjects')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    binFilter === 'subjects'
+                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                      : 'bg-white/5 text-slate-400 hover:text-white border border-transparent'
+                  }`}
+                >
+                  Subjects ({binSubjects.length})
+                </button>
+              </div>
             </div>
 
             {binLoading ? (
               <div className="p-16 text-center text-slate-500">Loading recycle bin...</div>
-            ) : binSubjects.length === 0 ? (
+            ) : (binClasses.length + binSubjects.length) === 0 ? (
               <div className="p-16 text-center text-slate-600">
                 <Trash2 size={32} className="mx-auto mb-2 opacity-30 text-slate-400" />
                 <p className="font-semibold text-slate-400">Recycle Bin is empty</p>
-                <p className="text-xs text-slate-500">Deleted subjects will appear here for 30 days before being permanently removed.</p>
+                <p className="text-xs text-slate-500">Deleted classes and subjects will appear here for 30 days before being permanently removed.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-black/20 text-slate-500 text-[11px] uppercase tracking-wider text-left">
-                      <th className="px-6 py-3.5">Subject Name</th>
-                      <th className="px-5 py-3.5">Class</th>
-                      <th className="px-5 py-3.5">Blogs Included</th>
+                      <th className="px-6 py-3.5">Item Name</th>
+                      <th className="px-5 py-3.5">Type</th>
+                      <th className="px-5 py-3.5">Parent / Scope</th>
+                      <th className="px-5 py-3.5">Contents Included</th>
                       <th className="px-5 py-3.5">Deleted At</th>
                       <th className="px-5 py-3.5">Deleted By</th>
                       <th className="px-5 py-3.5">Retention Remaining</th>
@@ -681,46 +723,78 @@ export default function TaxonomyManagement() {
                     </tr>
                   </thead>
                   <tbody>
-                    {binSubjects.map((sub) => (
-                      <tr key={sub._id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
-                        <td className="px-6 py-4 font-bold text-white">{sub.name}</td>
-                        <td className="px-5 py-4 text-slate-400 text-xs">{sub.classRef?.name || '—'}</td>
-                        <td className="px-5 py-4">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-500/15 text-sky-400 border border-sky-500/30">
-                            {sub.blogCount} blogs
-                          </span>
-                        </td>
-                        <td className="px-5 py-4 text-slate-400 text-xs">{new Date(sub.deletedAt).toLocaleDateString()}</td>
-                        <td className="px-5 py-4 text-slate-400 text-xs">{sub.deletedBy?.name || 'Admin'}</td>
-                        <td className="px-5 py-4">
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-orange-500/15 text-orange-400 border border-orange-500/30">
-                            <Clock size={12} /> {sub.daysLeft} days left
-                          </span>
-                        </td>
-                        <td className="px-5 py-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            {/* Restore is available for Admin & Super Admin */}
-                            <button
-                              onClick={() => handleRestoreFromBin(sub)}
-                              disabled={submitting}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold hover:bg-emerald-500/25 transition-all cursor-pointer disabled:opacity-40"
-                            >
-                              <RotateCcw size={13} /> Restore (Unbin)
-                            </button>
-                            {/* Permanent Delete Modal for Super Admin */}
-                            {isSuperAdmin && (
-                              <button
-                                onClick={() => openPermDeleteModal(sub)}
-                                disabled={submitting}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold hover:bg-rose-500/20 transition-all cursor-pointer disabled:opacity-40"
-                              >
-                                <Trash size={13} /> Permanent Delete
-                              </button>
+                    {[
+                      ...binClasses.map((c) => ({ ...c, itemType: 'class' })),
+                      ...binSubjects.map((s) => ({ ...s, itemType: 'subject' })),
+                    ]
+                      .filter((item) => {
+                        if (binFilter === 'classes') return item.itemType === 'class';
+                        if (binFilter === 'subjects') return item.itemType === 'subject';
+                        return true;
+                      })
+                      .map((item) => (
+                        <tr key={`${item.itemType}-${item._id}`} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                          <td className="px-6 py-4 font-bold text-white flex items-center gap-2">
+                            {item.name}
+                          </td>
+                          <td className="px-5 py-4">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
+                              item.itemType === 'class'
+                                ? 'bg-sky-500/15 text-sky-400 border-sky-500/30'
+                                : 'bg-purple-500/15 text-purple-400 border-purple-500/30'
+                            }`}>
+                              {item.itemType}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-slate-400 text-xs">
+                            {item.itemType === 'class' ? (
+                              <span className="text-slate-500">Top-Level Class</span>
+                            ) : (
+                              item.classRef?.name || '—'
                             )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="px-5 py-4">
+                            {item.itemType === 'class' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-500/15 text-sky-400 border border-sky-500/30">
+                                {item.subjectCount || 0} subjects, {item.blogCount || 0} blogs
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-500/15 text-purple-400 border border-purple-500/30">
+                                {item.blogCount || 0} blogs, {item.topicCount || 0} topics
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-5 py-4 text-slate-400 text-xs">{item.deletedAt ? new Date(item.deletedAt).toLocaleDateString() : '—'}</td>
+                          <td className="px-5 py-4 text-slate-400 text-xs">{item.deletedBy?.name || 'Admin'}</td>
+                          <td className="px-5 py-4">
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-orange-500/15 text-orange-400 border border-orange-500/30">
+                              <Clock size={12} /> {item.daysLeft ?? 30} days left
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {/* Restore is available for Admin & Super Admin */}
+                              <button
+                                onClick={() => handleRestoreFromBin(item, item.itemType)}
+                                disabled={submitting}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold hover:bg-emerald-500/25 transition-all cursor-pointer disabled:opacity-40"
+                              >
+                                <RotateCcw size={13} /> Restore (Unbin)
+                              </button>
+                              {/* Permanent Delete Modal for Super Admin */}
+                              {isSuperAdmin && (
+                                <button
+                                  onClick={() => openPermDeleteModal(item, item.itemType)}
+                                  disabled={submitting}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold hover:bg-rose-500/20 transition-all cursor-pointer disabled:opacity-40"
+                                >
+                                  <Trash size={13} /> Permanent Delete
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>
