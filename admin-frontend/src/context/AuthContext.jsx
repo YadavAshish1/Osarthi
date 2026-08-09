@@ -8,18 +8,46 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('adminToken');
-    if (!token) { setLoading(false); return; }
-    api.get('/auth/me')
-      .then((res) => {
-        if (['admin', 'super_admin'].includes(res.data?.user?.role)) {
-          setUser(res.data.user);
-        } else {
-          localStorage.removeItem('adminToken');
+    const handleLogout = () => {
+      localStorage.removeItem('adminToken');
+      setUser(null);
+    };
+    window.addEventListener('auth:logout', handleLogout);
+    return () => window.removeEventListener('auth:logout', handleLogout);
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      let token = localStorage.getItem('adminToken');
+      if (!token) {
+        // Try silent refresh from httpOnly cookie
+        try {
+          const { data: refreshData } = await api.post('/auth/refresh');
+          if (refreshData?.accessToken) {
+            token = refreshData.accessToken;
+            localStorage.setItem('adminToken', token);
+          }
+        } catch {
+          // No active session
         }
-      })
-      .catch(() => localStorage.removeItem('adminToken'))
-      .finally(() => setLoading(false));
+      }
+
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      api.get('/auth/me')
+        .then((res) => {
+          if (['admin', 'super_admin'].includes(res.data?.user?.role)) {
+            setUser(res.data.user);
+          } else {
+            localStorage.removeItem('adminToken');
+          }
+        })
+        .catch(() => localStorage.removeItem('adminToken'))
+        .finally(() => setLoading(false));
+    })();
   }, []);
 
   const login = async (email, password) => {

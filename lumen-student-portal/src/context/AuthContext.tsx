@@ -54,12 +54,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     onSuccess: null,
   });
 
-  // On mount: try /api/auth/me with stored token
+  // Listen for auth:logout event triggered when refresh token expires (after 7 days)
+  useEffect(() => {
+    const handleLogout = () => {
+      setUser(null);
+      clearToken();
+    };
+    window.addEventListener("auth:logout", handleLogout);
+    return () => window.removeEventListener("auth:logout", handleLogout);
+  }, []);
+
+  // On mount: try /api/auth/me (or silent refresh if access token expired)
   useEffect(() => {
     (async () => {
       try {
-        const token = localStorage.getItem("lumen_access_token");
-        if (!token) throw new Error("no token");
+        let token = localStorage.getItem("lumen_access_token");
+        if (!token) {
+          // Attempt silent refresh using httpOnly refreshToken cookie if present
+          try {
+            const { data: refreshData } = await api.post("/auth/refresh");
+            if (refreshData?.accessToken) {
+              const freshToken: string = refreshData.accessToken;
+              token = freshToken;
+              saveToken(freshToken);
+            }
+          } catch {
+            // No active session cookie
+          }
+        }
+
+        if (!token) {
+          setReady(true);
+          return;
+        }
 
         const { data } = await api.get("/auth/me");
         // backend returns { user: {...} }

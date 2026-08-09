@@ -18,12 +18,67 @@ export const api = axios.create({
 
 // Attach Authorization header on every request if token exists
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("lumen_access_token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("lumen_access_token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
   }
   return config;
 });
+
+let refreshPromise: Promise<string | null> | null = null;
+const AUTH_SKIP_REFRESH = ["/auth/refresh", "/auth/login", "/auth/register", "/auth/send-otp"];
+
+// Automatic 401 Interceptor — Silently refreshes access token using httpOnly refreshToken cookie
+api.interceptors.response.use(
+  (res) => res,
+  async (error) => {
+    const original = error.config || {};
+    const url = original.url || "";
+
+    if (AUTH_SKIP_REFRESH.some((path) => url.includes(path))) {
+      return Promise.reject(error);
+    }
+
+    if (error.response?.status !== 401 || original._retry) {
+      return Promise.reject(error);
+    }
+    original._retry = true;
+
+    if (!refreshPromise) {
+      refreshPromise = api
+        .post("/auth/refresh")
+        .then((res) => {
+          const newToken = res.data?.accessToken;
+          if (newToken) {
+            if (typeof window !== "undefined") {
+              localStorage.setItem("lumen_access_token", newToken);
+            }
+            return newToken;
+          }
+          return null;
+        })
+        .catch(() => {
+          // Refresh token expired (after 7 days) or invalid — trigger logout
+          if (typeof window !== "undefined") {
+            localStorage.removeItem("lumen_access_token");
+            window.dispatchEvent(new CustomEvent("auth:logout"));
+          }
+          return null;
+        })
+        .finally(() => {
+          refreshPromise = null;
+        });
+    }
+
+    const newToken = await refreshPromise;
+    if (!newToken) return Promise.reject(error);
+
+    original.headers.Authorization = `Bearer ${newToken}`;
+    return api(original);
+  }
+);
 
 export function formatApiErrorDetail(detail: any): string {
   if (detail == null) return "Something went wrong. Please try again.";
