@@ -6,6 +6,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Search, User as UserIcon, LogOut, Menu, X, PenSquare, Clock } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
+import { trackSearch } from "@/lib/gtag";
 
 export default function Header({ onSearch }: { onSearch?: (q: string) => void }) {
   const { user, logout, openAuth } = useAuth();
@@ -54,6 +55,9 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (q.trim()) {
+      trackSearch(q.trim());
+    }
     if (pathname !== "/") {
       router.push(`/?q=${encodeURIComponent(q)}`);
     } else if (onSearch) {

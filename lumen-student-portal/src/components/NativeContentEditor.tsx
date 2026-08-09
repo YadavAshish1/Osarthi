@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { renderMarkedText, mediaUrl, markedTextToHtml, domToMarkedText } from "@/lib/renderMarks";
+import { trackInsightPublished } from "@/lib/gtag";
 import { toast } from "sonner";
 import {
   Heading1,
@@ -527,6 +528,11 @@ export default function NativeContentEditor({
       const wasPublished = published;
       setPublished(publishStatus);
       clearLocalDraft();
+
+      if (publishStatus) {
+        trackInsightPublished(title.trim());
+      }
+
       toast.success(
         publishStatus
           ? "Insight Published Successfully! 🎉"

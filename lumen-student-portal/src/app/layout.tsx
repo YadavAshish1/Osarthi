@@ -5,6 +5,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import AuthModal from "@/components/AuthModal";
+import GoogleAnalytics from "@/components/GoogleAnalytics";
 import { Toaster } from "sonner";
 
 export const viewport: Viewport = {
@@ -101,6 +102,9 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col bg-[#FAF8F5] text-[#1A1A1A]">
+        <Suspense fallback={null}>
+          <GoogleAnalytics />
+        </Suspense>
         <AuthProvider>
           <Suspense fallback={<div className="h-16 border-b border-[#E5E1D8] bg-[#FAF8F5]" />}>
             <Header />
