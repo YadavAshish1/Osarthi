@@ -161,3 +161,174 @@ export function renderMarkedText(text: string = "", marks: Mark[] = []): React.R
   });
 }
 
+// ─── Convert { text, marks } to HTML for ContentEditable ────────────────────
+
+export function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+export function markedTextToHtml(text: string = "", marks: Mark[] = []): string {
+  if (!text) return "";
+  if (!marks || marks.length === 0) {
+    return escapeHtml(text).replace(/\n/g, "<br>");
+  }
+
+  const boundaries = new Set([0, text.length]);
+  marks.forEach((mark) => {
+    boundaries.add(Math.max(0, Math.min(mark.start, text.length)));
+    boundaries.add(Math.max(0, Math.min(mark.end, text.length)));
+  });
+  const sortedBoundaries = Array.from(boundaries).sort((a, b) => a - b);
+
+  const segments: string[] = [];
+  for (let i = 0; i < sortedBoundaries.length - 1; i++) {
+    const start = sortedBoundaries[i];
+    const end = sortedBoundaries[i + 1];
+    if (start >= end) continue;
+
+    const segText = escapeHtml(text.slice(start, end)).replace(/\n/g, "<br>");
+    const coveringMarks = marks.filter((m) => m.start <= start && m.end >= end);
+    if (!coveringMarks.length) {
+      segments.push(segText);
+      continue;
+    }
+
+    const merged = coveringMarks.reduce((acc, m) => ({ ...acc, ...m }), {} as Partial<Mark>);
+    let inner = segText;
+    if (merged.bold) inner = `<b>${inner}</b>`;
+    if (merged.italic) inner = `<i>${inner}</i>`;
+    if (merged.underline) inner = `<u>${inner}</u>`;
+
+    const styleParts: string[] = [];
+    if (merged.color) styleParts.push(`color: ${merged.color}`);
+    if (merged.backgroundColor) styleParts.push(`background-color: ${merged.backgroundColor}`);
+
+    if (styleParts.length) {
+      inner = `<span style="${styleParts.join("; ")}">${inner}</span>`;
+    }
+    segments.push(inner);
+  }
+
+  return segments.join("");
+}
+
+// ─── Convert ContentEditable DOM tree back to clean { text, marks } ─────────
+
+export function domToMarkedText(root: HTMLElement): { text: string; marks: Mark[] } {
+  let fullText = "";
+  const marks: Mark[] = [];
+
+  function traverse(node: Node, activeStyles: Partial<Mark>) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const nodeText = (node.textContent || "").replace(/\u200B/g, "");
+      if (!nodeText) return;
+      const start = fullText.length;
+      fullText += nodeText;
+      const end = fullText.length;
+
+      const hasStyle =
+        activeStyles.bold ||
+        activeStyles.italic ||
+        activeStyles.underline ||
+        activeStyles.color ||
+        activeStyles.backgroundColor;
+
+      if (hasStyle) {
+        marks.push({
+          start,
+          end,
+          ...(activeStyles.bold ? { bold: true } : {}),
+          ...(activeStyles.italic ? { italic: true } : {}),
+          ...(activeStyles.underline ? { underline: true } : {}),
+          ...(activeStyles.color ? { color: activeStyles.color } : {}),
+          ...(activeStyles.backgroundColor ? { backgroundColor: activeStyles.backgroundColor } : {}),
+        });
+      }
+      return;
+    }
+
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement;
+      const tag = el.tagName.toLowerCase();
+
+      if (tag === "br") {
+        fullText += "\n";
+        return;
+      }
+
+      // If div or p, prepend a newline if not at start
+      const isBlockLevel = tag === "div" || tag === "p" || tag === "li";
+      if (isBlockLevel && fullText.length > 0 && !fullText.endsWith("\n")) {
+        fullText += "\n";
+      }
+
+      // Inherit and merge styles
+      const computedStyles = { ...activeStyles };
+
+      if (
+        tag === "b" ||
+        tag === "strong" ||
+        el.style.fontWeight === "bold" ||
+        parseInt(el.style.fontWeight, 10) >= 600 ||
+        el.classList.contains("font-bold")
+      ) {
+        computedStyles.bold = true;
+      }
+      if (
+        tag === "i" ||
+        tag === "em" ||
+        el.style.fontStyle === "italic" ||
+        el.classList.contains("italic")
+      ) {
+        computedStyles.italic = true;
+      }
+      if (
+        tag === "u" ||
+        el.style.textDecoration?.includes("underline") ||
+        el.classList.contains("underline")
+      ) {
+        computedStyles.underline = true;
+      }
+      if (el.style.color) {
+        computedStyles.color = el.style.color;
+      }
+      if (el.style.backgroundColor) {
+        computedStyles.backgroundColor = el.style.backgroundColor;
+      }
+
+      // Traverse children
+      for (let i = 0; i < el.childNodes.length; i++) {
+        traverse(el.childNodes[i], computedStyles);
+      }
+    }
+  }
+
+  for (let i = 0; i < root.childNodes.length; i++) {
+    traverse(root.childNodes[i], {});
+  }
+
+  // Merge consecutive identical marks
+  const mergedMarks: Mark[] = [];
+  for (const m of marks) {
+    const prev = mergedMarks[mergedMarks.length - 1];
+    if (
+      prev &&
+      prev.end === m.start &&
+      Boolean(prev.bold) === Boolean(m.bold) &&
+      Boolean(prev.italic) === Boolean(m.italic) &&
+      Boolean(prev.underline) === Boolean(m.underline) &&
+      prev.color === m.color &&
+      prev.backgroundColor === m.backgroundColor
+    ) {
+      prev.end = m.end;
+    } else {
+      mergedMarks.push({ ...m });
+    }
+  }
+
+  return { text: fullText, marks: mergedMarks };
+}
+

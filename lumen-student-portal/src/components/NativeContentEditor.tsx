@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
-import { renderMarkedText, mediaUrl } from "@/lib/renderMarks";
+import { renderMarkedText, mediaUrl, markedTextToHtml, domToMarkedText } from "@/lib/renderMarks";
 import { toast } from "sonner";
 import {
   Heading1,
@@ -94,6 +94,92 @@ function newBlock(type: string, extra: any = {}): Block {
     align: "left",
     ...extra,
   };
+}
+
+// ─── Native ContentEditable Rich-Text Block Component ───────────────────────
+
+function ContentEditableBlock({
+  block,
+  updateBlock,
+}: {
+  block: Block;
+  updateBlock: (id: string, updates: Partial<Block>) => void;
+}) {
+  const editorRef = useRef<HTMLDivElement | null>(null);
+  const isComposingRef = useRef(false);
+
+  // Sync state to DOM innerHTML on mount and when block id changes
+  useEffect(() => {
+    if (editorRef.current && !isComposingRef.current) {
+      const html = markedTextToHtml(block.text || "", block.marks || []);
+      if (editorRef.current.innerHTML !== html) {
+        editorRef.current.innerHTML = html;
+      }
+    }
+  }, [block.id]);
+
+  const handleInput = () => {
+    if (!editorRef.current) return;
+    const { text, marks } = domToMarkedText(editorRef.current);
+    updateBlock(block.id, { text, marks });
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const plain = e.clipboardData.getData("text/plain");
+    document.execCommand("insertText", false, plain);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (block.type === "heading" && e.key === "Enter") {
+      e.preventDefault();
+    }
+  };
+
+  const isHeading = block.type === "heading";
+  const isQuote = block.type === "quote";
+
+  const placeholder = isHeading
+    ? `Enter Heading ${block.level || 1}…`
+    : isQuote
+    ? "Enter quote text…"
+    : "Write paragraph content…";
+
+  const fontClasses = isHeading
+    ? `font-serif-display font-semibold ${block.level === 1 ? "text-2xl" : "text-xl"} border-b border-transparent focus:border-[#A84C32]`
+    : isQuote
+    ? "font-serif-display italic text-lg leading-relaxed"
+    : "font-serif-body text-base leading-relaxed";
+
+  return (
+    <div className={`relative w-full ${isQuote ? "pl-4 border-l-2 border-[#A84C32]" : ""}`}>
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        data-block-id={block.id}
+        onFocus={() => {
+          isComposingRef.current = true;
+        }}
+        onBlur={() => {
+          isComposingRef.current = false;
+          if (editorRef.current) {
+            const { text, marks } = domToMarkedText(editorRef.current);
+            updateBlock(block.id, { text, marks });
+          }
+        }}
+        onInput={handleInput}
+        onPaste={handlePaste}
+        onKeyDown={handleKeyDown}
+        data-placeholder={placeholder}
+        style={{
+          textAlign: block.align || "left",
+          minHeight: isHeading ? "36px" : "44px",
+        }}
+        className={`w-full focus:outline-none text-[#1A1A1A] whitespace-pre-wrap break-words p-1 ${fontClasses} empty:before:content-[attr(data-placeholder)] empty:before:text-[#5C5A55]/40 empty:before:pointer-events-none cursor-text`}
+      />
+    </div>
+  );
 }
 
 export default function NativeContentEditor({
@@ -187,7 +273,9 @@ export default function NativeContentEditor({
   
   // Entire Sticky Formatting Bar Visibility State (Hide/Unhide)
   const [showToolbar, setShowToolbar] = useState(true);
-  const [colorTab, setColorTab] = useState<"highlight" | "text">("highlight");
+  const [colorTab, setColorTab] = useState<"highlight" | "text">("text");
+
+
 
   // AI Tools State
   const [aiSummary, setAiSummary] = useState("");
@@ -249,91 +337,56 @@ export default function NativeContentEditor({
     setBlocks(newBlocks);
   };
 
-  // Robust Text Formatting (Bold, Italic, Underline, Text Color, Highlight Background, Clear)
+  // Robust Text Formatting on ContentEditable DOM (Bold, Italic, Underline, Color, Highlight, Clear)
   const applyMark = (
     markType: "bold" | "italic" | "underline" | "color" | "highlight" | "clear",
     colorValue?: string
   ) => {
-    let selectedText = "";
-    let targetBlockId: string | null = null;
-    let selStart = -1;
-    let selEnd = -1;
-
-    // 1. Check active focused input/textarea element
-    const activeEl = document.activeElement as HTMLInputElement | HTMLTextAreaElement | null;
-    if (activeEl && (activeEl.tagName === "TEXTAREA" || activeEl.tagName === "INPUT")) {
-      const bId = activeEl.getAttribute("data-block-id");
-      if (bId) {
-        targetBlockId = bId;
-        selStart = activeEl.selectionStart || 0;
-        selEnd = activeEl.selectionEnd || 0;
-        if (selStart !== selEnd) {
-          selectedText = activeEl.value.substring(selStart, selEnd);
-        }
-      }
-    }
-
-    // 2. Fallback to window.getSelection() if activeElement didn't yield selection
-    if (!selectedText) {
-      const selection = window.getSelection();
-      if (selection && !selection.isCollapsed) {
-        selectedText = selection.toString();
-      }
-    }
-
-    if (!selectedText && markType !== "clear") {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
       toast.info("Highlight text inside a block first, then click formatting");
       return;
     }
 
-    setBlocks((prev) =>
-      prev.map((b) => {
-        // Clear all formatting on this block if clear requested
-        if (markType === "clear" && (targetBlockId ? b.id === targetBlockId : b.text?.includes(selectedText))) {
-          return { ...b, marks: [] };
+    try {
+      if (markType === "bold") {
+        document.execCommand("bold", false);
+      } else if (markType === "italic") {
+        document.execCommand("italic", false);
+      } else if (markType === "underline") {
+        document.execCommand("underline", false);
+      } else if (markType === "color" && colorValue) {
+        document.execCommand("foreColor", false, colorValue);
+      } else if (markType === "highlight" && colorValue) {
+        document.execCommand("styleWithCSS", false, "true");
+        if (!document.execCommand("hiliteColor", false, colorValue)) {
+          document.execCommand("backColor", false, colorValue);
         }
+      } else if (markType === "clear") {
+        document.execCommand("removeFormat", false);
+      }
 
-        // Targeted block by ID & textarea selection bounds
-        if (targetBlockId && b.id === targetBlockId && selStart >= 0 && selEnd > selStart) {
-          const marks = b.marks ? [...b.marks] : [];
-          if (markType === "bold") marks.push({ start: selStart, end: selEnd, bold: true });
-          if (markType === "italic") marks.push({ start: selStart, end: selEnd, italic: true });
-          if (markType === "underline") marks.push({ start: selStart, end: selEnd, underline: true });
-          if (markType === "color" && colorValue) {
-            marks.push({ start: selStart, end: selEnd, color: colorValue });
+      // Sync active contentEditable element to React blocks state
+      let node: Node | null = selection.anchorNode;
+      while (node && node !== document.body) {
+        if (node instanceof HTMLElement && node.getAttribute("data-block-id")) {
+          const blockId = node.getAttribute("data-block-id");
+          if (blockId) {
+            const { text, marks } = domToMarkedText(node);
+            updateBlock(blockId, { text, marks });
           }
-          if (markType === "highlight" && colorValue) {
-            marks.push({ start: selStart, end: selEnd, backgroundColor: colorValue });
-          }
-          return { ...b, marks };
+          break;
         }
+        node = node.parentNode;
+      }
 
-        // Fallback matching by substring text search
-        if (!targetBlockId && b.text && b.text.includes(selectedText)) {
-          const start = b.text.indexOf(selectedText);
-          const end = start + selectedText.length;
-          const marks = b.marks ? [...b.marks] : [];
-
-          if (markType === "bold") marks.push({ start, end, bold: true });
-          if (markType === "italic") marks.push({ start, end, italic: true });
-          if (markType === "underline") marks.push({ start, end, underline: true });
-          if (markType === "color" && colorValue) {
-            marks.push({ start, end, color: colorValue });
-          }
-          if (markType === "highlight" && colorValue) {
-            marks.push({ start, end, backgroundColor: colorValue });
-          }
-          return { ...b, marks };
-        }
-
-        return b;
-      })
-    );
-
-    if (markType === "clear") {
-      toast.success("Cleared block formatting");
-    } else {
-      toast.success(`Applied ${markType} formatting!`);
+      if (markType === "clear") {
+        toast.success("Cleared block formatting");
+      } else {
+        toast.success(`Applied ${markType} formatting!`);
+      }
+    } catch (e) {
+      console.error("Formatting error:", e);
     }
   };
 
@@ -617,18 +670,6 @@ export default function NativeContentEditor({
                     <div className="flex items-center p-0.5 rounded-xl bg-[#FAF8F5] border border-[#E5E1D8]">
                       <button
                         type="button"
-                        onClick={() => setColorTab("highlight")}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
-                          colorTab === "highlight"
-                            ? "bg-white text-[#A84C32] shadow-2xs font-bold"
-                            : "text-[#5C5A55] hover:text-[#1A1A1A]"
-                        }`}
-                      >
-                        <Pipette className="h-3.5 w-3.5" />
-                        <span>Bg Highlight</span>
-                      </button>
-                      <button
-                        type="button"
                         onClick={() => setColorTab("text")}
                         className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
                           colorTab === "text"
@@ -638,6 +679,18 @@ export default function NativeContentEditor({
                       >
                         <Palette className="h-3.5 w-3.5" />
                         <span>Text Color</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setColorTab("highlight")}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                          colorTab === "highlight"
+                            ? "bg-white text-[#A84C32] shadow-2xs font-bold"
+                            : "text-[#5C5A55] hover:text-[#1A1A1A]"
+                        }`}
+                      >
+                        <Pipette className="h-3.5 w-3.5" />
+                        <span>Bg Highlight</span>
                       </button>
                     </div>
                   </div>
@@ -833,79 +886,8 @@ export default function NativeContentEditor({
                 </div>
 
                 {/* Block Content Editing Fields */}
-                {block.type === "heading" && (
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      data-block-id={block.id}
-                      value={block.text || ""}
-                      onChange={(e) => updateBlock(block.id, { text: e.target.value })}
-                      placeholder={`Enter Heading ${block.level}…`}
-                      style={{ textAlign: block.align || "left" }}
-                      className={`w-full font-serif-display font-semibold text-[#1A1A1A] focus:outline-none border-b border-transparent focus:border-[#A84C32] ${
-                        block.level === 1 ? "text-2xl" : "text-xl"
-                      }`}
-                    />
-                    {/* Live Formatted Output Line in Edit Mode */}
-                    {block.marks && block.marks.length > 0 && block.text && (
-                      <div className="p-2 rounded-lg bg-[#FAF8F5] border border-[#E5E1D8] text-sm font-serif-display" style={{ textAlign: block.align || "left" }}>
-                        <span className="text-[10px] text-[#A84C32] font-mono block mb-1">Formatted Preview:</span>
-                        {renderMarkedText(block.text, block.marks)}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {block.type === "paragraph" && (
-                  <div className="space-y-2">
-                    <textarea
-                      ref={adjustTextareaHeight}
-                      rows={1}
-                      data-block-id={block.id}
-                      value={block.text || ""}
-                      onChange={(e) => {
-                        updateBlock(block.id, { text: e.target.value });
-                        adjustTextareaHeight(e.target);
-                      }}
-                      onInput={(e) => adjustTextareaHeight(e.currentTarget)}
-                      placeholder="Write paragraph content…"
-                      style={{ textAlign: block.align || "left", overflowY: "hidden" }}
-                      className="w-full font-serif-body text-[#1A1A1A] focus:outline-none resize-none leading-relaxed p-1 min-h-[44px]"
-                    />
-                    {/* Live Formatted Output Line in Edit Mode */}
-                    {block.marks && block.marks.length > 0 && block.text && (
-                      <div className="p-3 rounded-lg bg-[#FAF8F5] border border-[#E5E1D8] text-base font-serif-body leading-relaxed" style={{ textAlign: block.align || "left" }}>
-                        <span className="text-[10px] text-[#A84C32] font-mono block mb-1">Formatted Preview:</span>
-                        {renderMarkedText(block.text, block.marks)}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {block.type === "quote" && (
-                  <div className="pl-4 border-l-2 border-[#A84C32] space-y-2">
-                    <textarea
-                      ref={adjustTextareaHeight}
-                      rows={1}
-                      data-block-id={block.id}
-                      value={block.text || ""}
-                      onChange={(e) => {
-                        updateBlock(block.id, { text: e.target.value });
-                        adjustTextareaHeight(e.target);
-                      }}
-                      onInput={(e) => adjustTextareaHeight(e.currentTarget)}
-                      placeholder="Enter quote text…"
-                      style={{ textAlign: block.align || "left", overflowY: "hidden" }}
-                      className="w-full font-serif-display italic text-lg text-[#1A1A1A] focus:outline-none resize-none min-h-[40px]"
-                    />
-                    {/* Live Formatted Output Line in Edit Mode */}
-                    {block.marks && block.marks.length > 0 && block.text && (
-                      <div className="p-2 rounded-lg bg-[#FAF8F5] border border-[#E5E1D8] font-serif-display italic text-base" style={{ textAlign: block.align || "left" }}>
-                        <span className="text-[10px] text-[#A84C32] font-mono block mb-1">Formatted Preview:</span>
-                        {renderMarkedText(block.text, block.marks)}
-                      </div>
-                    )}
-                  </div>
+                {(block.type === "heading" || block.type === "paragraph" || block.type === "quote") && (
+                  <ContentEditableBlock block={block} updateBlock={updateBlock} />
                 )}
 
                 {block.type === "divider" && (

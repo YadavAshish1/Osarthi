@@ -7,6 +7,7 @@ import TeacherApplications from './pages/TeacherApplications';
 import UserManagement from './pages/UserManagement';
 import TaxonomyRequests from './pages/TaxonomyRequests';
 import TaxonomyManagement from './pages/TaxonomyManagement';
+import SupportTickets from './pages/SupportTickets';
 
 export default function App() {
   return (
@@ -40,6 +41,10 @@ export default function App() {
           <Route
             path="/taxonomy"
             element={<ProtectedRoute><TaxonomyManagement /></ProtectedRoute>}
+          />
+          <Route
+            path="/support-tickets"
+            element={<ProtectedRoute><SupportTickets /></ProtectedRoute>}
           />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
