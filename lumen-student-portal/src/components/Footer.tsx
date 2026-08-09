@@ -61,6 +61,14 @@ export default function Footer() {
                   Get in Touch
                 </Link>
               </li>
+              <li>
+                <Link
+                  href="/help"
+                  className="hover:text-[#1A1A1A] transition-colors font-medium text-[#A84C32]"
+                >
+                  Help & Support Center
+                </Link>
+              </li>
             </ul>
           </div>
 

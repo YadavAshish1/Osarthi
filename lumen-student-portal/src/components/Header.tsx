@@ -129,6 +129,14 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
           >
             Contact
           </Link>
+          <Link
+            data-testid="nav-help"
+            href="/help"
+            className={`hover:text-[#A84C32] transition-colors ${pathname === "/help" ? "font-semibold text-[#A84C32]" : ""
+              }`}
+          >
+            Help Center
+          </Link>
 
           {user ? (
             <div className="flex items-center gap-3 pl-4 border-l border-[#E5E1D8]">
