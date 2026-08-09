@@ -7,6 +7,7 @@ import { api, BlogItem, CommentItem, FALLBACK_BLOGS, mapContentToBlog, getTeache
 import { renderMarkedText, mediaUrl } from "@/lib/renderMarks";
 import CommentThread from "@/components/CommentThread";
 import { useAuth } from "@/context/AuthContext";
+import { trackInsightView, trackAppreciation, trackShare } from "@/lib/gtag";
 import { toast } from "sonner";
 
 export default function BlogDetailClient({
@@ -29,6 +30,19 @@ export default function BlogDetailClient({
   const [copied, setCopied] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Track page view in GA4 when blog details load
+  useEffect(() => {
+    if (blog?.title) {
+      trackInsightView({
+        insight_id: blog.id,
+        title: blog.title,
+        subject: blog.subject,
+        class_level: blog.class_level,
+        teacher_name: blog.teacher_name,
+      });
+    }
+  }, [blog?.id, blog?.title]);
 
   // Sync bookmark & like status with backend if user is authenticated
   useEffect(() => {
@@ -83,6 +97,7 @@ export default function BlogDetailClient({
       await api.post("/profile/likes/toggle", { blogId });
       if (nextLiked) {
         toast.success("Appreciated this insight! ❤️");
+        trackAppreciation(blog?.title || "Insight", blogId);
       }
     } catch {
       // optimistic fallback
@@ -105,6 +120,11 @@ export default function BlogDetailClient({
       text: blog?.excerpt || "Check out this insight on Medhashine",
       url: shareUrl,
     };
+
+    trackShare(
+      blog?.title || "Insight",
+      typeof navigator !== "undefined" && Boolean(navigator.share) ? "native_share" : "copy_link"
+    );
 
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
