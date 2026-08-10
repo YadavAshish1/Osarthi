@@ -6,6 +6,44 @@ function splitLines(text, keyPrefix) {
   });
 }
 
+function getColorLuminance(colorStr) {
+  if (!colorStr) return null;
+  const lower = colorStr.trim().toLowerCase();
+  if (lower === "white" || lower === "#fff" || lower === "#ffffff") return 1.0;
+  if (lower === "black" || lower === "#000" || lower === "#000000") return 0.0;
+  if (lower === "transparent") return null;
+  if (lower.startsWith("#")) {
+    let hex = lower.slice(1);
+    if (hex.length === 3) hex = hex.split("").map((c) => c + c).join("");
+    if (hex.length === 6) {
+      const r = parseInt(hex.slice(0, 2), 16);
+      const g = parseInt(hex.slice(2, 4), 16);
+      const b = parseInt(hex.slice(4, 6), 16);
+      if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
+        return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      }
+    }
+  }
+  const rgbMatch = lower.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  if (rgbMatch) {
+    const r = parseInt(rgbMatch[1], 10);
+    const g = parseInt(rgbMatch[2], 10);
+    const b = parseInt(rgbMatch[3], 10);
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  }
+  return null;
+}
+
+function isLightColor(colorStr) {
+  const lum = getColorLuminance(colorStr);
+  return lum !== null && lum >= 0.75;
+}
+
+function isDarkColor(colorStr) {
+  const lum = getColorLuminance(colorStr);
+  return lum !== null && lum < 0.5;
+}
+
 export function renderMarkedText(text = '', marks = []) {
   // No marks — just split on newlines and return with <br>
   if (!marks?.length) {
@@ -45,7 +83,11 @@ export function renderMarkedText(text = '', marks = []) {
     }
     const style = {};
     if (seg.mark.backgroundColor) style.backgroundColor = seg.mark.backgroundColor;
-    if (seg.mark.color) style.color = seg.mark.color;
+    if (seg.mark.color) {
+      if (!isLightColor(seg.mark.color) || isDarkColor(seg.mark.backgroundColor)) {
+        style.color = seg.mark.color;
+      }
+    }
     // marked segment — also split on newlines inside mark
     return seg.text.split('\n').flatMap((line, i, arr) => {
       const el = (
