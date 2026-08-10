@@ -130,7 +130,11 @@ export function renderMarkedText(text: string = "", marks: Mark[] = []): React.R
     }
     const style: React.CSSProperties = {};
     if (seg.mark.backgroundColor) style.backgroundColor = seg.mark.backgroundColor;
-    if (seg.mark.color) style.color = seg.mark.color;
+    if (seg.mark.color) {
+      if (!isLightColor(seg.mark.color) || isDarkColor(seg.mark.backgroundColor)) {
+        style.color = seg.mark.color;
+      }
+    }
 
     return seg.text.split("\n").flatMap((line, i, arr) => {
       const classes = [
@@ -311,13 +315,6 @@ export function domToMarkedText(root: HTMLElement): { text: string; marks: Mark[
         computedStyles.underline = true;
       }
 
-      // Text color detection: style.color or <font color="..."> or color attribute
-      const rawColor = el.style.color || el.getAttribute("color");
-      const normalizedColor = normalizeColor(rawColor);
-      if (normalizedColor) {
-        computedStyles.color = normalizedColor;
-      }
-
       // Background highlight detection: style.backgroundColor, style.background, bgcolor attribute, or <mark>
       const rawBg =
         el.style.backgroundColor ||
@@ -327,6 +324,15 @@ export function domToMarkedText(root: HTMLElement): { text: string; marks: Mark[
       const normalizedBg = normalizeColor(rawBg);
       if (normalizedBg) {
         computedStyles.backgroundColor = normalizedBg;
+      }
+
+      // Text color detection: style.color or <font color="..."> or color attribute
+      const rawColor = el.style.color || el.getAttribute("color");
+      const normalizedColor = normalizeColor(rawColor);
+      if (normalizedColor) {
+        if (!isLightColor(normalizedColor) || isDarkColor(computedStyles.backgroundColor)) {
+          computedStyles.color = normalizedColor;
+        }
       }
 
       // Traverse children
