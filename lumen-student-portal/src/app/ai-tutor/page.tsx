@@ -4,9 +4,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  Sparkles, Send, Loader2, Bot, Plus, MessageSquare,
+  Sparkles, Send, Loader2, Plus, MessageSquare,
   BookOpen, HelpCircle, FileText, CheckCircle2, Copy, ChevronDown,
-  ArrowLeft, RotateCcw, AlertTriangle, Cpu, Trash2
+  ArrowLeft, RotateCcw, AlertTriangle, Cpu, Trash2, GraduationCap
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
@@ -23,12 +23,15 @@ interface ChatMessage {
   retryPrompt?: string;
 }
 
+const CHAT_STORAGE_KEY = 'medhashine_ai_tutor_chat_history_v1';
+
 export default function FullAiTutorPage() {
   const { user, openAuth } = useAuth();
   const router = useRouter();
 
-  // In-Memory Chat State (Zero DB Persistence)
+  // Chat State with LocalStorage Sync (popup & page share conversation)
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
@@ -42,6 +45,58 @@ export default function FullAiTutorPage() {
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
+
+  // Load chat history from localStorage on initial mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(CHAT_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed.map((m: any) => ({ ...m, streaming: false })));
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load chat history:', e);
+    } finally {
+      setIsLoaded(true);
+    }
+  }, []);
+
+  // Sync chat history to localStorage
+  useEffect(() => {
+    if (!isLoaded) return;
+    try {
+      if (messages.length > 0) {
+        const cleanMsgs = messages.map((m) => ({ ...m, streaming: false }));
+        localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(cleanMsgs));
+      } else {
+        localStorage.removeItem(CHAT_STORAGE_KEY);
+      }
+    } catch (e) {
+      console.warn('Failed to sync chat history:', e);
+    }
+  }, [messages, isLoaded]);
+
+  // Sync across tabs/windows
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === CHAT_STORAGE_KEY) {
+        if (e.newValue) {
+          try {
+            const parsed = JSON.parse(e.newValue);
+            if (Array.isArray(parsed)) {
+              setMessages(parsed.map((m: any) => ({ ...m, streaming: false })));
+            }
+          } catch { }
+        } else {
+          setMessages([]);
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   useEffect(() => {
@@ -86,6 +141,9 @@ export default function FullAiTutorPage() {
   const startNewChat = () => {
     setMessages([]);
     setInput('');
+    try {
+      localStorage.removeItem(CHAT_STORAGE_KEY);
+    } catch { }
   };
 
   const sendMessage = async (textToSend: string, isRetry: boolean = false) => {
@@ -189,12 +247,12 @@ export default function FullAiTutorPage() {
         prev.map((m) =>
           m.id === aiMsgId
             ? {
-                ...m,
-                content: errText,
-                streaming: false,
-                isError: true,
-                retryPrompt: cleanText,
-              }
+              ...m,
+              content: errText,
+              streaming: false,
+              isError: true,
+              retryPrompt: cleanText,
+            }
             : m
         )
       );
@@ -291,15 +349,15 @@ export default function FullAiTutorPage() {
             <div className="h-4 w-px bg-[#E5E1D8] mx-1" />
 
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#A84C32] to-[#C4623E] flex items-center justify-center shadow-sm">
-                <Bot size={15} className="text-white" />
+              <div className="relative w-8 h-8 rounded-xl bg-gradient-to-br from-[#A84C32] to-[#C4623E] flex items-center justify-center shadow-sm">
+                <GraduationCap size={18} className="text-white" />
+                <div className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-amber-400 border-2 border-white flex items-center justify-center shadow-2xs">
+                  <Sparkles size={8} className="text-amber-950 fill-amber-950" />
+                </div>
               </div>
               <div>
-                <h1 className="font-bold text-[#1A1A1A] text-xs sm:text-sm tracking-tight flex items-center gap-1.5 font-ui">
-                  <span>AI Study Copilot</span>
-                  <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full bg-[#A84C32]/10 text-[#A84C32] border border-[#A84C32]/20">
-                    RAG
-                  </span>
+                <h1 className="font-bold text-[#1A1A1A] text-xs sm:text-sm tracking-tight font-ui">
+                  AI Study Copilot
                 </h1>
               </div>
             </div>
@@ -316,7 +374,7 @@ export default function FullAiTutorPage() {
                 <span>
                   {(() => {
                     if (!selectedModel) {
-                      const defName = availableModels.find((m) => m.id === defaultModelId)?.name || 
+                      const defName = availableModels.find((m) => m.id === defaultModelId)?.name ||
                         (defaultModelId === 'azure_openai' ? 'Azure OpenAI' : defaultModelId === 'gemini' ? 'Google Gemini' : 'OpenAI');
                       return `${defName} (Default)`;
                     }
@@ -338,11 +396,10 @@ export default function FullAiTutorPage() {
                       setSelectedModel(null);
                       setShowModelMenu(false);
                     }}
-                    className={`w-full text-left px-3 py-2 rounded-xl text-xs transition-colors cursor-pointer flex flex-col font-ui mb-1 ${
-                      selectedModel === null
+                    className={`w-full text-left px-3 py-2 rounded-xl text-xs transition-colors cursor-pointer flex flex-col font-ui mb-1 ${selectedModel === null
                         ? 'bg-[#A84C32]/10 text-[#A84C32] font-bold'
                         : 'text-[#3D3B36] hover:bg-[#F0EDE8]'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-semibold">Auto-Failover Chain</span>
@@ -358,10 +415,10 @@ export default function FullAiTutorPage() {
                   {(availableModels.length > 0
                     ? availableModels
                     : [
-                        { id: 'azure_openai', name: 'Azure OpenAI', desc: 'Enterprise cloud LLM' },
-                        { id: 'gemini', name: 'Google Gemini (Flash)', desc: 'Fast multimodal assistant' },
-                        { id: 'openai', name: 'OpenAI Direct (GPT-4o)', desc: 'Direct OpenAI gateway' },
-                      ]
+                      { id: 'azure_openai', name: 'Azure OpenAI', desc: 'Enterprise cloud LLM' },
+                      { id: 'gemini', name: 'Google Gemini (Flash)', desc: 'Fast multimodal assistant' },
+                      { id: 'openai', name: 'OpenAI Direct (GPT-4o)', desc: 'Direct OpenAI gateway' },
+                    ]
                   ).map((m) => {
                     const isSelected = selectedModel === m.id;
                     const isDefault = defaultModelId === m.id;
@@ -372,11 +429,10 @@ export default function FullAiTutorPage() {
                           setSelectedModel(m.id);
                           setShowModelMenu(false);
                         }}
-                        className={`w-full text-left px-3 py-2 rounded-xl text-xs transition-colors cursor-pointer flex flex-col font-ui ${
-                          isSelected
+                        className={`w-full text-left px-3 py-2 rounded-xl text-xs transition-colors cursor-pointer flex flex-col font-ui ${isSelected
                             ? 'bg-[#A84C32]/10 text-[#A84C32] font-bold'
                             : 'text-[#3D3B36] hover:bg-[#F0EDE8]'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center justify-between">
                           <span>{m.name}</span>
@@ -413,11 +469,43 @@ export default function FullAiTutorPage() {
           className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6 space-y-5 max-w-3xl w-full mx-auto"
           style={{ scrollbarColor: 'rgba(168,76,50,0.15) transparent' }}
         >
+          {/* Friendly Sign-In Banner inside Agent */}
+          {!user && (
+            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-center gap-3 text-left">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-900 flex items-center justify-center shrink-0">
+                  <GraduationCap size={18} />
+                </div>
+                <div>
+                  <h4 className="font-bold text-xs sm:text-sm text-[#1A1A1A] font-ui">Sign in to use AI Tutor</h4>
+                  <p className="text-xs text-[#5C5A55] font-ui">Sign in or create a student account to get instant answers, summaries & practice questions.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+                <button
+                  onClick={() => openAuth('login')}
+                  className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-[#A84C32] hover:bg-[#8C3A27] text-white font-ui font-bold text-xs transition-colors cursor-pointer shadow-2xs"
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => openAuth('register')}
+                  className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-white border border-[#E5E1D8] hover:bg-[#F0EDE8] text-[#1A1A1A] font-ui font-bold text-xs transition-colors cursor-pointer"
+                >
+                  Sign Up
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Welcome Screen */}
           {messages.length === 0 && (
             <div className="py-12 sm:py-20 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#A84C32] to-[#C4623E] flex items-center justify-center mx-auto mb-5 shadow-lg shadow-[#A84C32]/15">
-                <Sparkles size={30} className="text-white animate-pulse" />
+              <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#A84C32] to-[#C4623E] flex items-center justify-center mx-auto mb-5 shadow-lg shadow-[#A84C32]/15">
+                <GraduationCap size={32} className="text-white" />
+                <div className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-amber-400 border-2 border-white flex items-center justify-center shadow-sm">
+                  <Sparkles size={12} className="text-amber-950 fill-amber-950" />
+                </div>
               </div>
               <h2 className="text-2xl sm:text-3xl font-black text-[#1A1A1A] tracking-tight mb-2 font-serif-display">
                 What would you like to learn today?
@@ -465,26 +553,30 @@ export default function FullAiTutorPage() {
           {messages.map((msg, index) => (
             <div
               key={index}
-              className={`flex gap-3 sm:gap-4 ${
-                msg.role === 'user' ? 'justify-end' : 'justify-start'
-              }`}
+              className={`flex gap-3 sm:gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'
+                }`}
             >
               {msg.role === 'ai' && (
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-sm mt-1 ${
-                  msg.isError ? 'bg-amber-600 text-white' : 'bg-gradient-to-br from-[#A84C32] to-[#C4623E] text-white'
-                }`}>
-                  {msg.isError ? <AlertTriangle size={16} /> : <Bot size={16} />}
+                <div className={`relative w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-sm mt-1 ${msg.isError ? 'bg-amber-600 text-white' : 'bg-gradient-to-br from-[#A84C32] to-[#C4623E] text-white'
+                  }`}>
+                  {msg.isError ? (
+                    <AlertTriangle size={16} />
+                  ) : (
+                    <>
+                      <GraduationCap size={16} className="text-white" />
+                      <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-400 border border-white" />
+                    </>
+                  )}
                 </div>
               )}
 
               <div
-                className={`relative group max-w-[88%] sm:max-w-[80%] rounded-2xl px-5 py-4 ${
-                  msg.role === 'user'
+                className={`relative group max-w-[88%] sm:max-w-[80%] rounded-2xl px-5 py-4 ${msg.role === 'user'
                     ? 'bg-[#A84C32] text-white rounded-br-sm shadow-sm'
                     : msg.isError
-                    ? 'bg-amber-500/10 border border-amber-500/30 text-[#1A1A1A] rounded-bl-sm shadow-sm'
-                    : 'bg-white border border-[#E5E1D8] text-[#1A1A1A] rounded-bl-sm shadow-sm'
-                }`}
+                      ? 'bg-amber-500/10 border border-amber-500/30 text-[#1A1A1A] rounded-bl-sm shadow-sm'
+                      : 'bg-white border border-[#E5E1D8] text-[#1A1A1A] rounded-bl-sm shadow-sm'
+                  }`}
               >
                 {msg.role === 'ai' ? (
                   <div>
@@ -528,17 +620,6 @@ export default function FullAiTutorPage() {
                   <div className="mt-3 pt-2.5 border-t border-[#E5E1D8] flex items-center justify-between text-xs text-[#8A8580] font-ui">
                     <span className="text-[11px]">Verified Curriculum Assistant</span>
                     <div className="flex items-center gap-1.5">
-                      {msg.retryPrompt && (
-                        <button
-                          onClick={() => sendMessage(msg.retryPrompt!, true)}
-                          disabled={isStreaming}
-                          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[#F0EDE8] hover:bg-[#E8E4DD] hover:text-[#1A1A1A] transition-colors cursor-pointer text-xs"
-                          title="Regenerate answer"
-                        >
-                          <RotateCcw size={12} />
-                          <span>Retry</span>
-                        </button>
-                      )}
                       <button
                         onClick={() => copyToClipboard(msg.content, index)}
                         className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#F0EDE8] hover:bg-[#E8E4DD] hover:text-[#1A1A1A] transition-colors cursor-pointer text-xs"
@@ -575,42 +656,69 @@ export default function FullAiTutorPage() {
         {/* ─── CHAT INPUT BAR ─── */}
         <div className="p-3 sm:p-4 bg-transparent shrink-0 z-20">
           <div className="max-w-3xl mx-auto">
-            <div className="relative flex items-end rounded-2xl bg-white border border-[#E5E1D8] focus-within:border-[#A84C32] focus-within:ring-2 focus-within:ring-[#A84C32]/10 transition-all p-1.5 shadow-md shadow-black/5">
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Ask about any chapter, concept, doubt, or quiz..."
-                rows={1}
-                disabled={isStreaming}
-                className="flex-1 bg-transparent border-0 resize-none px-3.5 py-2.5 text-sm text-[#1A1A1A] placeholder-[#8A8580] focus:ring-0 focus:outline-none max-h-40 min-h-[44px] font-ui"
-              />
-
-              <div className="flex items-center gap-1.5 p-1 shrink-0">
-                {messages.length > 0 && (
+            {!user ? (
+              <div 
+                onClick={() => openAuth('login')}
+                className="flex items-center justify-between rounded-2xl bg-white border border-[#E5E1D8] px-4 py-3 cursor-pointer hover:border-[#A84C32]/40 transition-colors shadow-md shadow-black/5 group"
+              >
+                <span className="text-sm text-[#8A8580] group-hover:text-[#1A1A1A] transition-colors font-ui">
+                  Sign in to use AI Tutor...
+                </span>
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={startNewChat}
-                    className="p-2 rounded-xl text-[#8A8580] hover:text-[#A84C32] hover:bg-[#F0EDE8] transition-colors cursor-pointer"
-                    title="Clear Chat"
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); openAuth('login'); }}
+                    className="px-3.5 py-1.5 rounded-xl bg-[#A84C32] hover:bg-[#8C3A27] text-white text-xs font-bold font-ui transition-colors cursor-pointer shadow-2xs"
                   >
-                    <Trash2 size={16} />
+                    Sign In
                   </button>
-                )}
-
-                <button
-                  onClick={() => sendMessage(input)}
-                  disabled={!input.trim() || isStreaming}
-                  className="w-9 h-9 rounded-xl bg-[#A84C32] hover:bg-[#8C3A27] disabled:opacity-40 disabled:hover:bg-[#A84C32] text-white flex items-center justify-center transition-all cursor-pointer shadow-sm shrink-0"
-                >
-                  {isStreaming ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    <Send size={15} className="translate-x-0.5 -translate-y-0.5" />
-                  )}
-                </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); openAuth('register'); }}
+                    className="px-3.5 py-1.5 rounded-xl bg-[#F0EDE8] hover:bg-[#E8E4DD] text-[#1A1A1A] text-xs font-bold font-ui transition-colors cursor-pointer"
+                  >
+                    Sign Up
+                  </button>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="relative flex items-end rounded-2xl bg-white border border-[#E5E1D8] focus-within:border-[#A84C32] focus-within:ring-2 focus-within:ring-[#A84C32]/10 transition-all p-1.5 shadow-md shadow-black/5">
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Ask about any chapter, concept, doubt, or quiz..."
+                  rows={1}
+                  disabled={isStreaming}
+                  className="flex-1 bg-transparent border-0 resize-none px-3.5 py-2.5 text-sm text-[#1A1A1A] placeholder-[#8A8580] focus:ring-0 focus:outline-none max-h-40 min-h-[44px] font-ui"
+                />
+
+                <div className="flex items-center gap-1.5 p-1 shrink-0">
+                  {messages.length > 0 && (
+                    <button
+                      onClick={startNewChat}
+                      className="p-2 rounded-xl text-[#8A8580] hover:text-[#A84C32] hover:bg-[#F0EDE8] transition-colors cursor-pointer"
+                      title="Clear Chat"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => sendMessage(input)}
+                    disabled={!input.trim() || isStreaming}
+                    className="w-9 h-9 rounded-xl bg-[#A84C32] hover:bg-[#8C3A27] disabled:opacity-40 disabled:hover:bg-[#A84C32] text-white flex items-center justify-center transition-all cursor-pointer shadow-sm shrink-0"
+                  >
+                    {isStreaming ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <Send size={15} className="translate-x-0.5 -translate-y-0.5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="text-[11px] text-[#8A8580] px-2 pt-1.5 font-ui text-center sm:text-left">
               <span>Press <kbd className="px-1.5 py-0.5 rounded bg-[#F0EDE8] border border-[#E5E1D8] text-[10px] font-mono">Enter</kbd> to send, <kbd className="px-1.5 py-0.5 rounded bg-[#F0EDE8] border border-[#E5E1D8] text-[10px] font-mono">Shift+Enter</kbd> for new line</span>

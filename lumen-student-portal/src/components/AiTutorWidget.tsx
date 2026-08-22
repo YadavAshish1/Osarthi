@@ -4,14 +4,15 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Sparkles, X, Send, Loader2, Bot, Trash2, Maximize2, Minimize2,
+  Sparkles, X, Send, Loader2, Trash2, Maximize2, Minimize2,
   ExternalLink, BookOpen, HelpCircle, FileText, CheckCircle2, Copy,
-  ArrowUp, RotateCcw, AlertTriangle
+  ArrowUp, RotateCcw, AlertTriangle, GraduationCap
 } from 'lucide-react';
 
 import { useAuth } from '@/context/AuthContext';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
+const CHAT_STORAGE_KEY = 'medhashine_ai_tutor_chat_history_v1';
 
 export default function AiTutorWidget() {
   const { user, openAuth } = useAuth();
@@ -19,6 +20,7 @@ export default function AiTutorWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [messages, setMessages] = useState<any[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -28,6 +30,58 @@ export default function AiTutorWidget() {
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
+
+  // Load chat history from localStorage on initial mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(CHAT_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed.map((m: any) => ({ ...m, streaming: false })));
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load chat history:', e);
+    } finally {
+      setIsLoaded(true);
+    }
+  }, []);
+
+  // Sync chat history to localStorage
+  useEffect(() => {
+    if (!isLoaded) return;
+    try {
+      if (messages.length > 0) {
+        const cleanMsgs = messages.map((m) => ({ ...m, streaming: false }));
+        localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(cleanMsgs));
+      } else {
+        localStorage.removeItem(CHAT_STORAGE_KEY);
+      }
+    } catch (e) {
+      console.warn('Failed to sync chat history:', e);
+    }
+  }, [messages, isLoaded]);
+
+  // Sync across tabs/windows
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === CHAT_STORAGE_KEY) {
+        if (e.newValue) {
+          try {
+            const parsed = JSON.parse(e.newValue);
+            if (Array.isArray(parsed)) {
+              setMessages(parsed.map((m: any) => ({ ...m, streaming: false })));
+            }
+          } catch { }
+        } else {
+          setMessages([]);
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
@@ -159,12 +213,12 @@ export default function AiTutorWidget() {
         prev.map((m) =>
           m.id === aiMsgId
             ? {
-                ...m,
-                content: err.message || 'Temporary service issue occurred.',
-                streaming: false,
-                isError: true,
-                retryPrompt: cleanText,
-              }
+              ...m,
+              content: err.message || 'Temporary service issue occurred.',
+              streaming: false,
+              isError: true,
+              retryPrompt: cleanText,
+            }
             : m
         )
       );
@@ -176,6 +230,9 @@ export default function AiTutorWidget() {
   const startNewChat = () => {
     setMessages([]);
     setConversationId(null);
+    try {
+      localStorage.removeItem(CHAT_STORAGE_KEY);
+    } catch { }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -201,7 +258,7 @@ export default function AiTutorWidget() {
 
       // Inline code
       processed = processed.replace(/`([^`]+)`/g, '<code class="bg-[#A84C32]/8 text-[#A84C32] px-1 py-0.5 rounded text-xs font-mono border border-[#A84C32]/15">$1</code>');
-      
+
       // Markdown links: [text](url) -> <a href="url" target="_blank" rel="noopener noreferrer">
       processed = processed.replace(
         /\[([^\]]+)\]\((https?:\/\/[^\s)]+|\/[^\s)]+)\)/g,
@@ -240,43 +297,39 @@ export default function AiTutorWidget() {
       {/* Floating Chat Modal */}
       {isOpen && (
         <div
-          className={`fixed z-[9999] transition-all duration-300 ease-out flex flex-col overflow-hidden bg-[#FAF8F5] text-[#1A1A1A] shadow-2xl shadow-black/15 border border-[#E5E1D8] rounded-t-3xl sm:rounded-3xl
+          className={`fixed z-[9999] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] flex flex-col overflow-hidden bg-[#FAF8F5] text-[#1A1A1A] shadow-2xl shadow-black/15 border border-[#E5E1D8] rounded-t-3xl sm:rounded-3xl
             inset-x-0 bottom-0 top-12 sm:top-auto sm:inset-x-auto sm:bottom-6 sm:right-6
-            ${isExpanded 
-              ? 'sm:w-[720px] sm:h-[82vh] sm:max-h-[850px]' 
+            ${isExpanded
+              ? 'sm:w-[720px] sm:h-[82vh] sm:max-h-[850px]'
               : 'sm:w-[420px] sm:h-[600px] sm:max-h-[80vh]'
             }`}
         >
           {/* Header Bar */}
           <div className="px-4 py-3 bg-white border-b border-[#E5E1D8] flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#A84C32] to-[#C4623E] flex items-center justify-center shadow-sm">
-                <Bot size={18} className="text-white" />
+              <div className="relative w-8 h-8 rounded-xl bg-gradient-to-br from-[#A84C32] to-[#C4623E] flex items-center justify-center shadow-sm">
+                <GraduationCap size={18} className="text-white" />
+                <div className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-amber-400 border-2 border-white flex items-center justify-center shadow-2xs">
+                  <Sparkles size={8} className="text-amber-950 fill-amber-950" />
+                </div>
               </div>
               <div>
-                <div className="flex items-center gap-1.5">
-                  <h3 className="font-bold text-[#1A1A1A] text-sm font-ui">Medhashine AI Tutor</h3>
-                  <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full bg-[#A84C32]/10 text-[#A84C32] border border-[#A84C32]/20 font-ui">
-                    RAG
-                  </span>
-                </div>
-                <p className="text-[10px] text-[#8A8580] font-ui">Curriculum-Aware Copilot</p>
+                <h3 className="font-bold text-[#1A1A1A] text-sm font-ui">Medhashine AI Tutor</h3>
+                <p className="text-[10px] text-[#8A8580] font-ui">Curriculum-Aware Mentor</p>
               </div>
             </div>
 
             {/* Actions */}
             <div className="flex items-center gap-0.5">
-              {/* Full Page Link */}
               <Link
                 href="/ai-tutor"
-                onClick={() => setIsOpen(false)}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="p-1.5 rounded-lg text-[#8A8580] hover:text-[#A84C32] hover:bg-[#F0EDE8] transition-colors"
-                title="Open Full Page"
+                title="Open in new tab"
               >
                 <ExternalLink size={15} />
               </Link>
-
-              {/* Expand / Shrink (Desktop Only) */}
               <button
                 onClick={() => setIsExpanded(!isExpanded)}
                 className="hidden sm:inline-flex p-1.5 rounded-lg text-[#8A8580] hover:text-[#1A1A1A] hover:bg-[#F0EDE8] transition-colors cursor-pointer"
@@ -284,8 +337,6 @@ export default function AiTutorWidget() {
               >
                 {isExpanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
               </button>
-
-              {/* New Chat */}
               <button
                 onClick={startNewChat}
                 className="p-1.5 rounded-lg text-[#8A8580] hover:text-[#1A1A1A] hover:bg-[#F0EDE8] transition-colors cursor-pointer"
@@ -293,8 +344,6 @@ export default function AiTutorWidget() {
               >
                 <Trash2 size={15} />
               </button>
-
-              {/* Close */}
               <button
                 onClick={() => setIsOpen(false)}
                 className="p-1.5 rounded-lg text-[#8A8580] hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
@@ -306,10 +355,44 @@ export default function AiTutorWidget() {
 
           {/* Messages View */}
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3.5 bg-[#FAF8F5]">
+            {/* Friendly Sign-In Banner inside Agent for unauthenticated users */}
+            {!user && (
+              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-[#1A1A1A] shadow-2xs">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-900 flex items-center justify-center shrink-0">
+                      <GraduationCap size={15} />
+                    </div>
+                    <div>
+                      <h5 className="font-bold text-xs text-[#1A1A1A] font-ui">Sign in to use AI Tutor</h5>
+                      <p className="text-[10px] text-[#5C5A55] font-ui">Get instant explanations & quiz help</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => openAuth('login')}
+                      className="px-2.5 py-1 rounded-lg bg-[#A84C32] hover:bg-[#8C3A27] text-white text-[11px] font-bold font-ui transition-colors cursor-pointer shadow-2xs"
+                    >
+                      Sign In
+                    </button>
+                    <button
+                      onClick={() => openAuth('register')}
+                      className="px-2.5 py-1 rounded-lg bg-white border border-[#E5E1D8] hover:bg-[#F0EDE8] text-[#1A1A1A] text-[11px] font-bold font-ui transition-colors cursor-pointer"
+                    >
+                      Sign Up
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {messages.length === 0 && (
               <div className="py-6 px-2 text-center">
-                <div className="w-12 h-12 rounded-2xl bg-[#A84C32]/10 border border-[#A84C32]/15 flex items-center justify-center mx-auto mb-3">
-                  <Sparkles size={24} className="text-[#A84C32] animate-pulse" />
+                <div className="relative w-13 h-13 rounded-2xl bg-[#A84C32]/10 border border-[#A84C32]/20 flex items-center justify-center mx-auto mb-3">
+                  <GraduationCap size={26} className="text-[#A84C32]" />
+                  <div className="absolute -top-1 -right-1 w-4.5 h-4.5 rounded-full bg-gradient-to-br from-amber-400 to-amber-500 text-white flex items-center justify-center shadow-xs">
+                    <Sparkles size={10} className="fill-white" />
+                  </div>
                 </div>
                 <h4 className="font-bold text-[#1A1A1A] text-base mb-1 font-serif-body">
                   How can I help you study today?
@@ -345,13 +428,12 @@ export default function AiTutorWidget() {
                 className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
               >
                 <div
-                  className={`relative group max-w-[90%] sm:max-w-[85%] rounded-2xl px-4 py-3 ${
-                    msg.role === 'user'
+                  className={`relative group max-w-[90%] sm:max-w-[85%] rounded-2xl px-4 py-3 ${msg.role === 'user'
                       ? 'bg-[#A84C32] text-white rounded-br-sm shadow-sm'
                       : msg.isError
-                      ? 'bg-amber-500/10 border border-amber-500/30 text-[#1A1A1A] rounded-bl-sm shadow-sm'
-                      : 'bg-white border border-[#E5E1D8] text-[#1A1A1A] rounded-bl-sm shadow-sm'
-                  }`}
+                        ? 'bg-amber-500/10 border border-amber-500/30 text-[#1A1A1A] rounded-bl-sm shadow-sm'
+                        : 'bg-white border border-[#E5E1D8] text-[#1A1A1A] rounded-bl-sm shadow-sm'
+                    }`}
                 >
                   {msg.role === 'ai' ? (
                     <div>
@@ -390,22 +472,11 @@ export default function AiTutorWidget() {
                     <p className="text-xs sm:text-sm leading-relaxed whitespace-pre-wrap font-ui">{msg.content}</p>
                   )}
 
-                  {/* Copy & Retry Button on AI response */}
+                  {/* Copy Button on AI response */}
                   {msg.role === 'ai' && !msg.streaming && !msg.isError && msg.content && (
                     <div className="mt-2 pt-2 border-t border-[#E5E1D8] flex items-center justify-between text-[10px] text-[#8A8580] font-ui">
                       <span>Medhashine Study Tutor</span>
                       <div className="flex items-center gap-1.5">
-                        {msg.retryPrompt && (
-                          <button
-                            onClick={() => sendMessage(msg.retryPrompt, true)}
-                            disabled={isStreaming}
-                            className="flex items-center gap-1 text-[#8A8580] hover:text-[#A84C32] transition-colors cursor-pointer"
-                            title="Regenerate answer"
-                          >
-                            <RotateCcw size={11} />
-                            <span>Retry</span>
-                          </button>
-                        )}
                         <button
                           onClick={() => copyToClipboard(msg.content, msg.id || idx)}
                           className="flex items-center gap-1 text-[#8A8580] hover:text-[#A84C32] transition-colors cursor-pointer"
@@ -434,30 +505,57 @@ export default function AiTutorWidget() {
 
           {/* Floating Input Footer */}
           <div className="px-3 pb-3 pt-2 bg-gradient-to-t from-[#FAF8F5] to-transparent shrink-0">
-            <div className="flex items-end gap-2 bg-white border border-[#E5E1D8] rounded-2xl px-3 py-2 focus-within:border-[#A84C32]/50 focus-within:shadow-md focus-within:shadow-[#A84C32]/5 transition-all shadow-sm">
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={isStreaming ? "Generating answer..." : "Ask your doubt... (Enter to send)"}
-                disabled={isStreaming}
-                rows={1}
-                className="flex-1 bg-transparent border-0 text-[#1A1A1A] placeholder:text-[#B5B0A8] text-xs sm:text-sm resize-none focus:outline-hidden max-h-24 px-1 py-1 font-ui"
-                style={{ minHeight: '32px' }}
-              />
-              <button
-                onClick={() => sendMessage(input)}
-                disabled={!input.trim() || isStreaming}
-                className="w-8 h-8 rounded-xl bg-[#A84C32] text-white flex items-center justify-center hover:bg-[#8C3A27] disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer shrink-0"
+            {!user ? (
+              <div 
+                onClick={() => openAuth('login')}
+                className="flex items-center justify-between bg-white border border-[#E5E1D8] rounded-2xl px-3.5 py-2.5 cursor-pointer hover:border-[#A84C32]/50 transition-colors shadow-2xs group"
               >
-                {isStreaming ? (
-                  <Loader2 size={14} className="animate-spin text-white" />
-                ) : (
-                  <ArrowUp size={14} />
-                )}
-              </button>
-            </div>
+                <span className="text-xs text-[#8A8580] group-hover:text-[#1A1A1A] font-ui transition-colors">
+                  Sign in to use AI Tutor...
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); openAuth('login'); }}
+                    className="px-2.5 py-1 rounded-lg bg-[#A84C32] hover:bg-[#8C3A27] text-white text-[11px] font-bold font-ui transition-colors cursor-pointer"
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); openAuth('register'); }}
+                    className="px-2.5 py-1 rounded-lg bg-[#F0EDE8] hover:bg-[#E8E4DD] text-[#1A1A1A] text-[11px] font-bold font-ui transition-colors cursor-pointer"
+                  >
+                    Sign Up
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-end gap-2 bg-white border border-[#E5E1D8] rounded-2xl px-3 py-2 focus-within:border-[#A84C32]/50 focus-within:shadow-md focus-within:shadow-[#A84C32]/5 transition-all shadow-sm">
+                <textarea
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={isStreaming ? "Generating answer..." : "Ask your doubt... (Enter to send)"}
+                  disabled={isStreaming}
+                  rows={1}
+                  className="flex-1 bg-transparent border-0 text-[#1A1A1A] placeholder:text-[#B5B0A8] text-xs sm:text-sm resize-none focus:outline-hidden max-h-24 px-1 py-1 font-ui"
+                  style={{ minHeight: '32px' }}
+                />
+                <button
+                  onClick={() => sendMessage(input)}
+                  disabled={!input.trim() || isStreaming}
+                  className="w-8 h-8 rounded-xl bg-[#A84C32] text-white flex items-center justify-center hover:bg-[#8C3A27] disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer shrink-0"
+                >
+                  {isStreaming ? (
+                    <Loader2 size={14} className="animate-spin text-white" />
+                  ) : (
+                    <ArrowUp size={14} />
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
