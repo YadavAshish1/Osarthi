@@ -6,6 +6,24 @@ import { authenticate, requireRole } from '../middleware/auth.js';
 
 const router = Router();
 
+// AI Agent Service URL for RAG ingestion webhook
+const AI_SERVICE_URL = process.env.AI_AGENT_SERVICE_URL || 'http://localhost:8000';
+
+/**
+ * Trigger RAG ingestion in the Python AI Agent Service.
+ * Called asynchronously (fire-and-forget) when content is published.
+ * Addresses Verification Report Issue #5.
+ */
+function triggerRagIngestion(contentId) {
+  fetch(`${AI_SERVICE_URL}/api/rag/ingest`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content_id: contentId }),
+  }).catch((err) => {
+    console.warn('[RAG Ingestion] Failed to notify AI service:', err.message);
+  });
+}
+
 router.use(authenticate);
 
 // Auto cleanup expired bin insights (>30 days retention)
@@ -227,6 +245,11 @@ router.post('/topic/:topicId', requireRole('teacher'), async (req, res, next) =>
     });
 
     res.status(201).json(content);
+
+    // Trigger RAG ingestion if content is published
+    if (content.published) {
+      triggerRagIngestion(content._id.toString());
+    }
   } catch (err) {
     next(err);
   }
@@ -257,6 +280,11 @@ router.put('/:contentId', requireRole('teacher'), async (req, res, next) => {
     );
 
     res.json(content);
+
+    // Trigger RAG ingestion if content is now published
+    if (content.published) {
+      triggerRagIngestion(content._id.toString());
+    }
   } catch (err) {
     next(err);
   }

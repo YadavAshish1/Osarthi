@@ -2,17 +2,11 @@ import axios from 'axios';
 
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+// axios instance — relies 100% on secure httpOnly cookies with credentials
 export const api = axios.create({
   baseURL: `${BASE}/api`,
   withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
-});
-
-// Attach stored access token to every request
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('adminToken');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
 });
 
 let refreshPromise = null;
@@ -35,33 +29,29 @@ api.interceptors.response.use(
     original._retry = true;
 
     if (!refreshPromise) {
-      refreshPromise = api
-        .post('/auth/refresh')
+      refreshPromise = axios
+        .post(
+          `${BASE}/api/auth/refresh`,
+          {},
+          { withCredentials: true, headers: { 'Content-Type': 'application/json' } }
+        )
         .then((res) => {
-          const newToken = res.data?.accessToken;
-          if (newToken) {
-            localStorage.setItem('adminToken', newToken);
-            return newToken;
-          }
-          return null;
+          return res.status === 200;
         })
         .catch(() => {
-          // Refresh token expired (after 7 days) or invalid — trigger logout
-          localStorage.removeItem('adminToken');
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('auth:logout'));
           }
-          return null;
+          return false;
         })
         .finally(() => {
           refreshPromise = null;
         });
     }
 
-    const newToken = await refreshPromise;
-    if (!newToken) return Promise.reject(error);
+    const refreshed = await refreshPromise;
+    if (!refreshed) return Promise.reject(error);
 
-    original.headers.Authorization = `Bearer ${newToken}`;
     return api(original);
   }
 );

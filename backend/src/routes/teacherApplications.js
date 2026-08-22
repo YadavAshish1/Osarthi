@@ -107,16 +107,22 @@ router.post('/', async (req, res, next) => {
 // ─── GET /api/teacher-applications/my-status — Current user's application status
 router.get('/my-status', async (req, res, next) => {
   try {
-    // Try to get user from token
-    const header = req.headers.authorization;
-    if (!header?.startsWith('Bearer ')) {
+    // Extract token from httpOnly cookie or Authorization header
+    let token = null;
+    if (req.cookies?.accessToken) {
+      token = req.cookies.accessToken;
+    } else if (req.headers.authorization?.startsWith('Bearer ')) {
+      token = req.headers.authorization.slice(7);
+    }
+
+    if (!token) {
       return res.json({ application: null });
     }
 
     let userId;
     try {
       const { verifyAccessToken } = await import('../utils/tokens.js');
-      const decoded = verifyAccessToken(header.slice(7));
+      const decoded = verifyAccessToken(token);
       userId = decoded.userId;
     } catch {
       return res.json({ application: null });
@@ -133,12 +139,23 @@ router.get('/my-status', async (req, res, next) => {
       ],
     }).sort({ createdAt: -1 });
 
-    if (!application) return res.json({ application: null });
+    if (!application) {
+      if (user.role === 'teacher') {
+        return res.json({
+          application: {
+            status: 'approved',
+            name: user.name,
+            email: user.email,
+          },
+        });
+      }
+      return res.json({ application: null });
+    }
 
     res.json({
       application: {
         _id: application._id,
-        status: application.status,
+        status: user.role === 'teacher' ? 'approved' : application.status,
         name: application.name,
         email: application.email,
         rejectionReason: application.rejectionReason,

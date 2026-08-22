@@ -3,11 +3,17 @@ import User from '../models/User.js';
 
 export async function authenticate(req, res, next) {
   try {
+    let token = null;
     const header = req.headers.authorization;
-    if (!header?.startsWith('Bearer ')) {
+    if (header?.startsWith('Bearer ')) {
+      token = header.slice(7);
+    } else if (req.cookies?.accessToken) {
+      token = req.cookies.accessToken;
+    }
+
+    if (!token) {
       return res.status(401).json({ message: 'Authentication required' });
     }
-    const token = header.slice(7);
     const decoded = verifyAccessToken(token);
     const user = await User.findById(decoded.userId).select('-passwordHash -refreshTokenHash');
     if (!user) return res.status(401).json({ message: 'User not found' });

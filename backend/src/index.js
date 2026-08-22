@@ -22,6 +22,7 @@ import teacherApplicationRoutes from './routes/teacherApplications.js';
 import superAdminRoutes, { seedSuperAdmin } from './routes/superAdmin.js';
 import taxonomyRequestRoutes from './routes/taxonomyRequests.js';
 import supportTicketRoutes from './routes/supportTicket.js';
+import aiRoutes from './routes/ai.js';
 import { getStorageMode, isCloudinaryEnabled } from './services/storage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -98,6 +99,7 @@ app.use('/api/teacher-applications', teacherApplicationRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/taxonomy-requests', taxonomyRequestRoutes);
 app.use('/api/support', supportTicketRoutes);
+app.use('/api/ai', aiRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 

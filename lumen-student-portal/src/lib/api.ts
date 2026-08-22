@@ -7,7 +7,7 @@ export const BACKEND_URL =
   "http://localhost:5000";
 export const API = `${BACKEND_URL}/api`;
 
-// axios instance — attaches JWT token from localStorage automatically
+// axios instance — relies 100% on secure httpOnly cookies with credentials
 export const api = axios.create({
   baseURL: API,
   withCredentials: true,
@@ -16,21 +16,10 @@ export const api = axios.create({
   },
 });
 
-// Attach Authorization header on every request if token exists
-api.interceptors.request.use((config) => {
-  if (typeof window !== "undefined") {
-    const token = localStorage.getItem("lumen_access_token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-  }
-  return config;
-});
-
-let refreshPromise: Promise<string | null> | null = null;
+let refreshPromise: Promise<boolean> | null = null;
 const AUTH_SKIP_REFRESH = ["/auth/refresh", "/auth/login", "/auth/register", "/auth/send-otp"];
 
-// Automatic 401 Interceptor — Silently refreshes access token using httpOnly refreshToken cookie
+// Automatic 401 Interceptor — Silently refreshes session using secure httpOnly refreshToken cookie
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
@@ -47,35 +36,30 @@ api.interceptors.response.use(
     original._retry = true;
 
     if (!refreshPromise) {
-      refreshPromise = api
-        .post("/auth/refresh")
+      refreshPromise = axios
+        .post(
+          `${API}/auth/refresh`,
+          {},
+          { withCredentials: true, headers: { "Content-Type": "application/json" } }
+        )
         .then((res) => {
-          const newToken = res.data?.accessToken;
-          if (newToken) {
-            if (typeof window !== "undefined") {
-              localStorage.setItem("lumen_access_token", newToken);
-            }
-            return newToken;
-          }
-          return null;
+          return res.status === 200;
         })
         .catch(() => {
-          // Refresh token expired (after 7 days) or invalid — trigger logout
+          // Refresh token expired or session invalid — notify logout
           if (typeof window !== "undefined") {
-            localStorage.removeItem("lumen_access_token");
             window.dispatchEvent(new CustomEvent("auth:logout"));
           }
-          return null;
+          return false;
         })
         .finally(() => {
           refreshPromise = null;
         });
     }
 
-    const newToken = await refreshPromise;
-    if (!newToken) return Promise.reject(error);
+    const refreshed = await refreshPromise;
+    if (!refreshed) return Promise.reject(error);
 
-    original.headers.Authorization = `Bearer ${newToken}`;
     return api(original);
   }
 );
@@ -342,3 +326,5 @@ export const FALLBACK_FACETS: Facets = {
   subjects: ["Physics", "Mathematics", "Literature"],
   topics: ["Mechanics", "Number Theory", "Language & Style", "Calculus", "Optics", "Modernism"],
 };
+
+export default api;

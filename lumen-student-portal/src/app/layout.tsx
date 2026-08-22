@@ -5,6 +5,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import AuthModal from "@/components/AuthModal";
+import AiTutorWidget from "@/components/AiTutorWidget";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
 import { Toaster } from "sonner";
 
@@ -40,7 +41,7 @@ export const metadata: Metadata = {
     "Medhashine",
   ],
   authors: [{ name: "Medhashine Education Team" }],
-  creator: "Osarthi Team",
+  creator: "Medhashine Team",
   publisher: "Medhashine Student Portal",
   openGraph: {
     type: "website",
@@ -116,6 +117,7 @@ export default function RootLayout({
           </main>
           <Footer />
           <AuthModal />
+          <AiTutorWidget />
           <Toaster position="top-center" richColors closeButton />
         </AuthProvider>
       </body>

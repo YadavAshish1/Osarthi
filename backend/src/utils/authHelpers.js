@@ -17,18 +17,35 @@ export function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-export function setRefreshCookie(res, token) {
-  res.cookie('refreshToken', token, {
+export function setAuthCookies(res, accessToken, refreshToken) {
+  const isProd = process.env.NODE_ENV === 'production';
+  const cookieOpts = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
     path: '/',
+  };
+
+  // 1. Access Token cookie (2 hours)
+  res.cookie('accessToken', accessToken, {
+    ...cookieOpts,
+    maxAge: 2 * 60 * 60 * 1000,
+  });
+
+  // 2. Refresh Token cookie (30 days)
+  res.cookie('refreshToken', refreshToken, {
+    ...cookieOpts,
+    maxAge: 30 * 24 * 60 * 60 * 1000,
   });
 }
 
+export function clearAuthCookies(res) {
+  res.clearCookie('accessToken', { path: '/' });
+  res.clearCookie('refreshToken', { path: '/' });
+}
+
 export async function issueTokens(user, res) {
-  const payload = { userId: user._id.toString(), role: user.role };
+  const payload = { userId: user._id.toString(), role: user.role, email: user.email };
   const accessToken = signAccessToken(payload);
   const refreshToken = signRefreshToken(payload);
   const newHash = hashToken(refreshToken);
@@ -36,11 +53,10 @@ export async function issueTokens(user, res) {
   // Use atomic update to avoid stale-document overwrite issues
   await User.findByIdAndUpdate(user._id, { refreshTokenHash: newHash });
 
-  setRefreshCookie(res, refreshToken);
-  const safeUser = await User.findById(user._id).select('-passwordHash -refreshTokenHash');
-  return { accessToken, user: safeUser };
-}
+  if (res && typeof res.cookie === 'function') {
+    setAuthCookies(res, accessToken, refreshToken);
+  }
 
-export function clearRefreshCookie(res) {
-  res.clearCookie('refreshToken', { path: '/' });
+  const safeUser = await User.findById(user._id).select('-passwordHash -refreshTokenHash');
+  return { user: safeUser };
 }

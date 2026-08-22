@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Search, User as UserIcon, LogOut, Menu, X, PenSquare, Clock } from "lucide-react";
+import { Search, User as UserIcon, LogOut, Menu, X, PenSquare, Clock, Sparkles } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { trackSearch } from "@/lib/gtag";
@@ -161,15 +161,6 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
                 </Link>
               )}
 
-              {teacherStatus === "none" && user.role !== "teacher" && (
-                <Link
-                  href="/become-a-teacher"
-                  className="px-3 py-1.5 rounded-full bg-[#FAF8F5] border border-[#E5E1D8] text-[#1A1A1A] hover:border-[#A84C32] hover:text-[#A84C32] transition-colors font-medium text-xs flex items-center gap-1 whitespace-nowrap shrink-0"
-                >
-                  <span>Become a Teacher</span>
-                </Link>
-              )}
-
               <Link
                 href="/profile"
                 className="flex items-center gap-2 text-[#1A1A1A] hover:text-[#A84C32] transition-colors shrink-0"
@@ -269,6 +260,17 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
             >
               Help Center
             </Link>
+            <Link
+              href="/ai-tutor"
+              className={`py-2 px-3.5 rounded-xl flex items-center gap-2 font-semibold transition-all ${
+                pathname === "/ai-tutor"
+                  ? "bg-[#A84C32] text-white"
+                  : "bg-amber-500/10 text-amber-900 border border-amber-500/30"
+              }`}
+            >
+              <Sparkles className="h-4 w-4 text-amber-600" />
+              <span>AI Study Tutor</span>
+            </Link>
 
             {/* Teacher Quick Actions in Mobile Drawer */}
             {teacherStatus === "approved" && (
@@ -291,7 +293,7 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
               </Link>
             )}
 
-            {(!user || (teacherStatus === "none" && user.role !== "teacher")) && (
+            {!user && (
               <Link
                 href="/become-a-teacher"
                 className="w-full py-2 px-4 rounded-full bg-white border border-[#E5E1D8] text-[#1A1A1A] hover:border-[#A84C32] hover:text-[#A84C32] transition-colors font-medium text-xs flex items-center justify-center gap-1.5 mt-2"

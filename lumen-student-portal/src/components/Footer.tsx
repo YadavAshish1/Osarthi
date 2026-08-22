@@ -1,7 +1,17 @@
+"use client";
+
 import React from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export default function Footer() {
+  const pathname = usePathname();
+
+  // Hide footer completely on AI Tutor full page
+  if (pathname?.startsWith("/ai-tutor")) {
+    return null;
+  }
+
   return (
     <footer
       data-testid="site-footer"

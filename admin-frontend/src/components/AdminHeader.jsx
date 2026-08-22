@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, Menu, X, LayoutDashboard, Users, GraduationCap, Send, BookOpen, LifeBuoy } from 'lucide-react';
+import { LogOut, Menu, X, LayoutDashboard, Users, GraduationCap, Send, BookOpen, LifeBuoy, Bot } from 'lucide-react';
 
 export default function AdminHeader({ activePage }) {
   const { user, logout } = useAuth();
@@ -14,6 +14,7 @@ export default function AdminHeader({ activePage }) {
     { id: 'taxonomy-requests', label: 'Requests', path: '/taxonomy-requests', icon: Send },
     { id: 'taxonomy', label: 'Classes & Subjects', path: '/taxonomy', icon: BookOpen },
     { id: 'support-tickets', label: 'Support Tickets', path: '/support-tickets', icon: LifeBuoy },
+    ...(user?.role === 'super_admin' ? [{ id: 'ai-settings', label: 'AI Settings', path: '/ai-settings', icon: Bot }] : []),
   ];
 
   return (

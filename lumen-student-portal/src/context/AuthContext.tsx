@@ -37,14 +37,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-function saveToken(token: string) {
-  localStorage.setItem("lumen_access_token", token);
-}
-
-function clearToken() {
-  localStorage.removeItem("lumen_access_token");
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
@@ -54,71 +46,92 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     onSuccess: null,
   });
 
-  // Listen for auth:logout event triggered when refresh token expires (after 7 days)
+  // Listen for auth:logout event triggered when refresh session expires
   useEffect(() => {
     const handleLogout = () => {
       setUser(null);
-      clearToken();
     };
     window.addEventListener("auth:logout", handleLogout);
     return () => window.removeEventListener("auth:logout", handleLogout);
   }, []);
 
-  // On mount: try /api/auth/me (or silent refresh if access token expired)
-  useEffect(() => {
-    (async () => {
-      try {
-        let token = localStorage.getItem("lumen_access_token");
-        if (!token) {
-          // Attempt silent refresh using httpOnly refreshToken cookie if present
-          try {
-            const { data: refreshData } = await api.post("/auth/refresh");
-            if (refreshData?.accessToken) {
-              const freshToken: string = refreshData.accessToken;
-              token = freshToken;
-              saveToken(freshToken);
-            }
-          } catch {
-            // No active session cookie
-          }
-        }
+  // Helper to load user profile with automatic cookie refresh fallback
+  const fetchUserProfile = useCallback(async () => {
+    try {
+      const { data } = await api.get("/auth/me");
+      const u = data?.user;
+      if (u && u._id) {
+        setUser({
+          id: u._id,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          avatar: u.avatar,
+          savedTeachers: Array.isArray(u.savedTeachers) ? u.savedTeachers.map((id: any) => id.toString()) : [],
+        });
+        return;
+      }
 
-        if (!token) {
-          setReady(true);
+      // No active access token, try silent refresh via httpOnly refreshToken cookie
+      try {
+        const { data: refreshData } = await api.post("/auth/refresh");
+        const refreshedUser = refreshData?.user;
+        if (refreshedUser && refreshedUser._id) {
+          setUser({
+            id: refreshedUser._id,
+            name: refreshedUser.name,
+            email: refreshedUser.email,
+            role: refreshedUser.role,
+            avatar: refreshedUser.avatar,
+            savedTeachers: Array.isArray(refreshedUser.savedTeachers) ? refreshedUser.savedTeachers.map((id: any) => id.toString()) : [],
+          });
           return;
         }
-
-        const { data } = await api.get("/auth/me");
-        // backend returns { user: {...} }
-        const u = data?.user;
-        if (u && u._id) {
-          setUser({
-            id: u._id,
-            name: u.name,
-            email: u.email,
-            role: u.role,
-            avatar: u.avatar,
-            savedTeachers: Array.isArray(u.savedTeachers) ? u.savedTeachers.map((id: any) => id.toString()) : [],
-          });
-        } else {
-          clearToken();
-        }
       } catch {
-        clearToken();
-      } finally {
-        setReady(true);
+        // No active session cookie
       }
-    })();
+
+      setUser(null);
+    } catch {
+      setUser(null);
+    }
   }, []);
+
+  // On mount: check auth state
+  useEffect(() => {
+    fetchUserProfile().finally(() => setReady(true));
+  }, [fetchUserProfile]);
+
+  // Proactive background silent refresh every 10 minutes while the student is logged in
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(async () => {
+      try {
+        await api.post("/auth/refresh");
+      } catch {
+        // silent refresh handled by interceptor if token expires
+      }
+    }, 10 * 60 * 1000); // 10 minutes
+
+    return () => clearInterval(interval);
+  }, [user]);
+
+  // On tab focus: ensure session is kept warm
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible" && user) {
+        api.post("/auth/refresh").catch(() => {});
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [user]);
 
   const login = useCallback(async (email: string, password: string) => {
     try {
       const { data } = await api.post("/auth/login", { email, password });
-      // backend returns { accessToken, user }
-      const accessToken = data.accessToken;
       const u = data.user;
-      if (!accessToken || !u) throw new Error("Invalid response");
-      saveToken(accessToken);
+      if (!u) throw new Error("Invalid response");
       setUser({
         id: u._id,
         name: u.name,
@@ -174,10 +187,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           role: role || "student",
           otp,
         });
-        const accessToken = data.accessToken;
         const u = data.user;
-        if (!accessToken || !u) throw new Error("Invalid response");
-        saveToken(accessToken);
+        if (!u) throw new Error("Invalid response");
         setUser({ id: u._id, name: u.name, email: u.email, role: u.role, avatar: u.avatar });
         return { ok: true };
       } catch (e: any) {
@@ -230,7 +241,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await api.post("/auth/logout");
     } catch {}
-    clearToken();
     setUser(null);
   }, []);
 

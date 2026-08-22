@@ -8,6 +8,8 @@ import UserManagement from './pages/UserManagement';
 import TaxonomyRequests from './pages/TaxonomyRequests';
 import TaxonomyManagement from './pages/TaxonomyManagement';
 import SupportTickets from './pages/SupportTickets';
+import AiSettings from './pages/AiSettings';
+import AiCopilot from './components/AiCopilot';
 
 export default function App() {
   return (
@@ -46,8 +48,14 @@ export default function App() {
             path="/support-tickets"
             element={<ProtectedRoute><SupportTickets /></ProtectedRoute>}
           />
+          <Route
+            path="/ai-settings"
+            element={<ProtectedRoute><AiSettings /></ProtectedRoute>}
+          />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
+        {/* Global AI Copilot — floating on all authenticated pages */}
+        <AiCopilot />
       </AuthProvider>
     </BrowserRouter>
   );

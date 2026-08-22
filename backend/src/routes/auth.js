@@ -11,7 +11,7 @@ import {
   comparePassword,
   hashToken,
   issueTokens,
-  clearRefreshCookie,
+  clearAuthCookies,
 } from '../utils/authHelpers.js';
 import { verifyRefreshToken } from '../utils/tokens.js';
 
@@ -64,12 +64,18 @@ function validate(req, res) {
 
 router.get('/me', async (req, res, next) => {
   try {
+    let token = null;
     const header = req.headers.authorization;
-    if (!header?.startsWith('Bearer ')) {
+    if (header?.startsWith('Bearer ')) {
+      token = header.slice(7);
+    } else if (req.cookies?.accessToken) {
+      token = req.cookies.accessToken;
+    }
+    if (!token) {
       return res.json({ user: null });
     }
     const { verifyAccessToken } = await import('../utils/tokens.js');
-    const decoded = verifyAccessToken(header.slice(7));
+    const decoded = verifyAccessToken(token);
     const user = await User.findById(decoded.userId)
       .select('-passwordHash -refreshTokenHash')
       .populate('classRef', 'name');
@@ -215,7 +221,7 @@ router.post(
 
 router.post('/refresh', async (req, res, next) => {
   try {
-    const token = req.cookies.refreshToken;
+    const token = req.cookies?.refreshToken || req.body?.refreshToken;
     if (!token) return res.status(401).json({ message: 'Refresh token missing' });
 
     let decoded;
@@ -235,7 +241,7 @@ router.post('/refresh', async (req, res, next) => {
     }
 
     const tokens = await issueTokens(user, res);
-    res.json({ accessToken: tokens.accessToken, user: tokens.user });
+    res.json({ user: tokens.user });
   } catch (err) {
     next(err);
   }
@@ -243,7 +249,7 @@ router.post('/refresh', async (req, res, next) => {
 
 router.post('/logout', async (req, res, next) => {
   try {
-    const token = req.cookies.refreshToken;
+    const token = req.cookies?.refreshToken;
     if (token) {
       try {
         const decoded = verifyRefreshToken(token);
@@ -252,7 +258,7 @@ router.post('/logout', async (req, res, next) => {
         /* ignore */
       }
     }
-    clearRefreshCookie(res);
+    clearAuthCookies(res);
     res.json({ message: 'Logged out' });
   } catch (err) {
     next(err);
