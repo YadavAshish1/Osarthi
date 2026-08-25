@@ -6,10 +6,11 @@ import { useRouter } from 'next/navigation';
 import {
   Sparkles, Send, Loader2, Plus, MessageSquare,
   BookOpen, HelpCircle, FileText, CheckCircle2, Copy, ChevronDown,
-  ArrowLeft, RotateCcw, AlertTriangle, Cpu, Trash2, GraduationCap
+  ArrowLeft, RotateCcw, AlertTriangle, Cpu, Trash2, GraduationCap, Zap, CreditCard
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
+import AiPricingModal, { PricingPlan } from '@/components/AiPricingModal';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
 
@@ -20,6 +21,7 @@ interface ChatMessage {
   timestamp?: Date | string;
   streaming?: boolean;
   isError?: boolean;
+  isQuotaExhausted?: boolean;
   retryPrompt?: string;
 }
 
@@ -39,6 +41,9 @@ export default function FullAiTutorPage() {
   const [defaultModelId, setDefaultModelId] = useState<string>('azure_openai');
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [quotaInfo, setQuotaInfo] = useState<any>(null);
+  const [pricingModalOpen, setPricingModalOpen] = useState(false);
+  const [pricingPlans, setPricingPlans] = useState<PricingPlan[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -46,6 +51,31 @@ export default function FullAiTutorPage() {
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
+
+  // Fetch current user quota & pricing plans
+  const fetchQuotaUsage = useCallback(async () => {
+    if (!user) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/ai/usage`, {
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setQuotaInfo(data);
+        if (data.pricingPlans) {
+          setPricingPlans(data.pricingPlans);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch quota usage:', e);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      fetchQuotaUsage();
+    }
+  }, [user, fetchQuotaUsage]);
 
   // Load chat history from localStorage on initial mount
   useEffect(() => {
@@ -160,6 +190,12 @@ export default function FullAiTutorPage() {
       content: m.content,
     }));
 
+    // Check if quota is exhausted
+    if (quotaInfo && !quotaInfo.isUnlimited && quotaInfo.remaining <= 0) {
+      setPricingModalOpen(true);
+      return;
+    }
+
     if (isRetry) {
       setMessages((prev) => prev.filter((m) => !m.isError));
     } else {
@@ -192,6 +228,15 @@ export default function FullAiTutorPage() {
 
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));
+        if (response.status === 403 && errJson.error === 'QUOTA_EXHAUSTED') {
+          if (errJson.pricingPlans) setPricingPlans(errJson.pricingPlans);
+          if (errJson.quota) setQuotaInfo(errJson.quota);
+          else setQuotaInfo((prev: any) => ({ ...(prev || {}), remaining: 0, isExhausted: true }));
+          setPricingModalOpen(true);
+          const quotaErr = new Error(errJson.message || 'Free question quota reached. Please choose a plan to continue asking doubts!');
+          (quotaErr as any).isQuotaExhausted = true;
+          throw quotaErr;
+        }
         throw new Error(errJson.message || `Server responded with status ${response.status}`);
       }
 
@@ -242,6 +287,7 @@ export default function FullAiTutorPage() {
         })
       );
     } catch (err: any) {
+      const isQuota = Boolean(err.isQuotaExhausted || err.message?.includes('quota') || err.message?.includes('exhausted'));
       const errText = err.message || 'Something went wrong while generating the response.';
       setMessages((prev) =>
         prev.map((m) =>
@@ -250,8 +296,9 @@ export default function FullAiTutorPage() {
               ...m,
               content: errText,
               streaming: false,
-              isError: true,
-              retryPrompt: cleanText,
+              isError: !isQuota,
+              isQuotaExhausted: isQuota,
+              retryPrompt: isQuota ? undefined : cleanText,
             }
             : m
         )
@@ -498,6 +545,27 @@ export default function FullAiTutorPage() {
             </div>
           )}
 
+          {/* Quota Exhausted Banner */}
+          {user && quotaInfo && !quotaInfo.isUnlimited && quotaInfo.remaining <= 0 && (
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-[#A84C32]/10 to-amber-500/10 border border-[#A84C32]/30 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-center gap-3 text-left">
+                <div className="w-9 h-9 rounded-xl bg-[#A84C32] text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <Zap size={18} />
+                </div>
+                <div>
+                  <h4 className="font-bold text-xs sm:text-sm text-[#1A1A1A] font-ui">Free AI Question Limit Reached</h4>
+                  <p className="text-xs text-[#5C5A55] font-ui">Upgrade to Pro Scholar for unlimited lesson notes, MCQ generator & instant doubt solving.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setPricingModalOpen(true)}
+                className="px-4 py-2 rounded-xl bg-[#A84C32] hover:bg-[#8C3A27] text-white font-ui font-bold text-xs transition-colors cursor-pointer shadow-2xs shrink-0"
+              >
+                View Study Plans
+              </button>
+            </div>
+          )}
+
           {/* Welcome Screen */}
           {messages.length === 0 && (
             <div className="py-12 sm:py-20 text-center">
@@ -573,21 +641,42 @@ export default function FullAiTutorPage() {
               <div
                 className={`relative group max-w-[88%] sm:max-w-[80%] rounded-2xl px-5 py-4 ${msg.role === 'user'
                     ? 'bg-[#A84C32] text-white rounded-br-sm shadow-sm'
-                    : msg.isError
+                    : msg.isQuotaExhausted
                       ? 'bg-amber-500/10 border border-amber-500/30 text-[#1A1A1A] rounded-bl-sm shadow-sm'
-                      : 'bg-white border border-[#E5E1D8] text-[#1A1A1A] rounded-bl-sm shadow-sm'
+                      : msg.isError
+                        ? 'bg-amber-500/10 border border-amber-500/30 text-[#1A1A1A] rounded-bl-sm shadow-sm'
+                        : 'bg-white border border-[#E5E1D8] text-[#1A1A1A] rounded-bl-sm shadow-sm'
                   }`}
               >
                 {msg.role === 'ai' ? (
                   <div>
-                    {msg.isError ? (
+                    {msg.isQuotaExhausted ? (
+                      <div className="space-y-2.5 py-1">
+                        <div className="flex items-center gap-1.5 text-[#A84C32] font-bold text-xs sm:text-sm font-ui">
+                          <Zap size={15} className="text-[#A84C32]" />
+                          <span>Free AI Question Limit Reached</span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-[#3D3B36] leading-relaxed font-ui">
+                          {msg.content.replace(/^❌ (Agent Error:\s*)?/, '') || 'Your free AI question quota has been exhausted. Please choose a study plan to continue asking doubts!'}
+                        </p>
+                        <div className="pt-2.5 border-t border-[#E5E1D8] flex items-center gap-2">
+                          <button
+                            onClick={() => setPricingModalOpen(true)}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#A84C32] hover:bg-[#8C3A27] text-white text-xs sm:text-sm font-bold font-ui transition-all cursor-pointer shadow-xs"
+                          >
+                            <CreditCard size={14} />
+                            <span>View Study Plans & Upgrade</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : msg.isError ? (
                       <div className="space-y-2">
                         <div className="flex items-center gap-1.5 text-amber-800 font-bold text-xs font-ui">
                           <AlertTriangle size={14} className="text-amber-700" />
-                          <span>Temporary AI Service Issue</span>
+                          <span>AI Service Notice</span>
                         </div>
                         <p className="text-xs text-amber-900 leading-relaxed font-ui whitespace-pre-wrap">
-                          {msg.content.replace(/^❌ (Agent Error:\s*)?/, '') || 'The model encountered high demand or a temporary delay.'}
+                          {msg.content.replace(/^❌ (Agent Error:\s*)?/, '') || 'The model encountered a temporary delay.'}
                         </p>
                         {msg.retryPrompt && (
                           <div className="pt-2 border-t border-amber-500/20">
@@ -681,6 +770,25 @@ export default function FullAiTutorPage() {
                   </button>
                 </div>
               </div>
+            ) : quotaInfo && !quotaInfo.isUnlimited && quotaInfo.remaining <= 0 ? (
+              <div
+                onClick={() => setPricingModalOpen(true)}
+                className="flex items-center justify-between rounded-2xl bg-white border border-[#A84C32]/50 px-4 py-3 cursor-pointer hover:border-[#A84C32] transition-colors shadow-md shadow-[#A84C32]/5 group"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Zap size={16} className="text-[#A84C32] animate-pulse" />
+                  <span className="text-sm font-bold text-[#A84C32] font-ui">
+                    Free Quota Limit Reached — Upgrade to continue asking doubts
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setPricingModalOpen(true); }}
+                  className="px-4 py-2 rounded-xl bg-[#A84C32] hover:bg-[#8C3A27] text-white text-xs font-bold font-ui transition-colors cursor-pointer shadow-xs"
+                >
+                  Upgrade Now →
+                </button>
+              </div>
             ) : (
               <div className="relative flex items-end rounded-2xl bg-white border border-[#E5E1D8] focus-within:border-[#A84C32] focus-within:ring-2 focus-within:ring-[#A84C32]/10 transition-all p-1.5 shadow-md shadow-black/5">
                 <textarea
@@ -726,6 +834,17 @@ export default function FullAiTutorPage() {
           </div>
         </div>
       </main>
+
+      {/* 3-Tier Paywall Comparison Modal */}
+      <AiPricingModal
+        isOpen={pricingModalOpen}
+        onClose={() => setPricingModalOpen(false)}
+        plans={pricingPlans}
+        onPlanPurchased={(updated) => {
+          if (updated) setQuotaInfo(updated);
+          fetchQuotaUsage();
+        }}
+      />
     </div>
   );
 }

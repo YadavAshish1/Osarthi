@@ -31,6 +31,16 @@ const userSchema = new mongoose.Schema(
     savedBlogs: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Content' }],
     likedBlogs: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Content' }],
     savedTeachers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+
+    // AI Usage & Quota Tracking
+    aiUsage: {
+      messagesUsed: { type: Number, default: 0 }, // Used in current quota cycle
+      bonusMessages: { type: Number, default: 0 }, // Admin granted or top-up extra messages
+      totalLifetimeMessages: { type: Number, default: 0 }, // Lifetime total questions asked
+      lastQuotaResetAt: { type: Date, default: Date.now },
+      activePlan: { type: String, default: 'free' }, // 'free' | 'starter' | 'pro_monthly' | 'annual_pass'
+      planExpiresAt: { type: Date },
+    },
   },
   { timestamps: true }
 );

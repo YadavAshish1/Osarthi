@@ -6,10 +6,11 @@ import { usePathname } from 'next/navigation';
 import {
   Sparkles, X, Send, Loader2, Trash2, Maximize2, Minimize2,
   ExternalLink, BookOpen, HelpCircle, FileText, CheckCircle2, Copy,
-  ArrowUp, RotateCcw, AlertTriangle, GraduationCap
+  ArrowUp, RotateCcw, AlertTriangle, GraduationCap, Zap, CreditCard
 } from 'lucide-react';
 
 import { useAuth } from '@/context/AuthContext';
+import AiPricingModal, { PricingPlan } from './AiPricingModal';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
 const CHAT_STORAGE_KEY = 'medhashine_ai_tutor_chat_history_v1';
@@ -25,12 +26,40 @@ export default function AiTutorWidget() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [quotaInfo, setQuotaInfo] = useState<any>(null);
+  const [pricingModalOpen, setPricingModalOpen] = useState(false);
+  const [pricingPlans, setPricingPlans] = useState<PricingPlan[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
+
+  // Fetch current user quota & pricing plans
+  const fetchQuotaUsage = useCallback(async () => {
+    if (!user) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/ai/usage`, {
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setQuotaInfo(data);
+        if (data.pricingPlans) {
+          setPricingPlans(data.pricingPlans);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch quota usage:', e);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (isOpen && user) {
+      fetchQuotaUsage();
+    }
+  }, [isOpen, user, fetchQuotaUsage]);
 
   // Load chat history from localStorage on initial mount
   useEffect(() => {
@@ -97,9 +126,9 @@ export default function AiTutorWidget() {
     const path = window.location.pathname;
     if (path.startsWith('/blog/') || path.startsWith('/blogs/')) {
       const heading = document.querySelector('h1')?.textContent?.trim() || '';
-      // Also extract class or subject badge if present
-      const metaText = document.querySelector('p.eyebrow, div.eyebrow, header p')?.textContent?.trim() || '';
-      return `[Context: Student is currently actively reading the Medhashine blog/lesson titled: "${heading}" ${metaText ? `(${metaText})` : ''} at URL path: "${path}". When the student says "main jo insight open kiya hun", "is blog ki", "ye lesson", "iski summary", they are referring specifically to "${heading}".]`;
+      if (heading) {
+        return `\n\n[Context: Student is currently actively reading the Medhashine blog/lesson titled: "${heading}" on page URL: ${path}]`;
+      }
     }
     return '';
   };
@@ -119,35 +148,46 @@ export default function AiTutorWidget() {
       return;
     }
 
-    if (isRetry) {
-      setMessages((prev) => prev.filter((m) => !m.isError));
-    } else {
-      const userMsg = { role: 'user', content: cleanText, timestamp: new Date() };
-      setMessages((prev) => [...prev, userMsg]);
+    // Check if quota is exhausted
+    if (quotaInfo && !quotaInfo.isUnlimited && quotaInfo.remaining <= 0) {
+      setPricingModalOpen(true);
+      return;
     }
 
-    setInput('');
+    const pageContext = getPageContext();
+    const fullMessage = pageContext ? `${cleanText}${pageContext}` : cleanText;
+
+    const userMsgId = Date.now();
+    const aiMsgId = userMsgId + 1;
+
+    const historySnapshot = messages.slice(-10).map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+
+    if (!isRetry) {
+      setMessages((prev) => [
+        ...prev,
+        { id: userMsgId, role: 'user', content: cleanText },
+        { id: aiMsgId, role: 'ai', content: '', streaming: true },
+      ]);
+      setInput('');
+    } else {
+      setMessages((prev) => [
+        ...prev,
+        { id: aiMsgId, role: 'ai', content: '', streaming: true },
+      ]);
+    }
+
     setIsStreaming(true);
 
-    const aiMsgId = Date.now();
-    setMessages((prev) => [
-      ...prev,
-      { role: 'ai', content: '', id: aiMsgId, streaming: true, retryPrompt: cleanText },
-    ]);
-
     try {
-      const activePageContext = getPageContext();
-      const isReferringToActivePage = messages.length === 0 || /open|insight|blog|lesson|chapter|article|ye|is|iski|iska|padh|reading|summary|q&a|question|explain|batao/i.test(cleanText);
-      const contextPrefix = isReferringToActivePage && activePageContext ? activePageContext : '';
-      const fullMessage = contextPrefix ? `${contextPrefix}\n\n${cleanText}` : cleanText;
-      const historySnapshot = messages.slice(-6).map((m) => ({ role: m.role, content: m.content }));
-
       const response = await fetch(`${API_BASE}/api/ai/chat`, {
         method: 'POST',
-        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           message: fullMessage,
           history: historySnapshot,
@@ -156,6 +196,20 @@ export default function AiTutorWidget() {
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
+        if (response.status === 403 && err.error === 'QUOTA_EXHAUSTED') {
+          if (err.pricingPlans) {
+            setPricingPlans(err.pricingPlans);
+          }
+          if (err.quota) {
+            setQuotaInfo(err.quota);
+          } else {
+            setQuotaInfo((prev: any) => ({ ...(prev || {}), remaining: 0, isExhausted: true }));
+          }
+          setPricingModalOpen(true);
+          const quotaErr = new Error(err.message || 'Free question quota reached. Please choose a plan to continue asking doubts!');
+          (quotaErr as any).isQuotaExhausted = true;
+          throw quotaErr;
+        }
         if (response.status === 429) {
           throw new Error(err.message || 'Rate limit reached. Please wait a bit before sending more messages.');
         }
@@ -198,6 +252,13 @@ export default function AiTutorWidget() {
           }
         }
       }
+
+      // Update remaining quota count on successful response
+      setQuotaInfo((prev: any) => {
+        if (!prev || prev.isUnlimited) return prev;
+        const newRem = Math.max(0, (prev.remaining || 1) - 1);
+        return { ...prev, remaining: newRem, isExhausted: newRem <= 0 };
+      });
 
       setMessages((prev) =>
         prev.map((m) => {
@@ -319,7 +380,7 @@ export default function AiTutorWidget() {
               </div>
             </div>
 
-            {/* Actions */}
+            {/* Header Actions */}
             <div className="flex items-center gap-0.5">
               <Link
                 href="/ai-tutor"
@@ -386,6 +447,29 @@ export default function AiTutorWidget() {
               </div>
             )}
 
+            {/* Quota Exhausted Banner inside Agent */}
+            {user && quotaInfo && !quotaInfo.isUnlimited && quotaInfo.remaining <= 0 && (
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-[#A84C32]/10 to-amber-500/10 border border-[#A84C32]/30 text-[#1A1A1A] shadow-2xs">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-[#A84C32] text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <Zap size={16} />
+                    </div>
+                    <div>
+                      <h5 className="font-bold text-xs text-[#1A1A1A] font-ui">Free Questions Limit Reached</h5>
+                      <p className="text-[10px] text-[#5C5A55] font-ui">Upgrade to continue asking unlimited doubts!</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setPricingModalOpen(true)}
+                    className="px-3 py-1.5 rounded-xl bg-[#A84C32] hover:bg-[#8C3A27] text-white text-xs font-bold font-ui transition-all shadow-xs cursor-pointer shrink-0"
+                  >
+                    View Plans
+                  </button>
+                </div>
+              </div>
+            )}
+
             {messages.length === 0 && (
               <div className="py-6 px-2 text-center">
                 <div className="relative w-13 h-13 rounded-2xl bg-[#A84C32]/10 border border-[#A84C32]/20 flex items-center justify-center mx-auto mb-3">
@@ -430,14 +514,35 @@ export default function AiTutorWidget() {
                 <div
                   className={`relative group max-w-[90%] sm:max-w-[85%] rounded-2xl px-4 py-3 ${msg.role === 'user'
                       ? 'bg-[#A84C32] text-white rounded-br-sm shadow-sm'
-                      : msg.isError
+                      : msg.isQuotaExhausted
                         ? 'bg-amber-500/10 border border-amber-500/30 text-[#1A1A1A] rounded-bl-sm shadow-sm'
-                        : 'bg-white border border-[#E5E1D8] text-[#1A1A1A] rounded-bl-sm shadow-sm'
+                        : msg.isError
+                          ? 'bg-amber-500/10 border border-amber-500/30 text-[#1A1A1A] rounded-bl-sm shadow-sm'
+                          : 'bg-white border border-[#E5E1D8] text-[#1A1A1A] rounded-bl-sm shadow-sm'
                     }`}
                 >
                   {msg.role === 'ai' ? (
                     <div>
-                      {msg.isError ? (
+                      {msg.isQuotaExhausted ? (
+                        <div className="space-y-2.5 py-1">
+                          <div className="flex items-center gap-1.5 text-[#A84C32] font-bold text-xs font-ui">
+                            <Zap size={14} className="text-[#A84C32]" />
+                            <span>Free AI Question Limit Reached</span>
+                          </div>
+                          <p className="text-xs text-[#3D3B36] leading-relaxed font-ui">
+                            {msg.content.replace(/^❌ (Agent Error:\s*)?/, '') || 'Your free AI message quota has been exhausted. Please choose a study plan to continue asking doubts!'}
+                          </p>
+                          <div className="pt-2 border-t border-[#E5E1D8] flex items-center gap-2">
+                            <button
+                              onClick={() => setPricingModalOpen(true)}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#A84C32] hover:bg-[#8C3A27] text-white text-xs font-bold font-ui transition-all cursor-pointer shadow-xs"
+                            >
+                              <CreditCard size={13} />
+                              <span>View Plans & Upgrade</span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : msg.isError ? (
                         <div className="space-y-2">
                           <div className="flex items-center gap-1.5 text-amber-800 font-bold text-xs font-ui">
                             <AlertTriangle size={13} className="text-amber-700" />
@@ -530,6 +635,25 @@ export default function AiTutorWidget() {
                   </button>
                 </div>
               </div>
+            ) : quotaInfo && !quotaInfo.isUnlimited && quotaInfo.remaining <= 0 ? (
+              <div
+                onClick={() => setPricingModalOpen(true)}
+                className="flex items-center justify-between bg-white border border-[#A84C32]/50 rounded-2xl px-3.5 py-2.5 cursor-pointer hover:border-[#A84C32] transition-colors shadow-xs group"
+              >
+                <div className="flex items-center gap-2">
+                  <Zap size={14} className="text-[#A84C32] animate-pulse" />
+                  <span className="text-xs font-bold text-[#A84C32] font-ui">
+                    Quota Full — Upgrade to continue asking doubts
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setPricingModalOpen(true); }}
+                  className="px-3 py-1 rounded-lg bg-[#A84C32] hover:bg-[#8C3A27] text-white text-[11px] font-bold font-ui transition-colors cursor-pointer shadow-2xs"
+                >
+                  Upgrade →
+                </button>
+              </div>
             ) : (
               <div className="flex items-end gap-2 bg-white border border-[#E5E1D8] rounded-2xl px-3 py-2 focus-within:border-[#A84C32]/50 focus-within:shadow-md focus-within:shadow-[#A84C32]/5 transition-all shadow-sm">
                 <textarea
@@ -559,6 +683,17 @@ export default function AiTutorWidget() {
           </div>
         </div>
       )}
+
+      {/* 3-Tier Paywall Comparison Modal */}
+      <AiPricingModal
+        isOpen={pricingModalOpen}
+        onClose={() => setPricingModalOpen(false)}
+        plans={pricingPlans}
+        onPlanPurchased={(updated) => {
+          if (updated) setQuotaInfo(updated);
+          fetchQuotaUsage();
+        }}
+      />
     </>
   );
 }
