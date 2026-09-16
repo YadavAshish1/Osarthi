@@ -109,3 +109,5 @@ app.listen(PORT, () => {
   console.log(`Osarthi API running on http://localhost:${PORT}`);
   console.log(`Media storage: ${getStorageMode()}`);
 });
+
+export default app;

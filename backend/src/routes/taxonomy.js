@@ -40,9 +40,19 @@ export async function seedDefaultTaxonomy() {
     const superAdmin = await User.findOne({ role: 'super_admin' });
     const defaultClasses = ['Class 9', 'Class 10', 'Class 11', 'Class 12', 'General'];
     for (const name of defaultClasses) {
-      const existing = await Class.findOne({ name: { $regex: new RegExp(`^${name}$`, 'i') }, deletedAt: null });
+      const query = { name: { $regex: new RegExp(`^${name}$`, 'i') } };
+      if (superAdmin) {
+        query.createdBy = superAdmin._id;
+      }
+      const existing = await Class.findOne(query);
       if (!existing) {
-        await Class.create({ name, ...(superAdmin && { createdBy: superAdmin._id }) });
+        try {
+          await Class.create({ name, ...(superAdmin && { createdBy: superAdmin._id }) });
+        } catch (dupErr) {
+          if (dupErr.code !== 11000) {
+            console.error(`[Taxonomy] Error creating default class ${name}:`, dupErr.message);
+          }
+        }
       }
     }
   } catch (err) {
