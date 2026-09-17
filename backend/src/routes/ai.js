@@ -12,7 +12,11 @@ import PaymentOrder from '../models/PaymentOrder.js';
 const router = Router();
 
 // Python AI Agent Service URL
-const AI_SERVICE_URL = process.env.AI_AGENT_SERVICE_URL || 'http://localhost:8000';
+let rawAiServiceUrl = process.env.AI_AGENT_SERVICE_URL || 'http://localhost:8000';
+if (rawAiServiceUrl.includes('.onrender.com') && rawAiServiceUrl.startsWith('http://')) {
+  rawAiServiceUrl = rawAiServiceUrl.replace('http://', 'https://');
+}
+const AI_SERVICE_URL = rawAiServiceUrl;
 
 /**
  * Calculate the effective quota and remaining questions for a user.
@@ -88,32 +92,57 @@ async function calculateUserQuota(user, settings) {
 
 /**
  * Proxy a request to the Python AI Agent Service.
- * Handles SSE stream passthrough for chat responses and increments message usage on success.
+ * Handles internal redirects, SSE stream passthrough for chat responses, and increments message usage on success.
  */
-function proxyToAgent(req, res, targetPath, onCompleteCallback) {
-  const url = new URL(targetPath, AI_SERVICE_URL);
+function proxyToAgent(req, res, targetPathOrUrl, onCompleteCallback, redirectCount = 0) {
+  if (redirectCount > 5) {
+    return res.status(502).json({
+      message: 'Too many redirects encountered while connecting to AI Agent Service.',
+    });
+  }
+
+  let url;
+  try {
+    url = new URL(targetPathOrUrl, AI_SERVICE_URL);
+  } catch (_e) {
+    url = new URL(targetPathOrUrl);
+  }
+
+  if (url.hostname.includes('.onrender.com') && url.protocol === 'http:') {
+    url.protocol = 'https:';
+  }
+
   const isHttps = url.protocol === 'https:';
   const client = isHttps ? https : http;
+
+  const headers = {
+    ...req.headers,
+    host: url.host,
+    // Forward the JWT token from the original request or cookie
+    authorization: req.headers.authorization || (req.cookies?.accessToken ? `Bearer ${req.cookies.accessToken}` : ''),
+    cookie: req.headers.cookie || (req.cookies?.accessToken ? `accessToken=${req.cookies.accessToken}` : ''),
+    'content-type': 'application/json',
+  };
+
+  // Remove headers that shouldn't be forwarded
+  delete headers['content-length'];
 
   const options = {
     hostname: url.hostname,
     port: url.port || (isHttps ? 443 : 80),
     path: url.pathname + url.search,
     method: req.method,
-    headers: {
-      ...req.headers,
-      host: url.host,
-      // Forward the JWT token from the original request or cookie
-      authorization: req.headers.authorization || (req.cookies?.accessToken ? `Bearer ${req.cookies.accessToken}` : ''),
-      cookie: req.headers.cookie || (req.cookies?.accessToken ? `accessToken=${req.cookies.accessToken}` : ''),
-      'content-type': 'application/json',
-    },
+    headers,
   };
 
-  // Remove headers that shouldn't be forwarded
-  delete options.headers['content-length'];
-
   const proxyReq = client.request(options, (proxyRes) => {
+    // Follow 301, 302, 307, 308 redirects internally without exposing them to the frontend browser
+    if ([301, 302, 307, 308].includes(proxyRes.statusCode) && proxyRes.headers.location) {
+      const redirectLocation = proxyRes.headers.location;
+      const nextTarget = new URL(redirectLocation, url.href).href;
+      return proxyToAgent(req, res, nextTarget, onCompleteCallback, redirectCount + 1);
+    }
+
     // Check if this is an SSE response
     const contentType = proxyRes.headers['content-type'] || '';
     const isSSE = contentType.includes('text/event-stream');
@@ -164,7 +193,7 @@ function proxyToAgent(req, res, targetPath, onCompleteCallback) {
 
   // Forward request body for POST/PUT
   if (req.method === 'POST' || req.method === 'PUT') {
-    const body = JSON.stringify(req.body);
+    const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
     proxyReq.setHeader('content-length', Buffer.byteLength(body));
     proxyReq.write(body);
   }
