@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import http from 'http';
+import https from 'https';
 import { URL } from 'url';
 import crypto from 'crypto';
 import Razorpay from 'razorpay';
@@ -58,17 +59,15 @@ async function calculateUserQuota(user, settings) {
   let isPlanActive = false;
 
   // Check if user has an active paid subscription plan that has not expired
-  if (activePlanId !== 'free' && (!planExpiresAt || planExpiresAt > new Date())) {
-    const activePlan = settings?.pricingPlans?.find((p) => p.id === activePlanId);
-    if (activePlan && activePlan.messageQuota) {
-      planQuota = activePlan.messageQuota;
-      isPlanActive = true;
+  if (activePlanId !== 'free' && planExpiresAt && planExpiresAt > new Date()) {
+    isPlanActive = true;
+    const plan = settings?.subscriptionPlans?.find((p) => p.planId === activePlanId && p.isActive);
+    if (plan) {
+      planQuota = plan.monthlyQuota;
     }
   }
 
-  // Base allowance is either active paid plan quota OR default free quota
-  const baseQuota = isPlanActive ? planQuota : freeQuota;
-  const totalAllowed = baseQuota + bonusMessages;
+  const totalAllowed = freeQuota + planQuota + bonusMessages;
   const remaining = Math.max(0, totalAllowed - messagesUsed);
   const isExhausted = remaining <= 0;
 
@@ -93,10 +92,12 @@ async function calculateUserQuota(user, settings) {
  */
 function proxyToAgent(req, res, targetPath, onCompleteCallback) {
   const url = new URL(targetPath, AI_SERVICE_URL);
+  const isHttps = url.protocol === 'https:';
+  const client = isHttps ? https : http;
 
   const options = {
     hostname: url.hostname,
-    port: url.port,
+    port: url.port || (isHttps ? 443 : 80),
     path: url.pathname + url.search,
     method: req.method,
     headers: {
@@ -112,7 +113,7 @@ function proxyToAgent(req, res, targetPath, onCompleteCallback) {
   // Remove headers that shouldn't be forwarded
   delete options.headers['content-length'];
 
-  const proxyReq = http.request(options, (proxyRes) => {
+  const proxyReq = client.request(options, (proxyRes) => {
     // Check if this is an SSE response
     const contentType = proxyRes.headers['content-type'] || '';
     const isSSE = contentType.includes('text/event-stream');
