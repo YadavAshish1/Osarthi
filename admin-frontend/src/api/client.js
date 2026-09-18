@@ -5,18 +5,21 @@ const BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 export const api = axios.create({
   baseURL: `${BASE}/api`,
   withCredentials: true,
-  headers: { 'Content-Type': 'application/json' },
-});
-
-// Attach stored access token to every request
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('adminToken');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
+  headers: {
+    'Content-Type': 'application/json',
+    'x-auth-portal': 'admin',
+  },
 });
 
 let refreshPromise = null;
-const AUTH_SKIP_REFRESH = ['/auth/refresh', '/auth/login', '/auth/register'];
+const AUTH_SKIP_REFRESH = [
+  '/auth/refresh',
+  '/auth/login',
+  '/auth/register',
+  '/auth/send-otp',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+];
 
 // Automatic 401 Interceptor — Silently refreshes access token using httpOnly refreshToken cookie
 api.interceptors.response.use(
@@ -38,16 +41,9 @@ api.interceptors.response.use(
       refreshPromise = api
         .post('/auth/refresh')
         .then((res) => {
-          const newToken = res.data?.accessToken;
-          if (newToken) {
-            localStorage.setItem('adminToken', newToken);
-            return newToken;
-          }
-          return null;
+          return res.data?.user || true;
         })
         .catch(() => {
-          // Refresh token expired (after 7 days) or invalid — trigger logout
-          localStorage.removeItem('adminToken');
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('auth:logout'));
           }
@@ -58,10 +54,10 @@ api.interceptors.response.use(
         });
     }
 
-    const newToken = await refreshPromise;
-    if (!newToken) return Promise.reject(error);
+    const refreshed = await refreshPromise;
+    if (!refreshed) return Promise.reject(error);
 
-    original.headers.Authorization = `Bearer ${newToken}`;
     return api(original);
   }
 );
+

@@ -69,6 +69,7 @@ app.use(
       }
     },
     credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-portal', 'X-Requested-With'],
   })
 );
 app.use(express.json({ limit: '10mb' }));

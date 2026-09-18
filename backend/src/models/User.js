@@ -10,6 +10,7 @@ const userSchema = new mongoose.Schema(
     classRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Class' },
     googleId: { type: String, sparse: true },
     refreshTokenHash: { type: String },
+    previousRefreshTokenHash: { type: String },
     avatar: { type: String },
     bio: { type: String, default: '' },
     education: [

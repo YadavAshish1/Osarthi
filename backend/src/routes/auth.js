@@ -11,6 +11,7 @@ import {
   comparePassword,
   hashToken,
   issueTokens,
+  clearAuthCookies,
   clearRefreshCookie,
 } from '../utils/authHelpers.js';
 import { verifyRefreshToken } from '../utils/tokens.js';
@@ -62,18 +63,89 @@ function validate(req, res) {
   return true;
 }
 
+function getAccessTokenFromReq(req) {
+  const header = req.headers.authorization;
+  if (header?.startsWith('Bearer ')) {
+    const bearer = header.slice(7).trim();
+    if (bearer) return bearer;
+  }
+  const portal = req.headers['x-auth-portal'];
+  if (portal === 'admin' && req.cookies?.adminAccessToken) {
+    return req.cookies.adminAccessToken;
+  }
+  if (portal === 'student' && req.cookies?.studentAccessToken) {
+    return req.cookies.studentAccessToken;
+  }
+  return req.cookies?.accessToken || null;
+}
+
+function getRefreshTokenFromReq(req) {
+  const portal = req.headers['x-auth-portal'];
+  if (portal === 'admin') {
+    return req.cookies?.adminRefreshToken || req.cookies?.refreshToken;
+  }
+  if (portal === 'student') {
+    return req.cookies?.studentRefreshToken || req.cookies?.refreshToken;
+  }
+  return req.cookies?.adminRefreshToken || req.cookies?.studentRefreshToken || req.cookies?.refreshToken || null;
+}
+
 router.get('/me', async (req, res, next) => {
   try {
-    const header = req.headers.authorization;
-    if (!header?.startsWith('Bearer ')) {
-      return res.json({ user: null });
+    const portal = req.headers['x-auth-portal'];
+    const token = getAccessTokenFromReq(req);
+
+    if (token) {
+      try {
+        const { verifyAccessToken } = await import('../utils/tokens.js');
+        const decoded = verifyAccessToken(token);
+        const user = await User.findById(decoded.userId)
+          .select('-passwordHash -refreshTokenHash -previousRefreshTokenHash')
+          .populate('classRef', 'name');
+        if (user && user.isActive !== false) {
+          const isAdmin = ['admin', 'super_admin'].includes(user.role);
+          if (portal === 'admin' && !isAdmin) {
+            return res.json({ user: null });
+          }
+          if (portal === 'student' && isAdmin) {
+            return res.json({ user: null });
+          }
+          return res.json({ user });
+        }
+      } catch {
+        // Access token expired/invalid, try refresh token fallback below
+      }
     }
-    const { verifyAccessToken } = await import('../utils/tokens.js');
-    const decoded = verifyAccessToken(header.slice(7));
-    const user = await User.findById(decoded.userId)
-      .select('-passwordHash -refreshTokenHash')
-      .populate('classRef', 'name');
-    res.json({ user: user || null });
+
+    // Silent refresh fallback using refreshToken cookie
+    const refreshToken = getRefreshTokenFromReq(req);
+    if (refreshToken) {
+      try {
+        const { verifyRefreshToken } = await import('../utils/tokens.js');
+        const decoded = verifyRefreshToken(refreshToken);
+        const user = await User.findById(decoded.userId);
+        const isAdmin = user && ['admin', 'super_admin'].includes(user.role);
+
+        if (portal === 'admin' && !isAdmin) {
+          return res.json({ user: null });
+        }
+        if (portal === 'student' && isAdmin) {
+          return res.json({ user: null });
+        }
+
+        const hashed = hashToken(refreshToken);
+        const matchesHash = user && (user.refreshTokenHash === hashed || user.previousRefreshTokenHash === hashed);
+
+        if (user && matchesHash && user.isActive !== false) {
+          const tokens = await issueTokens(user, res, portal);
+          return res.json({ user: tokens.user });
+        }
+      } catch {
+        clearAuthCookies(res, portal);
+      }
+    }
+
+    res.json({ user: null });
   } catch {
     res.json({ user: null });
   }
@@ -144,6 +216,7 @@ router.post(
       if (!validate(req, res)) return;
       const { name, email, password, role, classId, className, otp } = req.body;
       const cleanEmail = email.toLowerCase();
+      const portal = req.headers['x-auth-portal'];
 
       const existing = await User.findOne({ email: cleanEmail });
       if (existing) return res.status(409).json({ message: 'Email already registered' });
@@ -180,7 +253,7 @@ router.post(
       // Delete used OTP
       await OtpVerification.deleteMany({ email: cleanEmail });
 
-      const tokens = await issueTokens(user, res);
+      const tokens = await issueTokens(user, res, portal);
       res.status(201).json(tokens);
     } catch (err) {
       next(err);
@@ -199,13 +272,14 @@ router.post(
     try {
       if (!validate(req, res)) return;
       const { email, password } = req.body;
+      const portal = req.headers['x-auth-portal'];
       const user = await User.findOne({ email: email.toLowerCase() });
       if (!user?.passwordHash) {
         return res.status(401).json({ message: 'Invalid credentials' });
       }
       const valid = await comparePassword(password, user.passwordHash);
       if (!valid) return res.status(401).json({ message: 'Invalid credentials' });
-      const tokens = await issueTokens(user, res);
+      const tokens = await issueTokens(user, res, portal);
       res.json(tokens);
     } catch (err) {
       next(err);
@@ -215,27 +289,49 @@ router.post(
 
 router.post('/refresh', async (req, res, next) => {
   try {
-    const token = req.cookies.refreshToken;
-    if (!token) return res.status(401).json({ message: 'Refresh token missing' });
+    const portal = req.headers['x-auth-portal'];
+    const token = getRefreshTokenFromReq(req);
+    if (!token) {
+      clearAuthCookies(res, portal);
+      return res.status(401).json({ message: 'Refresh token missing' });
+    }
 
     let decoded;
     try {
       decoded = verifyRefreshToken(token);
     } catch {
+      clearAuthCookies(res, portal);
       return res.status(401).json({ message: 'Invalid or expired refresh token' });
     }
 
     const user = await User.findById(decoded.userId);
-    if (!user) return res.status(401).json({ message: 'User not found' });
+    if (!user) {
+      clearAuthCookies(res, portal);
+      return res.status(401).json({ message: 'User not found' });
+    }
 
-    if (user.refreshTokenHash !== hashToken(token)) {
-      // Token mismatch — security ke liye hash clear karo (reuse attempt)
-      await User.findByIdAndUpdate(decoded.userId, { refreshTokenHash: null });
+    const isAdmin = ['admin', 'super_admin'].includes(user.role);
+    if (portal === 'admin' && !isAdmin) {
+      clearAuthCookies(res, portal);
+      return res.status(401).json({ message: 'Invalid refresh token for admin portal' });
+    }
+    if (portal === 'student' && isAdmin) {
+      clearAuthCookies(res, portal);
+      return res.status(401).json({ message: 'Invalid refresh token for student portal' });
+    }
+
+    const hashed = hashToken(token);
+    const matchesHash = user.refreshTokenHash === hashed || user.previousRefreshTokenHash === hashed;
+
+    if (!matchesHash) {
+      // Token mismatch — reuse attempt or completely invalid token
+      await User.findByIdAndUpdate(decoded.userId, { refreshTokenHash: null, previousRefreshTokenHash: null });
+      clearAuthCookies(res, portal);
       return res.status(401).json({ message: 'Refresh token invalid' });
     }
 
-    const tokens = await issueTokens(user, res);
-    res.json({ accessToken: tokens.accessToken, user: tokens.user });
+    const tokens = await issueTokens(user, res, portal);
+    res.json({ user: tokens.user });
   } catch (err) {
     next(err);
   }
@@ -243,16 +339,17 @@ router.post('/refresh', async (req, res, next) => {
 
 router.post('/logout', async (req, res, next) => {
   try {
-    const token = req.cookies.refreshToken;
+    const portal = req.headers['x-auth-portal'];
+    const token = getRefreshTokenFromReq(req);
     if (token) {
       try {
         const decoded = verifyRefreshToken(token);
-        await User.findByIdAndUpdate(decoded.userId, { refreshTokenHash: null });
+        await User.findByIdAndUpdate(decoded.userId, { refreshTokenHash: null, previousRefreshTokenHash: null });
       } catch {
         /* ignore */
       }
     }
-    clearRefreshCookie(res);
+    clearAuthCookies(res, portal);
     res.json({ message: 'Logged out' });
   } catch (err) {
     next(err);

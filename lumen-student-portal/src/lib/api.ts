@@ -13,22 +13,19 @@ export const api = axios.create({
   withCredentials: true,
   headers: {
     "Content-Type": "application/json",
+    "x-auth-portal": "student",
   },
 });
 
-// Attach Authorization header on every request if token exists
-api.interceptors.request.use((config) => {
-  if (typeof window !== "undefined") {
-    const token = localStorage.getItem("lumen_access_token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-  }
-  return config;
-});
-
-let refreshPromise: Promise<string | null> | null = null;
-const AUTH_SKIP_REFRESH = ["/auth/refresh", "/auth/login", "/auth/register", "/auth/send-otp"];
+let refreshPromise: Promise<boolean | null> | null = null;
+const AUTH_SKIP_REFRESH = [
+  "/auth/refresh",
+  "/auth/login",
+  "/auth/register",
+  "/auth/send-otp",
+  "/auth/forgot-password",
+  "/auth/reset-password",
+];
 
 // Automatic 401 Interceptor — Silently refreshes access token using httpOnly refreshToken cookie
 api.interceptors.response.use(
@@ -50,19 +47,11 @@ api.interceptors.response.use(
       refreshPromise = api
         .post("/auth/refresh")
         .then((res) => {
-          const newToken = res.data?.accessToken;
-          if (newToken) {
-            if (typeof window !== "undefined") {
-              localStorage.setItem("lumen_access_token", newToken);
-            }
-            return newToken;
-          }
-          return null;
+          return res.data?.user ? true : true;
         })
         .catch(() => {
-          // Refresh token expired (after 7 days) or invalid — trigger logout
+          // Refresh token expired or invalid — trigger logout
           if (typeof window !== "undefined") {
-            localStorage.removeItem("lumen_access_token");
             window.dispatchEvent(new CustomEvent("auth:logout"));
           }
           return null;
@@ -72,10 +61,9 @@ api.interceptors.response.use(
         });
     }
 
-    const newToken = await refreshPromise;
-    if (!newToken) return Promise.reject(error);
+    const refreshed = await refreshPromise;
+    if (!refreshed) return Promise.reject(error);
 
-    original.headers.Authorization = `Bearer ${newToken}`;
     return api(original);
   }
 );

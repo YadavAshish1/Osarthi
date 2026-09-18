@@ -21,13 +21,19 @@ router.get('/blog/:blogId', async (req, res, next) => {
       .sort({ createdAt: 1 })
       .populate('userId', 'name avatar');
 
-    // Get logged-in user id from Authorization header (optional)
+    // Get logged-in user id from Cookie or Authorization header (optional)
     let currentUserId = null;
-    const header = req.headers.authorization;
-    if (header?.startsWith('Bearer ')) {
+    let token = req.cookies?.accessToken;
+    if (!token) {
+      const header = req.headers.authorization;
+      if (header?.startsWith('Bearer ')) {
+        token = header.slice(7);
+      }
+    }
+    if (token) {
       try {
         const { verifyAccessToken } = await import('../utils/tokens.js');
-        const decoded = verifyAccessToken(header.slice(7));
+        const decoded = verifyAccessToken(token);
         currentUserId = decoded.userId;
       } catch { /* anonymous */ }
     }

@@ -28,11 +28,18 @@ router.post('/', async (req, res, next) => {
 
     // Link to authenticated or existing user account
     let applicantRef = null;
-    const header = req.headers.authorization;
-    if (header?.startsWith('Bearer ')) {
+    let token = req.cookies?.accessToken;
+    if (!token) {
+      const header = req.headers.authorization;
+      if (header?.startsWith('Bearer ')) {
+        token = header.slice(7);
+      }
+    }
+
+    if (token) {
       try {
         const { verifyAccessToken } = await import('../utils/tokens.js');
-        const decoded = verifyAccessToken(header.slice(7));
+        const decoded = verifyAccessToken(token);
         const user = await User.findById(decoded.userId);
         if (user) applicantRef = user._id;
       } catch {}
@@ -107,23 +114,51 @@ router.post('/', async (req, res, next) => {
 // ─── GET /api/teacher-applications/my-status — Current user's application status
 router.get('/my-status', async (req, res, next) => {
   try {
-    // Try to get user from token
-    const header = req.headers.authorization;
-    if (!header?.startsWith('Bearer ')) {
-      return res.json({ application: null });
+    let token = req.cookies?.accessToken;
+    if (!token) {
+      const header = req.headers.authorization;
+      if (header?.startsWith('Bearer ')) {
+        token = header.slice(7);
+      }
     }
 
     let userId;
-    try {
-      const { verifyAccessToken } = await import('../utils/tokens.js');
-      const decoded = verifyAccessToken(header.slice(7));
-      userId = decoded.userId;
-    } catch {
-      return res.json({ application: null });
+    if (token) {
+      try {
+        const { verifyAccessToken } = await import('../utils/tokens.js');
+        const decoded = verifyAccessToken(token);
+        userId = decoded.userId;
+      } catch {}
     }
+
+    if (!userId && req.cookies?.refreshToken) {
+      try {
+        const { verifyRefreshToken } = await import('../utils/tokens.js');
+        const { hashToken } = await import('../utils/authHelpers.js');
+        const decoded = verifyRefreshToken(req.cookies.refreshToken);
+        const u = await User.findById(decoded.userId);
+        if (u && u.refreshTokenHash === hashToken(req.cookies.refreshToken)) {
+          userId = u._id;
+        }
+      } catch {}
+    }
+
+    if (!userId) return res.json({ application: null });
 
     const user = await User.findById(userId);
     if (!user) return res.json({ application: null });
+
+    // If user's role is teacher, admin, or super_admin, return approved status
+    if (['teacher', 'admin', 'super_admin'].includes(user.role)) {
+      return res.json({
+        application: {
+          _id: user._id,
+          status: 'approved',
+          name: user.name,
+          email: user.email,
+        },
+      });
+    }
 
     // Find by applicantRef or email
     const application = await TeacherApplication.findOne({

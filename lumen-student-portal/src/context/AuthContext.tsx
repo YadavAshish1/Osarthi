@@ -37,14 +37,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-function saveToken(token: string) {
-  localStorage.setItem("lumen_access_token", token);
-}
-
-function clearToken() {
-  localStorage.removeItem("lumen_access_token");
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
@@ -54,42 +46,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     onSuccess: null,
   });
 
-  // Listen for auth:logout event triggered when refresh token expires (after 7 days)
+  // Listen for auth:logout event triggered when refresh token expires
   useEffect(() => {
     const handleLogout = () => {
       setUser(null);
-      clearToken();
     };
     window.addEventListener("auth:logout", handleLogout);
     return () => window.removeEventListener("auth:logout", handleLogout);
   }, []);
 
-  // On mount: try /api/auth/me (or silent refresh if access token expired)
+  // On mount: try /api/auth/me
   useEffect(() => {
     (async () => {
       try {
-        let token = localStorage.getItem("lumen_access_token");
-        if (!token) {
-          // Attempt silent refresh using httpOnly refreshToken cookie if present
-          try {
-            const { data: refreshData } = await api.post("/auth/refresh");
-            if (refreshData?.accessToken) {
-              const freshToken: string = refreshData.accessToken;
-              token = freshToken;
-              saveToken(freshToken);
-            }
-          } catch {
-            // No active session cookie
-          }
-        }
-
-        if (!token) {
-          setReady(true);
-          return;
-        }
-
         const { data } = await api.get("/auth/me");
-        // backend returns { user: {...} }
         const u = data?.user;
         if (u && u._id) {
           setUser({
@@ -101,10 +71,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             savedTeachers: Array.isArray(u.savedTeachers) ? u.savedTeachers.map((id: any) => id.toString()) : [],
           });
         } else {
-          clearToken();
+          setUser(null);
         }
       } catch {
-        clearToken();
+        setUser(null);
       } finally {
         setReady(true);
       }
@@ -114,11 +84,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     try {
       const { data } = await api.post("/auth/login", { email, password });
-      // backend returns { accessToken, user }
-      const accessToken = data.accessToken;
       const u = data.user;
-      if (!accessToken || !u) throw new Error("Invalid response");
-      saveToken(accessToken);
+      if (!u) throw new Error("Invalid response");
       setUser({
         id: u._id,
         name: u.name,
@@ -174,10 +141,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           role: role || "student",
           otp,
         });
-        const accessToken = data.accessToken;
         const u = data.user;
-        if (!accessToken || !u) throw new Error("Invalid response");
-        saveToken(accessToken);
+        if (!u) throw new Error("Invalid response");
         setUser({ id: u._id, name: u.name, email: u.email, role: u.role, avatar: u.avatar });
         return { ok: true };
       } catch (e: any) {
@@ -230,7 +195,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await api.post("/auth/logout");
     } catch {}
-    clearToken();
+    setAccessToken(null);
     setUser(null);
   }, []);
 
