@@ -8,6 +8,7 @@ import { Plus, BookOpen, Layers, CheckCircle2, Loader2, Send, Clock, ExternalLin
 
 interface TaxonomyPickerProps {
   allowCreate?: boolean;
+  initialSelection?: { classId?: string; subjectId?: string; topicId?: string } | null;
   onSelect: (selection: { classId: string; subjectId: string; topicId: string } | null) => void;
 }
 
@@ -16,14 +17,14 @@ interface Item {
   name: string;
 }
 
-export default function TaxonomyPicker({ allowCreate = true, onSelect }: TaxonomyPickerProps) {
+export default function TaxonomyPicker({ allowCreate = true, initialSelection, onSelect }: TaxonomyPickerProps) {
   const [classes, setClasses] = useState<Item[]>([]);
   const [subjects, setSubjects] = useState<Item[]>([]);
   const [topics, setTopics] = useState<Item[]>([]);
 
-  const [classId, setClassId] = useState("");
-  const [subjectId, setSubjectId] = useState("");
-  const [topicId, setTopicId] = useState("");
+  const [classId, setClassId] = useState(initialSelection?.classId || "");
+  const [subjectId, setSubjectId] = useState(initialSelection?.subjectId || "");
+  const [topicId, setTopicId] = useState(initialSelection?.topicId || "");
 
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
@@ -56,21 +57,38 @@ export default function TaxonomyPicker({ allowCreate = true, onSelect }: Taxonom
     })();
   }, []);
 
+  // Sync classId when initialSelection changes
+  useEffect(() => {
+    if (initialSelection?.classId && initialSelection.classId !== classId) {
+      setClassId(initialSelection.classId);
+    }
+  }, [initialSelection?.classId]);
+
   // Fetch subjects when classId changes
   useEffect(() => {
-    setSubjectId("");
-    setTopicId("");
-    setSubjects([]);
-    setTopics([]);
-    onSelect(null);
-
-    if (!classId) return;
+    if (!classId) {
+      setSubjectId("");
+      setTopicId("");
+      setSubjects([]);
+      setTopics([]);
+      onSelect(null);
+      return;
+    }
 
     (async () => {
       setLoadingSubjects(true);
       try {
         const { data } = await api.get(`/taxonomy/subjects?classId=${classId}`);
-        setSubjects(data || []);
+        const list: Item[] = data || [];
+        setSubjects(list);
+
+        if (initialSelection?.subjectId && list.some((s) => s._id === initialSelection.subjectId)) {
+          setSubjectId(initialSelection.subjectId);
+        } else if (subjectId && !list.some((s) => s._id === subjectId)) {
+          setSubjectId("");
+          setTopicId("");
+          setTopics([]);
+        }
       } catch {
         toast.error("Failed to load subjects");
       } finally {
@@ -81,17 +99,25 @@ export default function TaxonomyPicker({ allowCreate = true, onSelect }: Taxonom
 
   // Fetch topics when subjectId changes
   useEffect(() => {
-    setTopicId("");
-    setTopics([]);
-    onSelect(null);
-
-    if (!subjectId) return;
+    if (!subjectId) {
+      setTopicId("");
+      setTopics([]);
+      onSelect(null);
+      return;
+    }
 
     (async () => {
       setLoadingTopics(true);
       try {
         const { data } = await api.get(`/taxonomy/topics?subjectId=${subjectId}`);
-        setTopics(data || []);
+        const list: Item[] = data || [];
+        setTopics(list);
+
+        if (initialSelection?.topicId && list.some((t) => t._id === initialSelection.topicId)) {
+          setTopicId(initialSelection.topicId);
+        } else if (topicId && !list.some((t) => t._id === topicId)) {
+          setTopicId("");
+        }
       } catch {
         toast.error("Failed to load topics");
       } finally {

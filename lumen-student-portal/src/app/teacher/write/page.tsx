@@ -21,6 +21,32 @@ export default function WriteInsightPage() {
 
   const [teacherStatus, setTeacherStatus] = useState<"none" | "incomplete" | "pending" | "approved" | "loading">("loading");
 
+  // Auto-Recovery on Mount: Check for unsaved local draft in localStorage
+  useEffect(() => {
+    if (!ready || !user) return;
+    const storageKey = `medhashine_unsaved_draft_${user.id || (user as any)?._id || "guest"}_new`;
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (
+          parsed &&
+          (parsed.title?.trim() || (parsed.blocks && parsed.blocks.some((b: any) => Boolean(b.text?.trim()) || Boolean(b.items?.length))))
+        ) {
+          if (parsed.classId && parsed.subjectId && parsed.topicId) {
+            setSelection({
+              classId: parsed.classId,
+              subjectId: parsed.subjectId,
+              topicId: parsed.topicId,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error restoring unsaved draft selection from localStorage", err);
+    }
+  }, [user, ready]);
+
   useEffect(() => {
     if (!ready) return;
     if (!user) {
@@ -168,7 +194,7 @@ export default function WriteInsightPage() {
           </p>
         </div>
 
-        <TaxonomyPicker allowCreate onSelect={setSelection} />
+        <TaxonomyPicker allowCreate initialSelection={selection} onSelect={setSelection} />
       </div>
 
       {/* Step 2: Native Content Editor */}
@@ -176,8 +202,13 @@ export default function WriteInsightPage() {
         <div className="p-8 md:p-10 rounded-3xl bg-white border border-[#E5E1D8] shadow-xs">
           <NativeContentEditor
             topicId={selection.topicId}
+            classId={selection.classId}
+            subjectId={selection.subjectId}
             onSaved={() => {
               router.push("/teacher/dashboard");
+            }}
+            onDiscard={() => {
+              setSelection(null);
             }}
           />
         </div>

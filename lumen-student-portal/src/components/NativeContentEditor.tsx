@@ -59,6 +59,8 @@ interface Block {
 
 interface NativeContentEditorProps {
   topicId: string;
+  classId?: string;
+  subjectId?: string;
   contentId?: string;
   initialData?: {
     title?: string;
@@ -66,6 +68,7 @@ interface NativeContentEditorProps {
     published?: boolean;
   };
   onSaved?: (savedData: any) => void;
+  onDiscard?: () => void;
 }
 
 const BLOCK_TYPES = [
@@ -185,9 +188,12 @@ function ContentEditableBlock({
 
 export default function NativeContentEditor({
   topicId,
+  classId,
+  subjectId,
   contentId,
   initialData,
   onSaved,
+  onDiscard,
 }: NativeContentEditorProps) {
   const { user } = useAuth();
   const [title, setTitle] = useState(initialData?.title || "");
@@ -246,6 +252,8 @@ export default function NativeContentEditor({
         const draftPayload = {
           title,
           blocks,
+          classId,
+          subjectId,
           topicId,
           updatedAt: now,
         };
@@ -259,7 +267,7 @@ export default function NativeContentEditor({
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [title, blocks, topicId, storageKey]);
+  }, [title, blocks, classId, subjectId, topicId, storageKey]);
 
   const clearLocalDraft = () => {
     try {
@@ -590,6 +598,7 @@ export default function NativeContentEditor({
                   setTitle(initialData?.title || "");
                   setBlocks(initialData?.blocks?.length ? initialData.blocks : [newBlock("paragraph")]);
                   toast.success("Discarded unsaved local draft");
+                  onDiscard?.();
                 }}
                 className="text-[11px] text-rose-700 hover:underline cursor-pointer font-bold ml-1"
                 title="Click to discard local cache and restore original"

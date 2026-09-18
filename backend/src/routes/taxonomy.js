@@ -37,16 +37,8 @@ export async function cleanupExpiredBinItems() {
 export async function seedDefaultTaxonomy() {
   try {
     await cleanupExpiredBinItems();
-    const superAdmin = await User.findOne({ role: 'super_admin' });
-    const defaultClasses = ['Class 9', 'Class 10', 'Class 11', 'Class 12', 'General'];
-    for (const name of defaultClasses) {
-      const existing = await Class.findOne({ name: { $regex: new RegExp(`^${name}$`, 'i') }, deletedAt: null });
-      if (!existing) {
-        await Class.create({ name, ...(superAdmin && { createdBy: superAdmin._id }) });
-      }
-    }
   } catch (err) {
-    console.error('[Taxonomy] Failed to seed default classes:', err.message);
+    console.error('[Taxonomy] Error during startup cleanup:', err.message);
   }
 }
 
