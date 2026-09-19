@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { body, validationResult } from 'express-validator';
-import { escapeRegex } from '../utils/sanitize.js';
+import { escapeRegex, sanitizeString } from '../utils/sanitize.js';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import User from '../models/User.js';
@@ -244,7 +244,7 @@ router.post(
 
       const passwordHash = await hashPassword(password);
       const user = await User.create({
-        name,
+        name: sanitizeString(name.trim()),
         email: cleanEmail,
         passwordHash,
         role,

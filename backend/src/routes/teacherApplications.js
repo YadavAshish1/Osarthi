@@ -60,8 +60,8 @@ router.post('/', async (req, res, next) => {
     let application = await TeacherApplication.findOne({ email: cleanEmail });
 
     if (application) {
-      application.name = name.trim();
-      application.phone = phone?.trim() || application.phone || '';
+      application.name = sanitizeString(name.trim());
+      application.phone = phone ? sanitizeString(phone.trim()) : (application.phone || '');
       if (dateOfBirth) application.dateOfBirth = dateOfBirth;
       if (avatar) application.avatar = avatar;
       if (Array.isArray(education)) application.education = education;
@@ -75,9 +75,9 @@ router.post('/', async (req, res, next) => {
     } else {
       application = await TeacherApplication.create({
         applicantRef,
-        name: name.trim(),
+        name: sanitizeString(name.trim()),
         email: cleanEmail,
-        phone: phone?.trim() || '',
+        phone: phone ? sanitizeString(phone.trim()) : '',
         dateOfBirth: dateOfBirth || undefined,
         avatar: avatar || '',
         education: Array.isArray(education) ? education : [],
