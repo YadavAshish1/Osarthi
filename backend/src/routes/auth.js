@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { body, validationResult } from 'express-validator';
+import { escapeRegex } from '../utils/sanitize.js';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import User from '../models/User.js';
@@ -172,7 +173,7 @@ router.post(
       if (role === 'student') {
         if (!resolvedClassId && className?.trim()) {
           const cls = await Class.findOne({
-            name: { $regex: new RegExp(`^${className.trim()}$`, 'i') },
+            name: { $regex: new RegExp(`^${escapeRegex(className.trim())}$`, 'i') },
           });
           if (cls) resolvedClassId = cls._id;
         }
@@ -231,7 +232,7 @@ router.post(
       if (role === 'student') {
         if (!resolvedClassId && className?.trim()) {
           const cls = await Class.findOne({
-            name: { $regex: new RegExp(`^${className.trim()}$`, 'i') },
+            name: { $regex: new RegExp(`^${escapeRegex(className.trim())}$`, 'i') },
           });
           if (cls) resolvedClassId = cls._id;
         }
@@ -416,7 +417,7 @@ router.post('/oauth-register', async (req, res, next) => {
     if (role === 'student') {
       if (!resolvedClassId && className?.trim()) {
         const cls = await Class.findOne({
-          name: { $regex: new RegExp(`^${className.trim()}$`, 'i') },
+          name: { $regex: new RegExp(`^${escapeRegex(className.trim())}$`, 'i') },
         });
         if (cls) resolvedClassId = cls._id;
       }

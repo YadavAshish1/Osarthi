@@ -69,11 +69,16 @@ export async function issueTokens(user, res, portal = null) {
   setAccessCookie(res, accessToken, userPortal);
   setRefreshCookie(res, refreshToken, userPortal);
   const safeUser = await User.findById(user._id).select('-passwordHash -refreshTokenHash -previousRefreshTokenHash');
-  return { user: safeUser };
+  return { user: safeUser, accessToken };
 }
 
 export function clearAuthCookies(res, portal = null) {
-  const opts = { path: '/' };
+  const opts = {
+    path: '/',
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+  };
   if (!portal || portal === 'admin') {
     res.clearCookie('adminAccessToken', opts);
     res.clearCookie('adminRefreshToken', opts);

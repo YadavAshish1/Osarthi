@@ -4,6 +4,7 @@ import User from '../models/User.js';
 import Subject from '../models/Subject.js';
 import Class from '../models/Class.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
+import { escapeRegex, sanitizeString } from '../utils/sanitize.js';
 import {
   sendTeacherApplicationAdminNotification,
   sendTeacherApprovalEmail,
@@ -67,8 +68,8 @@ router.post('/', async (req, res, next) => {
       if (Array.isArray(subjects)) application.subjects = subjects;
       if (Array.isArray(requestedSubjects)) application.requestedSubjects = requestedSubjects;
       if (Array.isArray(experience)) application.experience = experience;
-      if (bio?.trim()) application.bio = bio.trim();
-      if (motivation?.trim()) application.motivation = motivation.trim();
+      if (bio?.trim()) application.bio = sanitizeString(bio.trim());
+      if (motivation?.trim()) application.motivation = sanitizeString(motivation.trim());
       if (applicantRef) application.applicantRef = applicantRef;
       await application.save();
     } else {
@@ -83,15 +84,15 @@ router.post('/', async (req, res, next) => {
         subjects: Array.isArray(subjects) ? subjects : [],
         requestedSubjects: Array.isArray(requestedSubjects) ? requestedSubjects : [],
         experience: Array.isArray(experience) ? experience : [],
-        bio: bio?.trim() || '',
-        motivation: motivation?.trim() || '',
+        bio: bio?.trim() ? sanitizeString(bio.trim()) : '',
+        motivation: motivation?.trim() ? sanitizeString(motivation.trim()) : '',
         status: 'pending',
       });
     }
 
     // Sync updated bio, education, experience to User model if user exists
     if (existingUser) {
-      if (bio?.trim()) existingUser.bio = bio.trim();
+      if (bio?.trim()) existingUser.bio = sanitizeString(bio.trim());
       if (Array.isArray(education) && education.length > 0) existingUser.education = education;
       if (Array.isArray(experience) && experience.length > 0) existingUser.experience = experience;
       if (avatar) existingUser.avatar = avatar;
@@ -296,7 +297,7 @@ router.put('/:id/review', authenticate, requireRole('admin'), async (req, res, n
           if (!cleanSub) continue;
 
           const existingSub = await Subject.findOne({
-            name: { $regex: new RegExp(`^${cleanSub}$`, 'i') },
+            name: { $regex: new RegExp(`^${escapeRegex(cleanSub)}$`, 'i') },
           });
 
           if (!existingSub) {

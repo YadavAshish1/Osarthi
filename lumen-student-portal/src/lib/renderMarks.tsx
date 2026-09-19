@@ -94,6 +94,22 @@ function isDarkColor(colorStr?: string): boolean {
   return lum !== null && lum < 0.5;
 }
 
+// ─── CSS Color Sanitization (prevents style injection) ──────────────────────
+
+const CSS_COLOR_PATTERN = /^(#[0-9a-fA-F]{3,8}|rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(,\s*[\d.]+\s*)?\)|hsla?\(\s*\d{1,3}\s*,\s*\d{1,3}%?\s*,\s*\d{1,3}%?\s*(,\s*[\d.]+\s*)?\)|[a-zA-Z]{3,25})$/;
+
+function sanitizeColorValue(color?: string): string | undefined {
+  if (!color) return undefined;
+  const trimmed = color.trim();
+  // Block any value with semicolons, urls, expressions, or other injection vectors
+  if (/[;{}()\\]/.test(trimmed) && !CSS_COLOR_PATTERN.test(trimmed)) return undefined;
+  if (/url\s*\(/i.test(trimmed)) return undefined;
+  if (/expression\s*\(/i.test(trimmed)) return undefined;
+  if (/javascript\s*:/i.test(trimmed)) return undefined;
+  if (CSS_COLOR_PATTERN.test(trimmed)) return trimmed;
+  return undefined;
+}
+
 export function renderMarkedText(text: string = "", marks: Mark[] = []): React.ReactNode[] {
   if (!marks?.length) {
     return splitLines(text, "plain");
@@ -129,10 +145,12 @@ export function renderMarkedText(text: string = "", marks: Mark[] = []): React.R
       return splitLines(seg.text, seg.key);
     }
     const style: React.CSSProperties = {};
-    if (seg.mark.backgroundColor) style.backgroundColor = seg.mark.backgroundColor;
-    if (seg.mark.color) {
-      if (!isLightColor(seg.mark.color) || isDarkColor(seg.mark.backgroundColor)) {
-        style.color = seg.mark.color;
+    const safeBg = sanitizeColorValue(seg.mark.backgroundColor);
+    const safeColor = sanitizeColorValue(seg.mark.color);
+    if (safeBg) style.backgroundColor = safeBg;
+    if (safeColor) {
+      if (!isLightColor(safeColor) || isDarkColor(safeBg)) {
+        style.color = safeColor;
       }
     }
 
@@ -197,8 +215,10 @@ export function markedTextToHtml(text: string = "", marks: Mark[] = []): string 
     if (merged.underline) inner = `<u>${inner}</u>`;
 
     const styleParts: string[] = [];
-    if (merged.color) styleParts.push(`color: ${merged.color}`);
-    if (merged.backgroundColor) styleParts.push(`background-color: ${merged.backgroundColor}`);
+    const safeC = sanitizeColorValue(merged.color);
+    const safeBgC = sanitizeColorValue(merged.backgroundColor);
+    if (safeC) styleParts.push(`color: ${safeC}`);
+    if (safeBgC) styleParts.push(`background-color: ${safeBgC}`);
 
     if (styleParts.length) {
       inner = `<span style="${styleParts.join("; ")}">${inner}</span>`;

@@ -3,6 +3,7 @@ import Content from '../models/Content.js';
 import Topic from '../models/Topic.js';
 import Subject from '../models/Subject.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
+import { sanitizeString, sanitizeBlocks } from '../utils/sanitize.js';
 
 const router = Router();
 
@@ -221,8 +222,8 @@ router.post('/topic/:topicId', requireRole('teacher'), async (req, res, next) =>
       subjectRef: subject._id,
       classRef: subject.classRef,
       createdBy: req.user._id,
-      title: title || 'Untitled',
-      blocks: blocks || [],
+      title: sanitizeString(title || 'Untitled'),
+      blocks: sanitizeBlocks(blocks || []),
       published: published ?? false,
     });
 
@@ -246,8 +247,8 @@ router.put('/:contentId', requireRole('teacher'), async (req, res, next) => {
     const content = await Content.findByIdAndUpdate(
       req.params.contentId,
       {
-        ...(title !== undefined && { title }),
-        ...(blocks !== undefined && { blocks }),
+        ...(title !== undefined && { title: sanitizeString(title) }),
+        ...(blocks !== undefined && { blocks: sanitizeBlocks(blocks) }),
         ...(published !== undefined && { published }),
         ...(topicRef !== undefined && { topicRef }),
         ...(subjectRef !== undefined && { subjectRef }),

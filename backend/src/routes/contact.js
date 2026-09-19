@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { body, validationResult } from 'express-validator';
 import { sendContactEmail } from '../utils/emailService.js';
+import { sanitizeString } from '../utils/sanitize.js';
 
 const router = Router();
 
@@ -25,9 +26,9 @@ router.post(
       const { name, email, message, isTeacher } = req.body;
 
       await sendContactEmail({
-        name,
+        name: sanitizeString(name),
         email: email.toLowerCase(),
-        message,
+        message: sanitizeString(message),
         isTeacher: Boolean(isTeacher),
       });
 

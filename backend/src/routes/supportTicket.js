@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import SupportTicket from '../models/SupportTicket.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
+import { escapeRegex, sanitizeString } from '../utils/sanitize.js';
 
 const router = Router();
 
@@ -29,14 +30,14 @@ router.post('/tickets', async (req, res) => {
 
     const ticket = await SupportTicket.create({
       ticketId,
-      name: name.trim(),
+      name: sanitizeString(name),
       email: email.trim().toLowerCase(),
       phone: phone ? phone.trim() : '',
       role: role || 'student',
       category: category || 'technical',
       priority: priority || 'medium',
-      subject: subject.trim(),
-      message: message.trim(),
+      subject: sanitizeString(subject),
+      message: sanitizeString(message),
       status: 'open',
     });
 
@@ -76,7 +77,7 @@ router.get('/admin/tickets', authenticate, requireRole('admin', 'super_admin'), 
     if (role && role !== 'all') filter.role = role;
 
     if (search) {
-      const q = search.trim();
+      const q = escapeRegex(search.trim());
       filter.$or = [
         { ticketId: { $regex: q, $options: 'i' } },
         { name: { $regex: q, $options: 'i' } },

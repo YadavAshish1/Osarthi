@@ -2,6 +2,7 @@ import { Router } from 'express';
 import Comment from '../models/Comment.js';
 import Content from '../models/Content.js';
 import { authenticate } from '../middleware/auth.js';
+import { sanitizeString } from '../utils/sanitize.js';
 
 const router = Router();
 
@@ -97,7 +98,7 @@ router.post('/blog/:blogId', authenticate, async (req, res, next) => {
     const comment = await Comment.create({
       blogId,
       userId: req.user._id,
-      content: content.trim(),
+      content: sanitizeString(content),
       parentId: parent_id || null,
     });
 
@@ -136,7 +137,7 @@ router.patch('/:id', authenticate, async (req, res, next) => {
     const { content } = req.body;
     if (!content?.trim()) return res.status(400).json({ message: 'Content required' });
 
-    comment.content = content.trim();
+    comment.content = sanitizeString(content);
     await comment.save();
 
     res.json({ message: 'Updated', content: comment.content });

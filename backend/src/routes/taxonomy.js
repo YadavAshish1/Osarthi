@@ -5,6 +5,7 @@ import Topic from '../models/Topic.js';
 import User from '../models/User.js';
 import TaxonomyAuditLog from '../models/TaxonomyAuditLog.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
+import { escapeRegex } from '../utils/sanitize.js';
 
 const router = Router();
 
@@ -74,7 +75,7 @@ router.post('/classes', requireRole('teacher'), async (req, res, next) => {
     const name = req.body.name?.trim();
     if (!name) return res.status(400).json({ message: 'Name required' });
     const existing = await Class.findOne({
-      name: { $regex: new RegExp(`^${name}$`, 'i') },
+      name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') },
       deletedAt: null,
     });
     if (existing) return res.json(existing);
@@ -104,7 +105,7 @@ router.post('/subjects', requireRole('teacher'), async (req, res, next) => {
     const { classId } = req.body;
     if (!name || !classId) return res.status(400).json({ message: 'Name and classId required' });
     const existing = await Subject.findOne({
-      name: { $regex: new RegExp(`^${name}$`, 'i') },
+      name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') },
       classRef: classId,
       deletedAt: null,
     });
@@ -142,7 +143,7 @@ router.post('/topics', requireRole('teacher'), async (req, res, next) => {
     const { subjectId } = req.body;
     if (!name || !subjectId) return res.status(400).json({ message: 'Name and subjectId required' });
     const existing = await Topic.findOne({
-      name: { $regex: new RegExp(`^${name}$`, 'i') },
+      name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') },
       subjectRef: subjectId,
       createdBy: req.user._id,
     });
@@ -183,7 +184,7 @@ router.post('/admin/classes', requireRole('admin'), async (req, res, next) => {
     const name = req.body.name?.trim();
     if (!name) return res.status(400).json({ message: 'Class name required' });
 
-    const existing = await Class.findOne({ name: { $regex: new RegExp(`^${name}$`, 'i') }, deletedAt: null });
+    const existing = await Class.findOne({ name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') }, deletedAt: null });
     if (existing) return res.status(400).json({ message: `Class "${name}" already exists` });
 
     const cls = await Class.create({ name, createdBy: req.user._id, isActive: true });
@@ -264,7 +265,7 @@ router.post('/admin/subjects', requireRole('admin'), async (req, res, next) => {
     if (!cls) return res.status(400).json({ message: 'Invalid Class specified' });
 
     const existing = await Subject.findOne({
-      name: { $regex: new RegExp(`^${name}$`, 'i') },
+      name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') },
       classRef: classId,
       deletedAt: null,
     });

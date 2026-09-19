@@ -2,6 +2,7 @@ import { Router } from 'express';
 import User from '../models/User.js';
 import { hashPassword } from '../utils/authHelpers.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
+import { escapeRegex } from '../utils/sanitize.js';
 
 const router = Router();
 
@@ -49,7 +50,7 @@ router.get('/users', async (req, res, next) => {
     }
 
     if (q?.trim()) {
-      const searchRegex = new RegExp(q.trim(), 'i');
+      const searchRegex = new RegExp(escapeRegex(q.trim()), 'i');
       filter.$or = [
         { name: searchRegex },
         { email: searchRegex },

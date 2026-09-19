@@ -6,6 +6,7 @@ import { uploadMedia } from '../services/storage.js';
 import User from '../models/User.js';
 import Content from '../models/Content.js';
 import Comment from '../models/Comment.js';
+import { sanitizeString } from '../utils/sanitize.js';
 
 const router = Router();
 router.use(authenticate);
@@ -37,8 +38,8 @@ router.put('/', async (req, res, next) => {
     const { name, bio, education, experience } = req.body;
 
     const updates = {};
-    if (name !== undefined) updates.name = name.trim();
-    if (bio !== undefined) updates.bio = bio;
+    if (name !== undefined) updates.name = sanitizeString(name);
+    if (bio !== undefined) updates.bio = sanitizeString(bio);
     if (education !== undefined) updates.education = education;
     if (experience !== undefined) updates.experience = experience;
 

@@ -3,7 +3,12 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
-import rateLimit from 'express-rate-limit';
+import {
+  authLimiter,
+  formSubmitLimiter,
+  commentLimiter,
+  applicationLimiter,
+} from './middleware/rateLimiter.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { connectDB } from './config/db.js';
@@ -48,21 +53,31 @@ const allowedOrigins = [
   'https://osarthi.onrender.com'
 ];
 
-if (process.env.CLIENT_URL) {
-  const envOrigins = process.env.CLIENT_URL.split(',').map(url => url.trim());
-  envOrigins.forEach(origin => {
-    if (origin && !allowedOrigins.includes(origin)) {
-      allowedOrigins.push(origin);
-    }
-  });
-}
+const envUrlVars = [
+  process.env.CLIENT_URL,
+  process.env.FRONTEND_URL,
+  process.env.STUDENT_PORTAL_URL,
+  process.env.ADMIN_URL,
+];
+
+envUrlVars.forEach((envVar) => {
+  if (envVar) {
+    envVar.split(',').forEach((url) => {
+      const cleanUrl = url.trim().replace(/\/+$/, '');
+      if (cleanUrl && !allowedOrigins.includes(cleanUrl)) {
+        allowedOrigins.push(cleanUrl);
+      }
+    });
+  }
+});
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps or curl requests)
+      // Allow requests with no origin (like mobile apps or server-to-server curl)
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) {
+      const cleanOrigin = origin.replace(/\/+$/, '');
+      if (allowedOrigins.includes(cleanOrigin)) {
         return callback(null, true);
       } else {
         return callback(new Error('Not allowed by CORS'));
@@ -75,15 +90,49 @@ app.use(
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 
+// ─── CSRF Protection for Cross-Domain Deployments ───────────────────────────
+// Since frontend and backend live on different domains, cookies use SameSite=None; Secure.
+// To prevent CSRF attacks from malicious third-party origins, verify Origin/Referer
+// on all state-changing HTTP methods (POST, PUT, PATCH, DELETE).
+app.use((req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    return next();
+  }
+
+  const origin = req.headers.origin;
+  if (origin) {
+    const cleanOrigin = origin.replace(/\/+$/, '');
+    if (allowedOrigins.includes(cleanOrigin)) {
+      return next();
+    }
+    return res.status(403).json({ message: 'CSRF Protection: Origin not authorized' });
+  }
+
+  const referer = req.headers.referer;
+  if (referer) {
+    try {
+      const refererOrigin = new URL(referer).origin.replace(/\/+$/, '');
+      if (allowedOrigins.includes(refererOrigin)) {
+        return next();
+      }
+      return res.status(403).json({ message: 'CSRF Protection: Referer not authorized' });
+    } catch {
+      return res.status(403).json({ message: 'CSRF Protection: Invalid Referer header' });
+    }
+  }
+
+  // In production, reject state-changing requests with auth cookies if neither Origin nor Referer is provided
+  const hasAuthCookie = req.cookies?.accessToken || req.cookies?.refreshToken || req.cookies?.adminAccessToken || req.cookies?.studentAccessToken;
+  if (process.env.NODE_ENV === 'production' && hasAuthCookie) {
+    return res.status(403).json({ message: 'CSRF Protection: Origin or Referer header required for authenticated requests' });
+  }
+
+  next();
+});
+
 if (!isCloudinaryEnabled()) {
   app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 }
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: { message: 'Too many requests' },
-});
 
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/taxonomy', taxonomyRoutes);
@@ -93,12 +142,12 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/explore', exploreRoutes);
-app.use('/api/comments', commentsRoutes);
-app.use('/api/contact', contactRoutes);
-app.use('/api/teacher-applications', teacherApplicationRoutes);
+app.use('/api/comments', commentLimiter, commentsRoutes);
+app.use('/api/contact', formSubmitLimiter, contactRoutes);
+app.use('/api/teacher-applications', applicationLimiter, teacherApplicationRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/taxonomy-requests', taxonomyRequestRoutes);
-app.use('/api/support', supportTicketRoutes);
+app.use('/api/support', formSubmitLimiter, supportTicketRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 

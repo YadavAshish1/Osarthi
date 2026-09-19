@@ -4,6 +4,7 @@ import Class from '../models/Class.js';
 import Subject from '../models/Subject.js';
 import User from '../models/User.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
+import { escapeRegex } from '../utils/sanitize.js';
 import {
   sendTaxonomyRequestAdminNotification,
   sendTaxonomyRequestStatusEmail,
@@ -43,7 +44,7 @@ router.post('/', requireRole('teacher'), async (req, res, next) => {
     const existing = await TaxonomyRequest.findOne({
       requestedBy: req.user._id,
       type,
-      name: { $regex: new RegExp(`^${cleanName}$`, 'i') },
+      name: { $regex: new RegExp(`^${escapeRegex(cleanName)}$`, 'i') },
       status: 'pending',
     });
 
@@ -144,14 +145,14 @@ router.put('/:id/review', requireRole('admin', 'super_admin'), async (req, res, 
       const finalName = (approvedName && approvedName.trim()) ? approvedName.trim() : request.name;
 
       if (request.type === 'class') {
-        let cls = await Class.findOne({ name: { $regex: new RegExp(`^${finalName}$`, 'i') } });
+        let cls = await Class.findOne({ name: { $regex: new RegExp(`^${escapeRegex(finalName)}$`, 'i') } });
         if (!cls) {
           cls = await Class.create({ name: finalName, createdBy: req.user._id });
         }
         createdEntity = cls;
       } else if (request.type === 'subject') {
         let subject = await Subject.findOne({
-          name: { $regex: new RegExp(`^${finalName}$`, 'i') },
+          name: { $regex: new RegExp(`^${escapeRegex(finalName)}$`, 'i') },
           classRef: request.classRef,
         });
         if (!subject) {

@@ -6,6 +6,7 @@ import Content from '../models/Content.js';
 import User from '../models/User.js';
 import SeoSettings from '../models/SeoSettings.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
+import { escapeRegex } from '../utils/sanitize.js';
 
 const router = Router();
 
@@ -212,7 +213,7 @@ router.get('/blogs', async (req, res, next) => {
     if (parsedTeacher) filter.createdBy = parsedTeacher;
 
     if (search) {
-      filter.title = { $regex: search, $options: 'i' };
+      filter.title = { $regex: escapeRegex(search), $options: 'i' };
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
