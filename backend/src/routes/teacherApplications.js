@@ -20,8 +20,13 @@ router.post('/', async (req, res, next) => {
       education, subjects, requestedSubjects, experience, bio, motivation,
     } = req.body;
 
-    if (!name || !email) {
-      return res.status(400).json({ message: 'Name and email are required' });
+    if (!name || !email || !phone || !phone.trim()) {
+      return res.status(400).json({ message: 'Name, email, and mobile number are required' });
+    }
+
+    const cleanPhone = phone.trim().replace(/[\s\-\(\)\+]/g, '');
+    if (cleanPhone.length < 10) {
+      return res.status(400).json({ message: 'Please provide a valid 10-digit mobile number' });
     }
 
     const cleanEmail = email.toLowerCase().trim();

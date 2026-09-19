@@ -8,7 +8,7 @@ const teacherApplicationSchema = new mongoose.Schema(
     // Personal information
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, lowercase: true, trim: true },
-    phone: { type: String, trim: true },
+    phone: { type: String, required: true, trim: true },
     dateOfBirth: { type: Date },
     avatar: { type: String },
 

@@ -158,6 +158,9 @@ export default function BecomeTeacherClient() {
         const { data: statusData } = await api.get("/teacher-applications/my-status");
         if (statusData?.application) {
           setExistingStatus(statusData.application.status);
+          if (statusData.application.phone) {
+            setPhone((prev) => prev || statusData.application.phone);
+          }
         }
       } catch {}
     })();
@@ -258,6 +261,15 @@ export default function BecomeTeacherClient() {
         toast.error("Please enter a valid email address");
         return false;
       }
+      if (!phone || !phone.trim()) {
+        toast.error("Please enter your mobile number");
+        return false;
+      }
+      const cleanPhone = phone.replace(/[\s\-\(\)\+]/g, "");
+      if (cleanPhone.length < 10) {
+        toast.error("Please enter a valid 10-digit mobile number");
+        return false;
+      }
       if (!dateOfBirth) {
         toast.error("Please select your date of birth");
         return false;
@@ -305,12 +317,16 @@ export default function BecomeTeacherClient() {
   };
 
   const handleSubmitApplication = async () => {
+    if (!phone || !phone.trim()) {
+      toast.error("Mobile number is mandatory");
+      return;
+    }
     setSubmitting(true);
     try {
       const payload = {
         name,
         email,
-        phone,
+        phone: phone.trim(),
         dateOfBirth: dateOfBirth || undefined,
         education: educationList.filter((e) => e.degree.trim() && e.institution.trim()),
         subjects: selectedSubjects,
@@ -681,15 +697,16 @@ export default function BecomeTeacherClient() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-xs font-semibold text-[#1A1A1A] uppercase tracking-wider mb-2">
-                          Phone Number
+                          Mobile Number *
                         </label>
                         <div className="relative">
                           <Phone className="absolute left-3.5 top-3 h-4 w-4 text-[#5C5A55]" />
                           <input
                             type="tel"
+                            required
                             value={phone}
                             onChange={(e) => setPhone(e.target.value)}
-                            placeholder="+91 98765 43210"
+                            placeholder="e.g. +91 98765 43210"
                             className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#E5E1D8] text-sm focus:outline-none focus:border-[#A84C32]"
                           />
                         </div>
@@ -1016,7 +1033,7 @@ export default function BecomeTeacherClient() {
                         Personal Info
                       </h4>
                       <p className="text-sm font-semibold text-[#1A1A1A]">{name}</p>
-                      <p className="text-xs text-[#5C5A55]">{email} {phone && `• ${phone}`}</p>
+                      <p className="text-xs text-[#5C5A55]">{email} • {phone}</p>
                       {dateOfBirth && <p className="text-xs text-[#5C5A55]">DOB: {dateOfBirth}</p>}
                     </div>
 
