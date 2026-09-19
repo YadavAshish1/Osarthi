@@ -54,6 +54,12 @@ export default function WriteInsightPage() {
       return;
     }
 
+    // Fast-path: If the authenticated user already has the teacher or admin role, they are approved
+    if (["teacher", "admin", "super_admin"].includes(user.role || "")) {
+      setTeacherStatus("approved");
+      return;
+    }
+
     // Query backend for submitted teacher application & approval status
     api
       .get("/teacher-applications/my-status")
@@ -70,7 +76,13 @@ export default function WriteInsightPage() {
           setTeacherStatus("incomplete");
         }
       })
-      .catch(() => setTeacherStatus("incomplete"));
+      .catch(() => {
+        if (["teacher", "admin", "super_admin"].includes(user.role || "")) {
+          setTeacherStatus("approved");
+        } else {
+          setTeacherStatus("incomplete");
+        }
+      });
   }, [user, ready]);
 
   if (!ready || teacherStatus === "loading") {

@@ -383,8 +383,25 @@ export default function PrivacyClient() {
                     {s2.content[3] || "IP addresses for network defense, browser user-agents, and cryptographically signed session tokens strictly for security."}
                   </p>
                 </div>
+
+                {/* Educator Data & Identity Protection Guarantee */}
+                <div className="bg-[#FAF8F5] border border-[#E5E1D8] rounded-xl p-4 flex items-start gap-3">
+                  <Lock className="w-4 h-4 text-[#0D9488] shrink-0 mt-0.5" />
+                  <div className="text-xs space-y-1">
+                    <span className="font-semibold text-[#1A1A1A] block">
+                      Teacher Data &amp; Identity Protection Guarantee
+                    </span>
+                    <p className="text-[#5C5A55] leading-relaxed">
+                      An educator&apos;s personal mobile number, private email, date of birth, and verification credentials are encrypted at rest and never made public on learner portals. For intellectual property &amp; copyright rules on teacher-authored insights, please review our{" "}
+                      <Link href="/terms" className="text-[#A84C32] font-semibold underline hover:text-[#8C3A27]">
+                        Terms &amp; Copyright Charter
+                      </Link>.
+                    </p>
+                  </div>
+                </div>
               </div>
             </article>
+
 
             {/* Section 3 */}
             <article id="usage" className="scroll-mt-28 space-y-5 pt-8 border-t border-[#E5E1D8]">

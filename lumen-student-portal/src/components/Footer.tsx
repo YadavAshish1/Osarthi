@@ -69,6 +69,14 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
+                <Link
+                  href="/terms"
+                  className="text-[#1A1A1A] font-medium hover:text-[#A84C32] transition-colors flex items-center gap-1.5"
+                >
+                  Terms & Copyright
+                </Link>
+              </li>
+              <li>
                 <Link href="/privacy#minors" className="hover:text-[#1A1A1A] transition-colors">
                   Child Safety & Minors
                 </Link>

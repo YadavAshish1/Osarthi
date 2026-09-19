@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 const taxonomyAuditLogSchema = new mongoose.Schema(
   {
-    targetType: { type: String, enum: ['class', 'subject'], required: true },
+    targetType: { type: String, enum: ['class', 'subject', 'topic'], required: true },
     targetId: { type: mongoose.Schema.Types.ObjectId, required: true },
     targetName: { type: String, required: true },
     action: { type: String, enum: ['create', 'edit', 'activate', 'deactivate', 'delete', 'soft_delete', 'restore', 'permanent_delete', 'merge'], required: true },

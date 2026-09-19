@@ -9,10 +9,19 @@ import { escapeRegex } from '../utils/sanitize.js';
 
 const router = Router();
 
-// Auto cleanup subjects/classes in recycle bin older than 30 days
+// Auto cleanup subjects/classes/topics in recycle bin older than 30 days
 export async function cleanupExpiredBinItems() {
   try {
     const now = new Date();
+    const Content = (await import('../models/Content.js')).default;
+
+    const expiredTopics = await Topic.find({ deletedAt: { $ne: null }, deletedUntil: { $lte: now } });
+    for (const top of expiredTopics) {
+      await Content.deleteMany({ topicRef: top._id });
+      await Topic.findByIdAndDelete(top._id);
+      console.log(`[Bin Cleanup] Auto permanently deleted topic "${top.name}" after 30-day retention.`);
+    }
+
     const expiredSubjects = await Subject.find({ deletedAt: { $ne: null }, deletedUntil: { $lte: now } });
     for (const sub of expiredSubjects) {
       await Topic.deleteMany({ subjectRef: sub._id });
@@ -123,9 +132,13 @@ router.post('/subjects', requireRole('teacher'), async (req, res, next) => {
 
 router.get('/topics', async (req, res, next) => {
   try {
-    const { subjectId } = req.query;
-    if (!subjectId) return res.status(400).json({ message: 'subjectId required' });
-    const filter = { subjectRef: subjectId };
+    const { subjectId, all } = req.query;
+    const filter = { deletedAt: null };
+    if (subjectId) {
+      filter.subjectRef = subjectId;
+    } else if (!all && req.user.role !== 'teacher') {
+      return res.status(400).json({ message: 'subjectId required' });
+    }
     if (req.user.role === 'teacher') {
       filter.createdBy = req.user._id;
     }
@@ -146,6 +159,7 @@ router.post('/topics', requireRole('teacher'), async (req, res, next) => {
       name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') },
       subjectRef: subjectId,
       createdBy: req.user._id,
+      deletedAt: null,
     });
     if (existing) return res.json(existing);
     const topic = await Topic.create({
@@ -154,6 +168,263 @@ router.post('/topics', requireRole('teacher'), async (req, res, next) => {
       createdBy: req.user._id,
     });
     res.status(201).json(topic);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── TEACHER TOPIC MANAGEMENT: ALL TOPICS, EDIT, IMPACT, DELETE, RESTORE, BIN ───
+
+/** GET /api/taxonomy/teacher/all-topics — All topics created by the teacher with Class, Subject & blog counts */
+router.get('/teacher/all-topics', requireRole('teacher'), async (req, res, next) => {
+  try {
+    const Content = (await import('../models/Content.js')).default;
+    const topics = await Topic.find({ createdBy: req.user._id, deletedAt: null })
+      .populate({
+        path: 'subjectRef',
+        select: 'name classRef',
+        populate: { path: 'classRef', select: 'name' },
+      })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const topicCounts = await Content.aggregate([
+      { $match: { createdBy: req.user._id, deletedAt: null } },
+      { $group: { _id: '$topicRef', count: { $sum: 1 } } },
+    ]);
+    const countMap = {};
+    topicCounts.forEach((tc) => {
+      if (tc._id) countMap[tc._id.toString()] = tc.count;
+    });
+
+    const result = topics.map((t) => ({
+      _id: t._id,
+      name: t.name,
+      createdAt: t.createdAt,
+      subjectId: t.subjectRef?._id || '',
+      subjectName: t.subjectRef?.name || 'General',
+      classId: t.subjectRef?.classRef?._id || '',
+      className: t.subjectRef?.classRef?.name || 'General',
+      blogCount: countMap[t._id.toString()] || 0,
+    }));
+
+    res.json({ topics: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** PUT /api/taxonomy/topics/:id — Teacher can edit/rename their topic */
+router.put('/topics/:id', requireRole('teacher'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const name = req.body.name?.trim();
+    if (!name) return res.status(400).json({ message: 'Topic name is required' });
+
+    const topic = await Topic.findOne({ _id: id, deletedAt: null });
+    if (!topic) return res.status(404).json({ message: 'Topic not found' });
+
+    if (req.user.role === 'teacher' && topic.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Forbidden: You can only edit your own topics' });
+    }
+
+    const duplicate = await Topic.findOne({
+      _id: { $ne: id },
+      name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') },
+      subjectRef: topic.subjectRef,
+      createdBy: topic.createdBy,
+      deletedAt: null,
+    });
+    if (duplicate) {
+      return res.status(400).json({ message: `A topic named "${name}" already exists under this subject` });
+    }
+
+    const previousName = topic.name;
+    topic.name = name;
+    await topic.save();
+
+    await TaxonomyAuditLog.create({
+      targetType: 'topic',
+      targetId: topic._id,
+      targetName: topic.name,
+      action: 'edit',
+      previousName,
+      newName: topic.name,
+      performedBy: req.user._id,
+      details: `Renamed Topic from "${previousName}" to "${topic.name}"`,
+    });
+
+    res.json({ message: 'Topic renamed successfully', topic });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /api/taxonomy/topics/:id/impact — Pre-check impact (count & titles of associated blogs) before deletion */
+router.get('/topics/:id/impact', requireRole('teacher'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const topic = await Topic.findOne({ _id: id, deletedAt: null });
+    if (!topic) return res.status(404).json({ message: 'Topic not found' });
+
+    if (req.user.role === 'teacher' && topic.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Forbidden: You can only view your own topics' });
+    }
+
+    const Content = (await import('../models/Content.js')).default;
+    const blogs = await Content.find({ topicRef: id, deletedAt: null })
+      .select('title published createdAt viewsCount likesCount')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json({
+      topic: {
+        _id: topic._id,
+        name: topic.name,
+      },
+      blogCount: blogs.length,
+      blogs,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** DELETE /api/taxonomy/topics/:id — Soft-delete topic with 30-day retention & cascade to its blogs */
+router.delete('/topics/:id', requireRole('teacher'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const topic = await Topic.findOne({ _id: id, deletedAt: null });
+    if (!topic) return res.status(404).json({ message: 'Topic not found' });
+
+    if (req.user.role === 'teacher' && topic.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Forbidden: You can only delete your own topics' });
+    }
+
+    const now = new Date();
+    const retention30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    topic.deletedAt = now;
+    topic.deletedUntil = retention30Days;
+    topic.deletedBy = req.user._id;
+    await topic.save();
+
+    const Content = (await import('../models/Content.js')).default;
+    const cascadeResult = await Content.updateMany(
+      { topicRef: id, deletedAt: null },
+      {
+        $set: {
+          deletedAt: now,
+          deletedUntil: retention30Days,
+          deletedBy: req.user._id,
+          published: false,
+        },
+      }
+    );
+
+    await TaxonomyAuditLog.create({
+      targetType: 'topic',
+      targetId: topic._id,
+      targetName: topic.name,
+      action: 'soft_delete',
+      performedBy: req.user._id,
+      details: `Moved Topic "${topic.name}" and ${cascadeResult.modifiedCount} associated insights to Recycle Bin (30-day retention)`,
+    });
+
+    res.json({
+      message: `Topic "${topic.name}" moved to Recycle Bin with 30-day retention.`,
+      affectedBlogs: cascadeResult.modifiedCount,
+      retentionUntil: retention30Days,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /api/taxonomy/teacher/topics/bin — List soft-deleted topics for the logged-in teacher */
+router.get('/teacher/topics/bin', requireRole('teacher'), async (req, res, next) => {
+  try {
+    await cleanupExpiredBinItems();
+    const now = new Date();
+    const Content = (await import('../models/Content.js')).default;
+
+    const deletedTopics = await Topic.find({
+      createdBy: req.user._id,
+      deletedAt: { $ne: null },
+    })
+      .populate({
+        path: 'subjectRef',
+        select: 'name classRef',
+        populate: { path: 'classRef', select: 'name' },
+      })
+      .sort({ deletedAt: -1 })
+      .lean();
+
+    const binTopics = await Promise.all(
+      deletedTopics.map(async (t) => {
+        const blogCount = await Content.countDocuments({ topicRef: t._id });
+        const until = new Date(t.deletedUntil || t.deletedAt.getTime() + 30 * 24 * 60 * 60 * 1000);
+        const daysLeft = Math.max(0, Math.ceil((until.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+        return {
+          _id: t._id,
+          name: t.name,
+          deletedAt: t.deletedAt,
+          deletedUntil: t.deletedUntil,
+          daysLeft,
+          blogCount,
+          subjectName: t.subjectRef?.name || '',
+          className: t.subjectRef?.classRef?.name || '',
+        };
+      })
+    );
+
+    res.json({ bin: binTopics, binTopics });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** POST /api/taxonomy/topics/:id/restore — Restore a soft-deleted topic and its cascade-deleted blogs */
+router.post('/topics/:id/restore', requireRole('teacher'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const topic = await Topic.findById(id);
+    if (!topic || !topic.deletedAt) return res.status(404).json({ message: 'Topic not found in Recycle Bin' });
+
+    if (req.user.role === 'teacher' && topic.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    topic.deletedAt = null;
+    topic.deletedUntil = null;
+    topic.deletedBy = null;
+    await topic.save();
+
+    const Content = (await import('../models/Content.js')).default;
+    const restoreBlogsResult = await Content.updateMany(
+      { topicRef: id, deletedAt: { $ne: null } },
+      {
+        $set: {
+          deletedAt: null,
+          deletedUntil: null,
+          deletedBy: null,
+        },
+      }
+    );
+
+    await TaxonomyAuditLog.create({
+      targetType: 'topic',
+      targetId: topic._id,
+      targetName: topic.name,
+      action: 'restore',
+      performedBy: req.user._id,
+      details: `Restored Topic "${topic.name}" and ${restoreBlogsResult.modifiedCount} insights from Recycle Bin`,
+    });
+
+    res.json({
+      message: `Topic "${topic.name}" and ${restoreBlogsResult.modifiedCount} associated insights restored successfully!`,
+      restoredBlogs: restoreBlogsResult.modifiedCount,
+    });
   } catch (err) {
     next(err);
   }

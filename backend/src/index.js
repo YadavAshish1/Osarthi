@@ -7,7 +7,6 @@ import {
   authLimiter,
   formSubmitLimiter,
   commentLimiter,
-  applicationLimiter,
 } from './middleware/rateLimiter.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -144,7 +143,7 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/explore', exploreRoutes);
 app.use('/api/comments', commentLimiter, commentsRoutes);
 app.use('/api/contact', formSubmitLimiter, contactRoutes);
-app.use('/api/teacher-applications', applicationLimiter, teacherApplicationRoutes);
+app.use('/api/teacher-applications', teacherApplicationRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/taxonomy-requests', taxonomyRequestRoutes);
 app.use('/api/support', formSubmitLimiter, supportTicketRoutes);

@@ -44,6 +44,11 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
       return;
     }
 
+    if (["teacher", "admin", "super_admin"].includes(user.role || "")) {
+      setTeacherStatus("approved");
+      return;
+    }
+
     api
       .get("/teacher-applications/my-status")
       .then(({ data }) => {
@@ -56,7 +61,13 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
           setTeacherStatus("none");
         }
       })
-      .catch(() => setTeacherStatus("none"));
+      .catch(() => {
+        if (["teacher", "admin", "super_admin"].includes(user.role || "")) {
+          setTeacherStatus("approved");
+        } else {
+          setTeacherStatus("none");
+        }
+      });
   }, [user]);
 
   const submit = (e: React.FormEvent) => {

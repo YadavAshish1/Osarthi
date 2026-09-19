@@ -31,6 +31,20 @@ import {
   SlidersHorizontal,
   Layers,
 } from "lucide-react";
+import TopicDeleteModal from "@/components/TopicDeleteModal";
+import TopicEditModal from "@/components/TopicEditModal";
+import TopicRecycleBinModal from "@/components/TopicRecycleBinModal";
+
+interface TeacherTopicItem {
+  _id: string;
+  name: string;
+  createdAt: string;
+  subjectId: string;
+  subjectName: string;
+  classId: string;
+  className: string;
+  blogCount: number;
+}
 
 interface ContentItem {
   _id: string;
@@ -98,6 +112,23 @@ export default function TeacherDashboardPage() {
 
   const [submitting, setSubmitting] = useState(false);
 
+  // Main Tabs: Insights vs Topics
+  const [activeMainTab, setActiveMainTab] = useState<"insights" | "topics">("insights");
+  const [teacherTopics, setTeacherTopics] = useState<TeacherTopicItem[]>([]);
+  const [loadingTopics, setLoadingTopics] = useState(false);
+  const [topicSearch, setTopicSearch] = useState("");
+  const [topicClassFilter, setTopicClassFilter] = useState("all");
+  const [topicSubjectFilter, setTopicSubjectFilter] = useState("all");
+  const [topicBinCount, setTopicBinCount] = useState(0);
+
+  // Topic Modal States
+  const [topicToEdit, setTopicToEdit] = useState<{ id: string; name: string } | null>(null);
+  const [topicToDelete, setTopicToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [topicBinModalOpen, setTopicBinModalOpen] = useState(false);
+
+  // Responsive topic chips toggle
+  const [expandTopicChips, setExpandTopicChips] = useState(false);
+
   const fetchAnalytics = useCallback(async () => {
     setLoading(true);
     try {
@@ -122,15 +153,33 @@ export default function TeacherDashboardPage() {
     }
   }, []);
 
+  const fetchTeacherTopics = useCallback(async () => {
+    setLoadingTopics(true);
+    try {
+      const [topicsRes, binRes] = await Promise.all([
+        api.get("/taxonomy/teacher/all-topics"),
+        api.get("/taxonomy/teacher/topics/bin").catch(() => ({ data: { bin: [] } })),
+      ]);
+      setTeacherTopics(topicsRes.data?.topics || []);
+      setTopicBinCount(binRes.data?.bin?.length || 0);
+    } catch {
+      toast.error("Failed to load your topics");
+    } finally {
+      setLoadingTopics(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!ready || !user) return;
     fetchAnalytics();
     fetchBin();
-  }, [user, ready, fetchAnalytics, fetchBin]);
+    fetchTeacherTopics();
+  }, [user, ready, fetchAnalytics, fetchBin, fetchTeacherTopics]);
 
   const refreshAll = () => {
     fetchAnalytics();
     fetchBin();
+    fetchTeacherTopics();
   };
 
   // Toggle Publish / Unpublish
@@ -368,6 +417,22 @@ export default function TeacherDashboardPage() {
   const isTitleMatched = itemToDelete && confirmTitleInput.trim().toLowerCase() === itemToDelete.title.trim().toLowerCase();
   const isPermTitleMatched = itemToPermDelete && permConfirmTitleInput.trim().toLowerCase() === itemToPermDelete.title.trim().toLowerCase();
 
+  // Filtered teacher topics matching search, class, subject
+  const filteredTeacherTopics = useMemo(() => {
+    return teacherTopics.filter((t) => {
+      if (topicClassFilter !== "all" && t.className !== topicClassFilter) return false;
+      if (topicSubjectFilter !== "all" && t.subjectName !== topicSubjectFilter) return false;
+      if (topicSearch.trim()) {
+        const q = topicSearch.toLowerCase().trim();
+        const matchesName = t.name.toLowerCase().includes(q);
+        const matchesClass = (t.className || "").toLowerCase().includes(q);
+        const matchesSub = (t.subjectName || "").toLowerCase().includes(q);
+        if (!matchesName && !matchesClass && !matchesSub) return false;
+      }
+      return true;
+    });
+  }, [teacherTopics, topicClassFilter, topicSubjectFilter, topicSearch]);
+
   if (!ready || loading) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center font-ui text-[#1A1A1A]">
@@ -496,42 +561,99 @@ export default function TeacherDashboardPage() {
 
       {/* Content Management Table with Publish/Unpublish & 30-Day Recycle Bin */}
       <div className="p-4 sm:p-6 md:p-8 rounded-2xl sm:rounded-3xl bg-white border border-[#E5E1D8] shadow-xs space-y-5 sm:space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 border-b border-[#E5E1D8] pb-4">
+        {/* Navigation Tab Header: Insights & Publishing vs Manage Topics */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#E5E1D8] pb-5">
           <div>
-            <span className="eyebrow text-[#A84C32] block mb-0.5 sm:mb-1 text-[11px] sm:text-xs">Content Management</span>
-            <h3 className="font-serif-display text-xl sm:text-2xl font-semibold text-[#1A1A1A]">
-              Your Insights & Publishing
-            </h3>
-          </div>
-
-          {/* Filter Tabs including Bin — Smooth horizontal scroll on mobile */}
-          <div className="flex items-center gap-1.5 sm:gap-2 font-ui text-xs overflow-x-auto pb-1 sm:pb-0 no-scrollbar sm:flex-wrap -mx-1 px-1">
-            {(["all", "published", "draft", "bin"] as const).map((t) => (
+            <span className="eyebrow text-[#A84C32] block mb-1 text-[11px] sm:text-xs">
+              Content &amp; Taxonomy Management
+            </span>
+            <div className="flex items-center gap-2">
               <button
-                key={t}
-                onClick={() => setFilter(t)}
-                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full capitalize font-semibold transition-all cursor-pointer shrink-0 whitespace-nowrap text-xs ${
-                  filter === t
-                    ? t === "bin"
-                      ? "bg-rose-700 text-white shadow-2xs"
-                      : "bg-[#1A1A1A] text-white shadow-2xs"
-                    : "bg-[#FAF8F5] border border-[#E5E1D8] text-[#5C5A55] hover:text-[#1A1A1A]"
+                type="button"
+                onClick={() => setActiveMainTab("insights")}
+                className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+                  activeMainTab === "insights"
+                    ? "bg-[#1A1A1A] text-white shadow-xs"
+                    : "bg-white border border-[#E5E1D8] text-[#5C5A55] hover:text-[#1A1A1A] hover:border-[#A84C32]"
                 }`}
               >
-                {t === "all"
-                  ? `All (${contents.length})`
-                  : t === "published"
-                  ? `Published (${publishedCount})`
-                  : t === "draft"
-                  ? `Drafts (${draftCount})`
-                  : `Bin (${binItems.length})`}
+                <BookOpen className="h-4 w-4" />
+                <span>Insights ({contents.length})</span>
               </button>
-            ))}
+
+              <button
+                type="button"
+                onClick={() => setActiveMainTab("topics")}
+                className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+                  activeMainTab === "topics"
+                    ? "bg-[#1A1A1A] text-white shadow-xs"
+                    : "bg-white border border-[#E5E1D8] text-[#5C5A55] hover:text-[#1A1A1A] hover:border-[#A84C32]"
+                }`}
+              >
+                <Layers className="h-4 w-4" />
+                <span>Topics &amp; Taxonomy ({teacherTopics.length})</span>
+              </button>
+            </div>
           </div>
+
+          {activeMainTab === "insights" ? (
+            /* Filter Tabs including Bin — Smooth horizontal scroll on mobile */
+            <div className="flex items-center gap-1.5 sm:gap-2 font-ui text-xs overflow-x-auto pb-1 sm:pb-0 no-scrollbar sm:flex-wrap -mx-1 px-1">
+              {(["all", "published", "draft", "bin"] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setFilter(t)}
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full capitalize font-semibold transition-all cursor-pointer shrink-0 whitespace-nowrap text-xs ${
+                    filter === t
+                      ? t === "bin"
+                        ? "bg-rose-700 text-white shadow-2xs"
+                        : "bg-[#1A1A1A] text-white shadow-2xs"
+                      : "bg-[#FAF8F5] border border-[#E5E1D8] text-[#5C5A55] hover:text-[#1A1A1A]"
+                  }`}
+                >
+                  {t === "all"
+                    ? `All (${contents.length})`
+                    : t === "published"
+                    ? `Published (${publishedCount})`
+                    : t === "draft"
+                    ? `Drafts (${draftCount})`
+                    : `Bin (${binItems.length})`}
+                </button>
+              ))}
+            </div>
+          ) : (
+            /* Action controls for Topics tab */
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setTopicBinModalOpen(true)}
+                className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
+                  topicBinCount > 0
+                    ? "bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200"
+                    : "bg-white border border-[#E5E1D8] text-[#5C5A55] hover:text-[#1A1A1A] hover:border-[#A84C32]"
+                }`}
+                title="View deleted topics in 30-day Recycle Bin"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                <span>Topic Recycle Bin{topicBinCount > 0 ? ` (${topicBinCount})` : ""}</span>
+              </button>
+
+              <Link
+                href="/teacher/write"
+                className="px-4 py-2 rounded-xl bg-[#A84C32] text-white text-xs font-semibold hover:bg-[#8C3A27] transition-colors flex items-center gap-1.5 shadow-xs"
+                title="Create new topic in Studio"
+              >
+                <PenSquare className="h-3.5 w-3.5" />
+                <span>+ New Topic (Studio)</span>
+              </Link>
+            </div>
+          )}
         </div>
 
-        {/* Search, Taxonomy Filters & Sorting Toolbar (Active for Live & Drafts) */}
-        {filter !== "bin" && contents.length > 0 && (
+        {activeMainTab === "insights" ? (
+          <>
+            {/* Search, Taxonomy Filters & Sorting Toolbar (Active for Live & Drafts) */}
+            {filter !== "bin" && contents.length > 0 && (
           <div className="space-y-3 sm:space-y-4 p-3.5 sm:p-5 rounded-xl sm:rounded-2xl bg-[#FAF8F5] border border-[#E5E1D8]">
             {/* Row 1: Search Bar & Reset */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3">
@@ -648,37 +770,51 @@ export default function TeacherDashboardPage() {
               </div>
             </div>
 
-            {/* Quick Topic Chips / Pills (when multiple topics available) */}
+            {/* Quick Topic Chips / Pills (with Show More/Fewer toggle for clean responsive layout) */}
             {topicOptions.length > 0 && (
-              <div className="pt-2 border-t border-[#E5E1D8]/70 flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
-                <span className="text-[10px] sm:text-[11px] font-semibold text-[#5C5A55] shrink-0">
-                  Topics:
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedTopic("all")}
-                  className={`px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                    selectedTopic === "all"
-                      ? "bg-[#1A1A1A] text-white"
-                      : "bg-white border border-[#E5E1D8] text-[#5C5A55] hover:text-[#1A1A1A]"
-                  }`}
-                >
-                  All ({subjectOptions.reduce((acc, s) => acc + s.count, 0)})
-                </button>
-                {topicOptions.map((t) => (
+              <div className="pt-2 border-t border-[#E5E1D8]/70 space-y-1.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] sm:text-[11px] font-semibold text-[#5C5A55]">
+                    Filter by Topic:
+                  </span>
+                  {topicOptions.length > 6 && (
+                    <button
+                      type="button"
+                      onClick={() => setExpandTopicChips((prev) => !prev)}
+                      className="text-[11px] text-[#A84C32] hover:underline font-semibold cursor-pointer"
+                    >
+                      {expandTopicChips ? "Show fewer topics" : `+${topicOptions.length - 6} more topics`}
+                    </button>
+                  )}
+                </div>
+
+                <div className={`flex items-center gap-1.5 flex-wrap ${expandTopicChips ? "max-h-36 overflow-y-auto pr-1" : ""}`}>
                   <button
-                    key={t.name}
                     type="button"
-                    onClick={() => setSelectedTopic(t.name)}
+                    onClick={() => setSelectedTopic("all")}
                     className={`px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                      selectedTopic === t.name
-                        ? "bg-[#A84C32] text-white"
-                        : "bg-white border border-[#E5E1D8] text-[#5C5A55] hover:text-[#1A1A1A] hover:border-[#A84C32]"
+                      selectedTopic === "all"
+                        ? "bg-[#1A1A1A] text-white"
+                        : "bg-white border border-[#E5E1D8] text-[#5C5A55] hover:text-[#1A1A1A]"
                     }`}
                   >
-                    {t.name} <span className="opacity-75">({t.count})</span>
+                    All ({subjectOptions.reduce((acc, s) => acc + s.count, 0)})
                   </button>
-                ))}
+                  {(expandTopicChips ? topicOptions : topicOptions.slice(0, 6)).map((t) => (
+                    <button
+                      key={t.name}
+                      type="button"
+                      onClick={() => setSelectedTopic(t.name)}
+                      className={`px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                        selectedTopic === t.name
+                          ? "bg-[#A84C32] text-white"
+                          : "bg-white border border-[#E5E1D8] text-[#5C5A55] hover:text-[#1A1A1A] hover:border-[#A84C32]"
+                      }`}
+                    >
+                      {t.name} <span className="opacity-75">({t.count})</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -1107,6 +1243,273 @@ export default function TeacherDashboardPage() {
             </>
           )
         )}
+      </>
+    ) : (
+      /* ─── VIEW: TOPIC MANAGEMENT TABLE & CARDS ─────────────────────── */
+          <div className="space-y-4">
+            {/* Topic Search & Filter Toolbar */}
+            <div className="p-3.5 sm:p-5 rounded-xl sm:rounded-2xl bg-[#FAF8F5] border border-[#E5E1D8] space-y-3">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#5C5A55]" />
+                  <input
+                    type="text"
+                    value={topicSearch}
+                    onChange={(e) => setTopicSearch(e.target.value)}
+                    placeholder="Search topic name, class, subject..."
+                    className="w-full pl-9 sm:pl-10 pr-8 sm:pr-9 py-2 sm:py-2.5 rounded-xl bg-white border border-[#E5E1D8] text-xs font-ui focus:outline-none focus:border-[#A84C32] transition-colors"
+                  />
+                  {topicSearch && (
+                    <button
+                      onClick={() => setTopicSearch("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[#5C5A55] hover:text-[#1A1A1A] cursor-pointer p-1"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                  {/* Class Filter */}
+                  <select
+                    value={topicClassFilter}
+                    onChange={(e) => setTopicClassFilter(e.target.value)}
+                    className="flex-1 sm:flex-none p-2 sm:p-2.5 rounded-xl bg-white border border-[#E5E1D8] text-xs font-ui focus:outline-none focus:border-[#A84C32] cursor-pointer"
+                  >
+                    <option value="all">All Classes</option>
+                    {Array.from(new Set(teacherTopics.map((t) => t.className).filter(Boolean))).map((cls) => (
+                      <option key={cls} value={cls}>
+                        {cls}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Subject Filter */}
+                  <select
+                    value={topicSubjectFilter}
+                    onChange={(e) => setTopicSubjectFilter(e.target.value)}
+                    className="flex-1 sm:flex-none p-2 sm:p-2.5 rounded-xl bg-white border border-[#E5E1D8] text-xs font-ui focus:outline-none focus:border-[#A84C32] cursor-pointer"
+                  >
+                    <option value="all">All Subjects</option>
+                    {Array.from(new Set(teacherTopics.map((t) => t.subjectName).filter(Boolean))).map((sub) => (
+                      <option key={sub} value={sub}>
+                        {sub}
+                      </option>
+                    ))}
+                  </select>
+
+                  {(topicSearch || topicClassFilter !== "all" || topicSubjectFilter !== "all") && (
+                    <button
+                      onClick={() => {
+                        setTopicSearch("");
+                        setTopicClassFilter("all");
+                        setTopicSubjectFilter("all");
+                      }}
+                      className="px-3 py-2 rounded-xl bg-white border border-[#E5E1D8] text-xs font-semibold text-rose-700 hover:bg-rose-50 transition-colors inline-flex items-center gap-1 cursor-pointer shrink-0"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" /> Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] sm:text-xs text-[#5C5A55]">
+                <span>
+                  Showing <strong className="text-[#1A1A1A]">{filteredTeacherTopics.length}</strong> of{" "}
+                  <strong>{teacherTopics.length}</strong> topics
+                </span>
+                <span className="text-[11px] text-[#5C5A55] hidden sm:inline">
+                  All topic edits and deletions include 30-day safety retention.
+                </span>
+              </div>
+            </div>
+
+            {/* Topics Table & Card View */}
+            {loadingTopics ? (
+              <div className="py-16 flex flex-col items-center justify-center text-[#5C5A55] text-xs gap-2">
+                <Loader2 className="h-6 w-6 animate-spin text-[#A84C32]" />
+                <span>Loading your topics…</span>
+              </div>
+            ) : filteredTeacherTopics.length === 0 ? (
+              <div className="py-16 text-center space-y-3 font-serif-body border border-dashed border-[#E5E1D8] rounded-2xl bg-[#FAF8F5]/60">
+                <div className="w-12 h-12 rounded-full bg-[#FBF4F2] text-[#A84C32] flex items-center justify-center mx-auto border border-[#A84C32]/20">
+                  <Layers className="h-6 w-6" />
+                </div>
+                <h4 className="font-serif-display text-lg sm:text-xl font-semibold text-[#1A1A1A]">
+                  {teacherTopics.length === 0 ? "No Topics Created Yet" : "No Matching Topics"}
+                </h4>
+                <p className="text-xs sm:text-sm text-[#5C5A55] max-w-sm mx-auto font-ui">
+                  {teacherTopics.length === 0
+                    ? "You haven't created any topics yet. Topics are created when drafting insights in the studio."
+                    : "No topics match your current search or filter criteria. Try clearing filters."}
+                </p>
+                {teacherTopics.length === 0 && (
+                  <div className="pt-2">
+                    <Link
+                      href="/teacher/write"
+                      className="px-5 py-2.5 rounded-full bg-[#1A1A1A] text-white text-xs font-semibold hover:bg-[#A84C32] transition-colors inline-flex items-center gap-1.5"
+                    >
+                      <PenSquare className="h-3.5 w-3.5" />
+                      <span>Create Topic in Studio</span>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                {/* Mobile Card Grid (sm:hidden) */}
+                <div className="sm:hidden space-y-3 font-ui">
+                  {filteredTeacherTopics.map((topic) => (
+                    <div
+                      key={topic._id}
+                      className="p-4 rounded-xl border border-[#E5E1D8] bg-white hover:border-[#A84C32]/40 transition-colors space-y-3 shadow-2xs"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <h4 className="font-serif-display font-semibold text-base text-[#1A1A1A]">
+                            {topic.name}
+                          </h4>
+                          <div className="flex items-center gap-1.5 text-[11px] text-[#5C5A55] mt-1 flex-wrap">
+                            {topic.className && (
+                              <span className="px-2 py-0.5 rounded-md bg-[#FBF4F2] text-[#A84C32] font-semibold text-[10px] border border-[#A84C32]/20">
+                                {topic.className}
+                              </span>
+                            )}
+                            {topic.subjectName && (
+                              <span className="font-medium text-[#1A1A1A]">
+                                {topic.subjectName}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveMainTab("insights");
+                            setSelectedTopic(topic.name);
+                          }}
+                          className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-[#FAF8F5] border border-[#E5E1D8] text-[#5C5A55] hover:text-[#A84C32] hover:border-[#A84C32] transition-colors shrink-0 cursor-pointer"
+                          title="View insights under this topic"
+                        >
+                          {topic.blogCount} insight{topic.blogCount === 1 ? "" : "s"}
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-[#E5E1D8]/60 text-xs">
+                        <span className="text-[10px] text-[#5C5A55]">
+                          Created {new Date(topic.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        </span>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setTopicToEdit({ id: topic._id, name: topic.name })}
+                            className="p-1.5 px-2.5 rounded-lg border border-[#E5E1D8] bg-white text-xs font-semibold text-[#1A1A1A] hover:border-[#A84C32] hover:text-[#A84C32] flex items-center gap-1 transition-colors cursor-pointer"
+                          >
+                            <Pencil className="h-3 w-3" />
+                            <span>Rename</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTopicToDelete({ id: topic._id, name: topic.name })}
+                            className="p-1.5 px-2.5 rounded-lg border border-red-200 bg-red-50 text-xs font-semibold text-red-600 hover:bg-red-100 flex items-center gap-1 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop / Tablet Table (hidden sm:block) */}
+                <div className="hidden sm:block overflow-x-auto rounded-xl sm:rounded-2xl border border-[#E5E1D8] bg-white shadow-2xs">
+                  <table className="w-full text-left text-xs font-ui border-collapse">
+                    <thead>
+                      <tr className="border-b border-[#E5E1D8] bg-[#FAF8F5] text-[#5C5A55] font-semibold text-[11px] uppercase tracking-wider">
+                        <th className="py-3.5 pl-4">Topic Name</th>
+                        <th className="py-3.5 px-3">Class Level</th>
+                        <th className="py-3.5 px-3">Subject</th>
+                        <th className="py-3.5 px-3 text-center">Linked Insights</th>
+                        <th className="py-3.5 px-3">Created Date</th>
+                        <th className="py-3.5 pr-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#E5E1D8]/60">
+                      {filteredTeacherTopics.map((topic) => (
+                        <tr key={topic._id} className="hover:bg-[#FAF8F5]/80 transition-colors">
+                          <td className="py-3.5 pl-4 font-medium text-[#1A1A1A]">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-lg bg-[#FBF4F2] text-[#A84C32] flex items-center justify-center shrink-0 border border-[#A84C32]/20">
+                                <Layers className="h-3.5 w-3.5" />
+                              </div>
+                              <span className="font-serif-display font-semibold text-sm text-[#1A1A1A]">
+                                {topic.name}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-3">
+                            <span className="px-2 py-0.5 rounded-md bg-[#FBF4F2] text-[#A84C32] font-semibold text-[11px] border border-[#A84C32]/20">
+                              {topic.className || "General"}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-3 font-medium text-[#1A1A1A]">
+                            {topic.subjectName || "General"}
+                          </td>
+                          <td className="py-3.5 px-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveMainTab("insights");
+                                setSelectedTopic(topic.name);
+                              }}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#FAF8F5] border border-[#E5E1D8] text-[#1A1A1A] hover:text-[#A84C32] hover:border-[#A84C32] transition-colors cursor-pointer"
+                              title="Click to view and filter insights in this topic"
+                            >
+                              <BookOpen className="h-3 w-3 text-[#A84C32]" />
+                              <span>{topic.blogCount} insight{topic.blogCount === 1 ? "" : "s"}</span>
+                            </button>
+                          </td>
+                          <td className="py-3.5 px-3 text-[#5C5A55]">
+                            {new Date(topic.createdAt).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })}
+                          </td>
+                          <td className="py-3.5 pr-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setTopicToEdit({ id: topic._id, name: topic.name })}
+                                className="p-1.5 px-2.5 rounded-lg border border-[#E5E1D8] bg-white text-xs font-semibold text-[#1A1A1A] hover:border-[#A84C32] hover:text-[#A84C32] inline-flex items-center gap-1 transition-colors cursor-pointer"
+                                title="Rename Topic"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                                <span>Rename</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setTopicToDelete({ id: topic._id, name: topic.name })}
+                                className="p-1.5 px-2.5 rounded-lg border border-red-200 bg-red-50 text-xs font-semibold text-red-600 hover:bg-red-100 inline-flex items-center gap-1 transition-colors cursor-pointer"
+                                title="Delete Topic (30-day retention)"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                <span>Delete</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ─── MODAL 1: SOFT DELETE CONFIRMATION (MOVE TO BIN) ──────────────────── */}
@@ -1240,6 +1643,49 @@ export default function TeacherDashboardPage() {
           </div>
         </div>
       )}
+
+      {/* ─── TOPIC MANAGEMENT MODALS: EDIT, DELETE (30-DAY RETENTION), RECYCLE BIN ─── */}
+      {topicToEdit && (
+        <TopicEditModal
+          topicId={topicToEdit.id}
+          currentName={topicToEdit.name}
+          isOpen={Boolean(topicToEdit)}
+          onClose={() => setTopicToEdit(null)}
+          onSuccess={(newName: string) => {
+            setTeacherTopics((prev) =>
+              prev.map((t) => (t._id === topicToEdit.id ? { ...t, name: newName } : t))
+            );
+            fetchAnalytics();
+          }}
+        />
+      )}
+
+      {topicToDelete && (
+        <TopicDeleteModal
+          topicId={topicToDelete.id}
+          topicName={topicToDelete.name}
+          isOpen={Boolean(topicToDelete)}
+          onClose={() => setTopicToDelete(null)}
+          onSuccess={() => {
+            // Optimistically remove from local state immediately so UI updates right away
+            setTeacherTopics((prev) => prev.filter((t) => t._id !== topicToDelete!.id));
+            setTopicToDelete(null);
+            // Then also refresh from server to get accurate bin count
+            fetchTeacherTopics();
+            fetchAnalytics();
+            toast.success(`Topic moved to Recycle Bin!`);
+          }}
+        />
+      )}
+
+      <TopicRecycleBinModal
+        isOpen={topicBinModalOpen}
+        onClose={() => setTopicBinModalOpen(false)}
+        onRestored={() => {
+          fetchTeacherTopics();
+          fetchAnalytics();
+        }}
+      />
     </div>
   );
 }

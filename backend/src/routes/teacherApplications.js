@@ -10,11 +10,12 @@ import {
   sendTeacherApprovalEmail,
   sendTeacherRejectionEmail,
 } from '../utils/emailService.js';
+import { applicationLimiter } from '../middleware/rateLimiter.js';
 
 const router = Router();
 
 // ─── POST /api/teacher-applications — Submit a new application ──────────────
-router.post('/', async (req, res, next) => {
+router.post('/', applicationLimiter, async (req, res, next) => {
   try {
     const {
       name, email, phone, dateOfBirth, avatar,

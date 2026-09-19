@@ -31,8 +31,50 @@ export default function BlogDetailClient({
   const [bookmarked, setBookmarked] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // Prevent unauthorized copying, context menu, cutting, and dragging of protected content
+  const handleProtectedAction = useCallback((e: React.SyntheticEvent) => {
+    const target = e.target as HTMLElement;
+    // Allow user interaction inside input, textarea, or elements marked with data-allow-copy
+    if (target.closest("input, textarea, [contenteditable='true'], [data-allow-copy='true']")) {
+      return;
+    }
+    e.preventDefault();
+    toast.error("Content copying and right-click are disabled to protect educator copyright.", {
+      id: "copy-protection-toast",
+      duration: 2500,
+    });
+  }, []);
+
+  // Block keyboard copy shortcuts (Ctrl+C, Ctrl+A, Ctrl+X, Ctrl+U, Ctrl+S, Ctrl+P) on protected content
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      // Allow keyboard shortcuts inside input/textarea fields (e.g. comment box)
+      if (target.closest("input, textarea, [contenteditable='true']")) {
+        return;
+      }
+
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+      if (isCtrlOrCmd) {
+        const key = e.key.toLowerCase();
+        // c: copy, x: cut, a: select all, u: view source, s: save page, p: print
+        if (["c", "x", "a", "u", "s", "p"].includes(key)) {
+          e.preventDefault();
+          toast.error("Content copying is disabled to protect educator copyright.", {
+            id: "copy-protection-toast",
+            duration: 2500,
+          });
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   // Track page view in GA4 when blog details load
   useEffect(() => {
+
     if (blog?.title) {
       trackInsightView({
         insight_id: blog.id,
@@ -217,7 +259,20 @@ export default function BlogDetailClient({
   const contentParagraphs = !hasBlocks ? (blog.content || "").split("\n\n") : [];
 
   return (
-    <article className="pb-24" data-testid="blog-detail">
+    <article
+      className="pb-24 select-none"
+      data-testid="blog-detail"
+      style={{
+        WebkitUserSelect: "none",
+        MozUserSelect: "none",
+        msUserSelect: "none",
+        userSelect: "none",
+      }}
+      onContextMenu={handleProtectedAction}
+      onCopy={handleProtectedAction}
+      onCut={handleProtectedAction}
+      onDragStart={handleProtectedAction}
+    >
       <div className="max-w-3xl mx-auto px-6 pt-10 md:pt-16">
         <Link
           href="/"
@@ -296,6 +351,7 @@ export default function BlogDetailClient({
                 <Clock className="h-3.5 w-3.5 text-[#A84C32]" />
                 <span>{blog.read_minutes} min read</span>
               </div>
+
 
               <button
                 onClick={handleBookmark}
@@ -383,6 +439,7 @@ export default function BlogDetailClient({
                     {blog.read_minutes} min read
                   </span>
                 </div>
+
               </div>
             </div>
 
@@ -528,7 +585,7 @@ export default function BlogDetailClient({
         )}
 
         {/* Appreciation & Share Buttons */}
-        <div className="pt-10 pb-6 flex flex-wrap items-center justify-center gap-4">
+        <div className="pt-4 pb-6 flex flex-wrap items-center justify-center gap-4">
           <button
             onClick={toggleLike}
             data-testid="like-blog-button"
@@ -563,7 +620,11 @@ export default function BlogDetailClient({
       </div>
 
       {/* Reflections / Comments */}
-      <div className="max-w-3xl mx-auto px-6">
+      <div
+        className="max-w-3xl mx-auto px-6 select-text"
+        data-allow-copy="true"
+        style={{ userSelect: "text", WebkitUserSelect: "text" }}
+      >
         <CommentThread
           blogId={blog.id}
           comments={comments}
@@ -571,5 +632,6 @@ export default function BlogDetailClient({
         />
       </div>
     </article>
+
   );
 }
