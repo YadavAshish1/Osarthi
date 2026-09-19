@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description:
     "Send us a note about an insight, a topic you'd love to see, or a teacher you'd like to hear from. We read everything.",
   openGraph: {
-    title: "Get in Touch | Medhashine Student Portal",
+    title: "Get in Touch | Medhashine",
     description:
       "Send us a note about an insight, a topic you'd love to see, or a teacher you'd like to hear from.",
   },

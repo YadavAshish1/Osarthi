@@ -23,14 +23,14 @@ export const metadata: Metadata = {
   },
   title: {
     default: "Medhashine | Insights for Curious Minds",
-    template: "%s | Medhashine Student Portal",
+    template: "%s | Medhashine",
   },
   description:
     "A quiet library of insights, ideas, and encouragements — written by teachers, meant for curious young minds.",
   keywords: [
     "education",
     "insights",
-    "student portal",
+    "learning platform",
     "learning",
     "physics",
     "mathematics",
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "Medhashine Education Team" }],
   creator: "Osarthi Team",
-  publisher: "Medhashine Student Portal",
+  publisher: "Medhashine",
   openGraph: {
     type: "website",
     locale: "en_US",
@@ -49,7 +49,7 @@ export const metadata: Metadata = {
     title: "Medhashine | Insights for Curious Minds",
     description:
       "A quiet library of insights, ideas, and encouragements — written by teachers, meant for curious young minds.",
-    siteName: "Medhashine Student Portal",
+    siteName: "Medhashine",
   },
   twitter: {
     card: "summary_large_image",
@@ -86,7 +86,7 @@ export default function RootLayout({
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "EducationalOrganization",
-    name: "Medhashine Student Portal",
+    name: "Medhashine",
     url: siteUrl,
     description:
       "A quiet library of insights, ideas, and encouragements — written by teachers, meant for curious young minds.",

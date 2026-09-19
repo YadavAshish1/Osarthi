@@ -33,7 +33,7 @@ export default function TeacherProfileClient({
     const shareUrl = typeof window !== "undefined" ? window.location.href : "";
     const shareData = {
       title: `${teacher?.name || "Educator"} | Medhashine`,
-      text: `Check out ${teacher?.name || "this educator"}'s profile and insights on Medhashine Student Portal.`,
+      text: `Check out ${teacher?.name || "this educator"}'s profile and insights on Medhashine.`,
       url: shareUrl,
     };
 

@@ -150,7 +150,7 @@ export default function BlogDetailClient({
   // Update browser document.title dynamically when blog is loaded
   useEffect(() => {
     if (blog?.title) {
-      document.title = `${blog.title} | Medhashine Student Portal`;
+      document.title = `${blog.title} | Medhashine`;
     }
   }, [blog]);
 

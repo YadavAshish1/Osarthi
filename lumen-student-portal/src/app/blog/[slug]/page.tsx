@@ -48,7 +48,7 @@ export async function generateMetadata({
   }
 
   const title = blog.title;
-  const description = blog.excerpt || `Read "${blog.title}" by ${blog.teacher_name} on Medhashine Student Portal.`;
+  const description = blog.excerpt || `Read "${blog.title}" by ${blog.teacher_name} on Medhashine.`;
   const coverUrl = blog.cover || getDefaultSubjectCover(blog.subject);
 
   return {
@@ -66,7 +66,7 @@ export async function generateMetadata({
     ],
     authors: [{ name: blog.teacher_name }],
     openGraph: {
-      title: `${blog.title} | Medhashine Student Portal`,
+      title: `${blog.title} | Medhashine`,
       description,
       type: "article",
       publishedTime: blog.created_at,
@@ -75,7 +75,7 @@ export async function generateMetadata({
     },
     twitter: {
       card: "summary_large_image",
-      title: `${blog.title} | Medhashine Student Portal`,
+      title: `${blog.title} | Medhashine`,
       description,
       images: coverUrl ? [coverUrl] : [],
     },
@@ -109,7 +109,7 @@ export default async function BlogDetailPage({
         },
         publisher: {
           "@type": "Organization",
-          name: "Medhashine Student Portal",
+          name: "Medhashine",
           url: process.env.NEXT_PUBLIC_SITE_URL || "https://www.medhashine.in",
         },
         articleSection: blog.subject,

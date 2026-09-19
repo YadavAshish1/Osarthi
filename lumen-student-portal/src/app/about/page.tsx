@@ -2,10 +2,10 @@ import React from "react";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "About Us | Medhashine Student Portal",
+  title: "About Us | Medhashine",
   description: "A quiet room for insights written by teachers who care.",
   openGraph: {
-    title: "About Us | Medhashine Student Portal",
+    title: "About Us | Medhashine",
     description: "A quiet room for insights written by teachers who care.",
     images: [{ url: "/assets/images/branding.jpg", alt: "Medhashine Brand Showcase" }],
   },

@@ -3,7 +3,7 @@ import TeachersListClient from "./TeachersListClient";
 import { API, TeacherProfile, FALLBACK_FACETS } from "@/lib/api";
 
 export const metadata: Metadata = {
-  title: "Find My Teachers & Educators | Medhashine Student Portal",
+  title: "Find My Teachers & Educators | Medhashine",
   description:
     "Explore and connect with verified Medhashine faculty members, read their academic articles, and discover educator profiles designed for curious minds.",
   keywords: [
@@ -11,18 +11,17 @@ export const metadata: Metadata = {
     "Educator Directory",
     "Medhashine Teachers",
     "Faculty Profiles",
-    "Student Portal Teachers",
     "Academic Mentors",
   ],
   openGraph: {
-    title: "Find My Teachers & Educators | Medhashine Student Portal",
+    title: "Find My Teachers & Educators | Medhashine",
     description:
       "Explore and connect with verified Medhashine faculty members, read their academic articles, and discover educator profiles.",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Find My Teachers & Educators | Medhashine Student Portal",
+    title: "Find My Teachers & Educators | Medhashine",
     description:
       "Explore and connect with verified Medhashine faculty members, read their academic articles, and discover educator profiles.",
   },
@@ -144,7 +143,7 @@ export default async function FindTeachersPage() {
     "@context": "https://schema.org",
     "@type": "ItemList",
     name: "Medhashine Faculty & Educators",
-    description: "Verified teachers and academic mentors on Medhashine Student Portal",
+    description: "Verified teachers and academic mentors on Medhashine",
     itemListElement: teachers.map((teacher, index) => ({
       "@type": "ListItem",
       position: index + 1,

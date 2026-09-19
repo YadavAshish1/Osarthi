@@ -58,7 +58,7 @@ export async function generateMetadata({
   const title = `${teacher.name} | Medhashine Educator Profile`;
   const description =
     teacher.bio ||
-    `Read academic insights, qualifications, and educational articles authored by ${teacher.name} on Medhashine Student Portal.`;
+    `Read academic insights, qualifications, and educational articles authored by ${teacher.name} on Medhashine.`;
 
   return {
     title,

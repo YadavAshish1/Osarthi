@@ -84,7 +84,7 @@ export default function Footer() {
       </div>
 
       <div className="max-w-screen-xl mx-auto px-6 md:px-12 mt-12 pt-8 border-t border-[#E5E1D8]/60 flex flex-col sm:flex-row justify-between items-center text-xs font-ui text-[#5C5A55]/80 gap-4">
-        <div>© {new Date().getFullYear()} Medhashine Student Portal. All rights reserved.</div>
+        <div>© {new Date().getFullYear()} Medhashine. All rights reserved.</div>
         <div>Designed with clarity for curious minds.</div>
       </div>
     </footer>

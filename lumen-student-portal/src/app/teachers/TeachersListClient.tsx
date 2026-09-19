@@ -228,7 +228,7 @@ export default function TeachersListClient({
       try {
         await navigator.share({
           title: `${teacher.name} | Medhashine Educator`,
-          text: `Check out ${teacher.name}'s profile and teaching insights on Medhashine Student Portal!`,
+          text: `Check out ${teacher.name}'s profile and teaching insights on Medhashine!`,
           url: profileUrl,
         });
         return;

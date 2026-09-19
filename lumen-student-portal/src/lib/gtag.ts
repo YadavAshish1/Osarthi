@@ -25,7 +25,7 @@ export const event = (
   }
 };
 
-// ─── Pre-defined Custom Event Helpers for Medhashine Student Portal ──────────
+// ─── Pre-defined Custom Event Helpers for Medhashine ──────────
 
 /** Track when a student reads an academic insight */
 export const trackInsightView = (data: {
