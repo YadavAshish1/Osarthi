@@ -1,7 +1,13 @@
+"use client";
+
 import React from "react";
 import Link from "next/link";
+import { useAuth } from "@/context/AuthContext";
 
 export default function Footer() {
+  const { user } = useAuth();
+  const isTeacher = user?.role === "teacher";
+
   return (
     <footer
       data-testid="site-footer"
@@ -39,11 +45,25 @@ export default function Footer() {
                   Find Teachers
                 </Link>
               </li>
-              <li>
-                <Link href="/become-a-teacher" className="hover:text-[#1A1A1A] transition-colors">
-                  Become a Teacher
-                </Link>
-              </li>
+              {/* Only show "Become a Teacher" if user is NOT already a teacher */}
+              {!isTeacher && (
+                <li>
+                  <Link href="/become-a-teacher" className="hover:text-[#1A1A1A] transition-colors">
+                    Become a Teacher
+                  </Link>
+                </li>
+              )}
+              {/* Show Teacher Studio link if user IS a teacher */}
+              {isTeacher && (
+                <li>
+                  <Link
+                    href="/teacher/dashboard"
+                    className="hover:text-[#1A1A1A] transition-colors text-[#A84C32] font-medium"
+                  >
+                    Teacher Studio
+                  </Link>
+                </li>
+              )}
               <li>
                 <Link href="/about" className="hover:text-[#1A1A1A] transition-colors">
                   Our Story
@@ -58,7 +78,7 @@ export default function Footer() {
           </div>
 
           <div>
-            <div className="eyebrow text-[#A84C32] mb-4">Trust & Legal</div>
+            <div className="eyebrow text-[#A84C32] mb-4">Trust &amp; Legal</div>
             <ul className="space-y-2.5">
               <li>
                 <Link
@@ -73,12 +93,12 @@ export default function Footer() {
                   href="/terms"
                   className="text-[#1A1A1A] font-medium hover:text-[#A84C32] transition-colors flex items-center gap-1.5"
                 >
-                  Terms & Copyright
+                  Terms &amp; Copyright
                 </Link>
               </li>
               <li>
                 <Link href="/privacy#minors" className="hover:text-[#1A1A1A] transition-colors">
-                  Child Safety & Minors
+                  Child Safety &amp; Minors
                 </Link>
               </li>
               <li>
@@ -87,8 +107,11 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/help" className="hover:text-[#1A1A1A] transition-colors text-[#A84C32] font-medium">
-                  Help & Support Center
+                <Link
+                  href="/help"
+                  className="hover:text-[#1A1A1A] transition-colors text-[#A84C32] font-medium"
+                >
+                  Help &amp; Support Center
                 </Link>
               </li>
             </ul>
