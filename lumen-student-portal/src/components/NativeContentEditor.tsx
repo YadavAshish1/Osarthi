@@ -568,7 +568,7 @@ export default function NativeContentEditor({
       />
 
       {/* Editor Control Header */}
-      <div className="p-5 md:p-6 rounded-3xl bg-[#FAF8F5] border border-[#E5E1D8] flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
+      <div className="p-4 sm:p-5 md:p-6 rounded-2xl sm:rounded-3xl bg-[#FAF8F5] border border-[#E5E1D8] flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
         <div>
           <span className="eyebrow text-[#A84C32] block mb-1 text-[11px] uppercase font-bold tracking-wider">
             Interactive Native Editor
@@ -670,7 +670,7 @@ export default function NativeContentEditor({
         /* Native Interactive Editing Workspace */
         <div className="space-y-6">
           {/* Title Field */}
-          <div className="p-6 rounded-2xl bg-white border border-[#E5E1D8] shadow-xs">
+          <div className="p-4 sm:p-6 rounded-xl sm:rounded-2xl bg-white border border-[#E5E1D8] shadow-xs">
             <label className="text-[11px] font-semibold uppercase tracking-wider text-[#5C5A55] block mb-2">
               Insight Title
             </label>
@@ -679,7 +679,7 @@ export default function NativeContentEditor({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Enter a compelling title for your insight…"
-              className="w-full text-2xl md:text-3xl font-serif-display font-semibold text-[#1A1A1A] focus:outline-none placeholder:text-[#5C5A55]/40"
+              className="w-full text-xl sm:text-2xl md:text-3xl font-serif-display font-semibold text-[#1A1A1A] focus:outline-none placeholder:text-[#5C5A55]/40"
             />
           </div>
 
@@ -870,10 +870,10 @@ export default function NativeContentEditor({
             {blocks.map((block, idx) => (
               <div
                 key={block.id}
-                className="p-5 rounded-2xl bg-white border border-[#E5E1D8] shadow-xs space-y-3 relative group"
+                className="p-3.5 sm:p-5 rounded-xl sm:rounded-2xl bg-white border border-[#E5E1D8] shadow-xs space-y-3 relative group"
               >
                 {/* Block Controls Header with Text Alignment */}
-                <div className="flex items-center justify-between text-xs text-[#5C5A55] border-b border-[#E5E1D8]/60 pb-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#5C5A55] border-b border-[#E5E1D8]/60 pb-2">
                   <div className="flex items-center gap-3">
                     <span className="font-mono text-[11px] uppercase font-semibold text-[#A84C32]">
                       #{idx + 1} {block.type} {block.level ? `(H${block.level})` : ""}

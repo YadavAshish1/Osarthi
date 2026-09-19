@@ -162,9 +162,9 @@ export default function WriteInsightPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-10 md:py-14 space-y-10 font-ui">
+    <div className="max-w-6xl mx-auto px-3.5 sm:px-6 py-6 sm:py-10 md:py-14 space-y-6 sm:space-y-10 font-ui">
       {/* Top Header Navigation */}
-      <div className="flex items-center justify-between border-b border-[#E5E1D8] pb-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-[#E5E1D8] pb-4 sm:pb-6">
         <Link
           href="/profile"
           className="inline-flex items-center gap-2 font-ui text-xs tracking-widest uppercase text-[#5C5A55] hover:text-[#A84C32] transition-colors"
@@ -181,15 +181,15 @@ export default function WriteInsightPage() {
       </div>
 
       {/* Step 1: Select Topic */}
-      <div className="p-8 md:p-10 rounded-3xl bg-white border border-[#E5E1D8] shadow-xs space-y-6">
-        <div className="border-b border-[#E5E1D8] pb-6">
-          <span className="eyebrow text-[#A84C32] bg-[#FBF4F2] px-3 py-1 rounded-full border border-[#A84C32]/20 inline-block mb-2 font-bold">
+      <div className="p-4 sm:p-8 md:p-10 rounded-2xl sm:rounded-3xl bg-white border border-[#E5E1D8] shadow-xs space-y-4 sm:space-y-6">
+        <div className="border-b border-[#E5E1D8] pb-4 sm:pb-6">
+          <span className="eyebrow text-[#A84C32] bg-[#FBF4F2] px-3 py-1 rounded-full border border-[#A84C32]/20 inline-block mb-2 font-bold text-xs">
             Step 1: Topic Taxonomy Selection
           </span>
-          <h2 className="font-serif-display text-3xl font-semibold text-[#1A1A1A]">
+          <h2 className="font-serif-display text-2xl sm:text-3xl font-semibold text-[#1A1A1A]">
             Select or Create Class, Subject & Topic
           </h2>
-          <p className="text-sm font-serif-body text-[#5C5A55] mt-1">
+          <p className="text-xs sm:text-sm font-serif-body text-[#5C5A55] mt-1">
             Choose the academic category where this insight will be published for students.
           </p>
         </div>
@@ -199,7 +199,7 @@ export default function WriteInsightPage() {
 
       {/* Step 2: Native Content Editor */}
       {selection?.topicId ? (
-        <div className="p-8 md:p-10 rounded-3xl bg-white border border-[#E5E1D8] shadow-xs">
+        <div className="p-4 sm:p-8 md:p-10 rounded-2xl sm:rounded-3xl bg-white border border-[#E5E1D8] shadow-xs">
           <NativeContentEditor
             topicId={selection.topicId}
             classId={selection.classId}
@@ -213,12 +213,12 @@ export default function WriteInsightPage() {
           />
         </div>
       ) : (
-        <div className="p-12 text-center bg-white rounded-3xl border border-[#E5E1D8] text-[#5C5A55]">
-          <BookOpen className="h-10 w-10 text-[#A84C32] mx-auto mb-3 opacity-60" />
-          <h3 className="font-serif-display text-2xl font-semibold text-[#1A1A1A]">
+        <div className="p-8 sm:p-12 text-center bg-white rounded-2xl sm:rounded-3xl border border-[#E5E1D8] text-[#5C5A55]">
+          <BookOpen className="h-8 w-8 sm:h-10 sm:w-10 text-[#A84C32] mx-auto mb-3 opacity-60" />
+          <h3 className="font-serif-display text-xl sm:text-2xl font-semibold text-[#1A1A1A]">
             Select a Topic Above to Launch Editor
           </h3>
-          <p className="font-serif-body text-sm mt-1 max-w-md mx-auto">
+          <p className="font-serif-body text-xs sm:text-sm mt-1 max-w-md mx-auto">
             Once you pick a topic, the full Medhashine Insight Editor and AI Assistant will load here.
           </p>
         </div>

@@ -47,8 +47,8 @@ export default function EditInsightPage({ params }: { params: Promise<{ id: stri
   if (!content) return null;
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-10 md:py-14 space-y-8 font-ui">
-      <div className="flex items-center justify-between border-b border-[#E5E1D8] pb-6">
+    <div className="max-w-6xl mx-auto px-3.5 sm:px-6 py-6 sm:py-10 md:py-14 space-y-6 sm:space-y-8 font-ui">
+      <div className="flex items-center justify-between border-b border-[#E5E1D8] pb-4 sm:pb-6">
         <Link
           href="/teacher/dashboard"
           className="inline-flex items-center gap-2 font-ui text-xs tracking-widest uppercase text-[#5C5A55] hover:text-[#A84C32] transition-colors"
@@ -57,7 +57,7 @@ export default function EditInsightPage({ params }: { params: Promise<{ id: stri
         </Link>
       </div>
 
-      <div className="p-8 md:p-10 rounded-3xl bg-white border border-[#E5E1D8] shadow-xs">
+      <div className="p-4 sm:p-8 md:p-10 rounded-2xl sm:rounded-3xl bg-white border border-[#E5E1D8] shadow-xs">
         <NativeContentEditor
           topicId={content.topicRef}
           contentId={content._id}

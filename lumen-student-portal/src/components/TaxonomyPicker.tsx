@@ -200,23 +200,23 @@ export default function TaxonomyPicker({ allowCreate = true, initialSelection, o
   return (
     <div className="space-y-4 font-ui">
       {/* Top Banner Notice */}
-      <div className="p-3.5 px-4 rounded-2xl bg-[#FAF8F5] border border-[#E5E1D8] flex items-center justify-between text-xs text-[#5C5A55]">
+      <div className="p-3 sm:p-3.5 px-3.5 sm:px-4 rounded-xl sm:rounded-2xl bg-[#FAF8F5] border border-[#E5E1D8] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-[#5C5A55]">
         <div className="flex items-center gap-2">
           <Clock className="h-4 w-4 text-[#A84C32] shrink-0" />
           <span>Can't find a specific Class or Subject? Submit a request to Admins for review.</span>
         </div>
         <Link
           href="/teacher/requests"
-          className="text-[#A84C32] font-semibold hover:underline flex items-center gap-1 shrink-0 ml-2"
+          className="text-[#A84C32] font-semibold hover:underline flex items-center gap-1 shrink-0 self-end sm:self-auto"
         >
           <span>View Request History</span>
           <ExternalLink className="h-3 w-3" />
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
         {/* 1. Class Selector */}
-        <div className="p-6 rounded-2xl bg-[#FAF8F5] border border-[#E5E1D8] space-y-4">
+        <div className="p-4 sm:p-6 rounded-xl sm:rounded-2xl bg-[#FAF8F5] border border-[#E5E1D8] space-y-3 sm:space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-[#1A1A1A]">
               <BookOpen className="h-4 w-4 text-[#A84C32]" />
@@ -289,7 +289,7 @@ export default function TaxonomyPicker({ allowCreate = true, initialSelection, o
         </div>
 
         {/* 2. Subject Selector */}
-        <div className={`p-6 rounded-2xl border transition-all space-y-4 ${classId ? "bg-[#FAF8F5] border-[#E5E1D8]" : "bg-[#F5F2EB]/50 border-dashed border-[#E5E1D8] opacity-60"}`}>
+        <div className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl border transition-all space-y-3 sm:space-y-4 ${classId ? "bg-[#FAF8F5] border-[#E5E1D8]" : "bg-[#F5F2EB]/50 border-dashed border-[#E5E1D8] opacity-60"}`}>
           <div className="flex items-center gap-2 text-[#1A1A1A]">
             <Layers className="h-4 w-4 text-[#A84C32]" />
             <h4 className="font-serif-display text-lg font-semibold">2. Select Subject</h4>
@@ -361,7 +361,7 @@ export default function TaxonomyPicker({ allowCreate = true, initialSelection, o
         </div>
 
         {/* 3. Topic Selector — Direct Add Topic Intact */}
-        <div className={`p-6 rounded-2xl border transition-all space-y-4 ${subjectId ? "bg-[#FAF8F5] border-[#E5E1D8]" : "bg-[#F5F2EB]/50 border-dashed border-[#E5E1D8] opacity-60"}`}>
+        <div className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl border transition-all space-y-3 sm:space-y-4 ${subjectId ? "bg-[#FAF8F5] border-[#E5E1D8]" : "bg-[#F5F2EB]/50 border-dashed border-[#E5E1D8] opacity-60"}`}>
           <div className="flex items-center gap-2 text-[#1A1A1A]">
             <CheckCircle2 className="h-4 w-4 text-[#A84C32]" />
             <h4 className="font-serif-display text-lg font-semibold">3. Select Topic</h4>
