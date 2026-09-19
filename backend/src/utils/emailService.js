@@ -55,13 +55,31 @@ export async function sendOtpEmail(toEmail, otp, name) {
   }
 }
 
-function getAdminRecipientEmails() {
+export function getAdminRecipientEmails() {
   const raw = process.env.ADMIN_EMAIL || process.env.CONTACT_EMAIL || '';
   const emails = raw
     .split(',')
     .map((e) => e.trim())
     .filter(Boolean);
   return emails.length > 0 ? emails : ['delivered@resend.dev'];
+}
+
+export function getPrivacyRecipientEmails() {
+  const raw = process.env.PRIVACY_EMAIL || process.env.ADMIN_EMAIL || process.env.CONTACT_EMAIL || '';
+  const emails = raw
+    .split(',')
+    .map((e) => e.trim())
+    .filter(Boolean);
+  return emails.length > 0 ? emails : getAdminRecipientEmails();
+}
+
+export function getGrievanceRecipientEmails() {
+  const raw = process.env.GRIEVANCE_EMAIL || process.env.GRIEVIENCE_EMAIL || process.env.PRIVACY_EMAIL || process.env.ADMIN_EMAIL || process.env.CONTACT_EMAIL || '';
+  const emails = raw
+    .split(',')
+    .map((e) => e.trim())
+    .filter(Boolean);
+  return emails.length > 0 ? emails : getAdminRecipientEmails();
 }
 
 export async function sendContactEmail({ name, email, isTeacher, message }) {
@@ -111,6 +129,62 @@ export async function sendContactEmail({ name, email, isTeacher, message }) {
     return { success: true, data };
   } catch (err) {
     console.error('[sendContactEmail Exception]', err);
+    throw err;
+  }
+}
+
+export async function sendPrivacyInquiryNotification({ name, email, inquiryType = 'privacy', message }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.EMAIL_FROM || 'Medhashine <noreply@medhashine.in>';
+  const recipients = inquiryType === 'grievance' 
+    ? getGrievanceRecipientEmails() 
+    : getPrivacyRecipientEmails();
+
+  console.log(`[Privacy/Grievance Submission]\nType: ${inquiryType}\nFrom: ${name} <${email}>\nRecipients: ${recipients.join(', ')}\nMessage: ${message}`);
+
+  if (!apiKey) {
+    console.warn('[Resend] RESEND_API_KEY is not set. Submission logged to server console above.');
+    return { success: true, devMode: true };
+  }
+
+  const client = getResendClient();
+  const isGrievance = inquiryType === 'grievance';
+  const badgeColor = isGrievance ? '#DC2626' : '#0D9488';
+  const title = isGrievance ? 'NEW GRIEVANCE REDRESSAL TICKET' : 'NEW PRIVACY & DATA RIGHTS REQUEST';
+
+  const html = `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #E5E1D8; border-radius: 12px; background-color: #FAF8F5;">
+      <div style="background-color: ${badgeColor}; color: #ffffff; padding: 12px 20px; border-radius: 8px 8px 0 0; font-size: 14px; font-weight: bold; letter-spacing: 1px;">
+        ${title} — MEDHASHINE
+      </div>
+      <div style="padding: 20px; background-color: #ffffff; border: 1px solid #E5E1D8; border-top: none; border-radius: 0 0 8px 8px;">
+        <p style="margin: 0 0 12px 0; font-size: 15px; color: #1A1A1A;"><strong>Sender:</strong> ${name}</p>
+        <p style="margin: 0 0 12px 0; font-size: 15px; color: #1A1A1A;"><strong>Email:</strong> <a href="mailto:${email}" style="color: #A84C32;">${email}</a></p>
+        <p style="margin: 0 0 16px 0; font-size: 15px; color: #1A1A1A;"><strong>Category:</strong> ${isGrievance ? 'Grievance / DPDP Officer Redressal' : 'Privacy / Personal Data Charter'}</p>
+        <hr style="border: none; border-top: 1px solid #E5E1D8; margin: 16px 0;" />
+        <p style="margin: 0 0 8px 0; font-size: 13px; color: #5C5A55; font-weight: bold; text-transform: uppercase;">Message & Details:</p>
+        <div style="white-space: pre-wrap; font-size: 15px; line-height: 1.6; color: #2A2A2A; background-color: #FAF8F5; padding: 16px; border-radius: 8px; border: 1px solid #E5E1D8;">${message}</div>
+      </div>
+    </div>
+  `;
+
+  try {
+    const { data, error } = await client.emails.send({
+      from: fromEmail,
+      to: recipients,
+      replyTo: email,
+      subject: `[Medhashine ${isGrievance ? 'Grievance' : 'Privacy'}] Inquiry from ${name}`,
+      html,
+    });
+
+    if (error) {
+      console.error('[Resend Error]', error);
+      throw new Error(error.message || 'Failed to send privacy notification email via Resend');
+    }
+
+    return { success: true, data };
+  } catch (err) {
+    console.error('[sendPrivacyInquiryNotification Exception]', err);
     throw err;
   }
 }

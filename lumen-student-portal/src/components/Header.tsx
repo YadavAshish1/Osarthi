@@ -9,18 +9,24 @@ import { api } from "@/lib/api";
 import { trackSearch } from "@/lib/gtag";
 
 export default function Header({ onSearch }: { onSearch?: (q: string) => void }) {
-  const { user, logout, openAuth } = useAuth();
+  const { user, ready, logout, openAuth } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
 
+  const [mounted, setMounted] = useState(false);
   const [q, setQ] = useState(searchParams.get("q") || "");
   const [menuOpen, setMenuOpen] = useState(false);
   const [teacherStatus, setTeacherStatus] = useState<"none" | "pending" | "approved">("none");
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     setMenuOpen(false);
   }, [pathname]);
+
 
   // Support ?auth=login or ?auth=register query param
   useEffect(() => {
@@ -139,8 +145,11 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
             Help Center
           </Link>
 
-          {user ? (
-            <div className="flex items-center gap-2.5 lg:gap-3.5 pl-3 lg:pl-4 border-l border-[#E5E1D8] shrink-0">
+          {mounted && ready && user ? (
+            <div
+              suppressHydrationWarning
+              className="flex items-center gap-2.5 lg:gap-3.5 pl-3 lg:pl-4 border-l border-[#E5E1D8] shrink-0"
+            >
               {teacherStatus === "approved" && (
                 <Link
                   href="/teacher/write"
@@ -200,7 +209,10 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-3 pl-3 lg:pl-4 border-l border-[#E5E1D8] shrink-0">
+            <div
+              suppressHydrationWarning
+              className="flex items-center gap-3 pl-3 lg:pl-4 border-l border-[#E5E1D8] shrink-0"
+            >
               <button
                 onClick={() => openAuth("login")}
                 data-testid="open-auth-button"
@@ -210,6 +222,7 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
               </button>
             </div>
           )}
+
         </nav>
 
         {/* Mobile menu toggle */}
@@ -271,7 +284,7 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
             </Link>
 
             {/* Teacher Quick Actions in Mobile Drawer */}
-            {teacherStatus === "approved" && (
+            {mounted && ready && teacherStatus === "approved" && (
               <Link
                 href="/teacher/write"
                 className="w-full py-2.5 px-4 rounded-full bg-[#A84C32] text-white hover:bg-[#8C3A27] transition-colors font-medium text-sm flex items-center justify-center gap-2 shadow-2xs mt-2"
@@ -281,7 +294,7 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
               </Link>
             )}
 
-            {teacherStatus === "pending" && (
+            {mounted && ready && teacherStatus === "pending" && (
               <Link
                 href="/profile"
                 className="w-full py-2 px-4 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-semibold text-xs flex items-center justify-center gap-1.5 hover:bg-amber-200 transition-colors mt-2"
@@ -291,7 +304,7 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
               </Link>
             )}
 
-            {(!user || (teacherStatus === "none" && user.role !== "teacher")) && (
+            {(!mounted || !ready || !user || (teacherStatus === "none" && user.role !== "teacher")) && (
               <Link
                 href="/become-a-teacher"
                 className="w-full py-2 px-4 rounded-full bg-white border border-[#E5E1D8] text-[#1A1A1A] hover:border-[#A84C32] hover:text-[#A84C32] transition-colors font-medium text-xs flex items-center justify-center gap-1.5 mt-2"
@@ -300,7 +313,7 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
               </Link>
             )}
 
-            {user ? (
+            {mounted && ready && user ? (
               <div className="pt-4 border-t border-[#E5E1D8] flex items-center justify-between">
                 <Link
                   href="/profile"
@@ -335,6 +348,7 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
                 Sign In
               </button>
             )}
+
           </div>
         </div>
       )}
