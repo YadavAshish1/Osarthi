@@ -514,7 +514,7 @@ export default function BecomeTeacherClient() {
         {view === "form" && (
           <div className="max-w-3xl mx-auto bg-white rounded-3xl border border-[#E5E1D8] shadow-sm overflow-hidden">
             {/* Form Progress Header */}
-            <div className="bg-[#FAF8F5] px-8 py-6 border-b border-[#E5E1D8]">
+            <div className="bg-[#FAF8F5] px-4 sm:px-8 py-4 sm:py-6 border-b border-[#E5E1D8]">
               <div className="flex items-center justify-between mb-4">
                 <button
                   onClick={() => setView("overview")}
@@ -553,7 +553,7 @@ export default function BecomeTeacherClient() {
               </div>
             </div>
 
-            <div className="p-8 md:p-10">
+            <div className="p-4 sm:p-8 md:p-10">
               {/* STEP 1: Personal Details */}
               {currentStep === 1 && (
                 <div className="space-y-6 animate-fadeIn">
@@ -581,7 +581,7 @@ export default function BecomeTeacherClient() {
                       </span>
                     </div>
                   ) : (
-                    <div className="p-6 rounded-2xl bg-[#FAF8F5] border border-[#E5E1D8] space-y-4">
+                    <div className="p-4 sm:p-6 rounded-2xl bg-[#FAF8F5] border border-[#E5E1D8] space-y-4">
                       <div className="flex items-center justify-between pb-3 border-b border-[#E5E1D8]">
                         <span className="text-xs font-bold text-[#A84C32] uppercase tracking-wider">
                           Email OTP Signup
@@ -664,28 +664,49 @@ export default function BecomeTeacherClient() {
                           <label className="block text-xs font-semibold text-[#A84C32] uppercase tracking-wider">
                             Enter 6-Digit OTP Code (sent to {email})
                           </label>
-                          <div className="flex gap-2">
+                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-2">
                             <input
                               type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
                               maxLength={6}
                               value={otp}
-                              onChange={(e) => setOtp(e.target.value)}
+                              onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
                               placeholder="123456"
-                              className="flex-1 px-4 py-2.5 rounded-xl border border-[#A84C32] text-center tracking-[8px] font-mono text-lg font-bold focus:outline-none bg-white"
+                              className="w-full sm:flex-1 min-w-0 px-4 py-3 sm:py-2.5 rounded-xl border border-[#A84C32] text-center tracking-[6px] sm:tracking-[8px] font-mono text-lg font-bold focus:outline-none bg-white shadow-sm"
                             />
                             <button
                               type="button"
                               onClick={handleVerifyOtpAndSignup}
-                              disabled={verifyingOtp}
-                              className="px-6 py-2.5 rounded-xl bg-[#A84C32] text-white text-xs font-semibold hover:bg-[#8B3A25] transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                              disabled={verifyingOtp || otp.length !== 6}
+                              className="w-full sm:w-auto px-6 py-3 sm:py-2.5 rounded-xl bg-[#A84C32] text-white text-xs font-semibold hover:bg-[#8B3A25] transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shrink-0 shadow-sm"
                             >
                               {verifyingOtp ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin" /> Verifying...
+                                </>
                               ) : (
                                 <>
-                                  Verify & Sign Up <Check className="h-4 w-4" />
+                                  Verify OTP & Sign Up <Check className="h-4 w-4" />
                                 </>
                               )}
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs text-[#5C5A55]">
+                            <button
+                              type="button"
+                              onClick={() => setOtpSent(false)}
+                              className="text-[#5C5A55] hover:text-[#1A1A1A] underline cursor-pointer"
+                            >
+                              Edit Details
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleSendOtpCode}
+                              disabled={sendingOtp}
+                              className="text-[#A84C32] font-semibold hover:underline cursor-pointer disabled:opacity-50"
+                            >
+                              {sendingOtp ? "Resending..." : "Resend OTP"}
                             </button>
                           </div>
                         </div>
@@ -805,7 +826,7 @@ export default function BecomeTeacherClient() {
                             />
                           </div>
                         </div>
-                        <div className="w-1/3">
+                        <div className="w-full sm:w-1/3">
                           <span className="text-[11px] text-[#5C5A55]">Completion Year</span>
                           <input
                             type="text"
@@ -866,18 +887,18 @@ export default function BecomeTeacherClient() {
                       <p className="text-[11px] text-[#5C5A55]">
                         Can't find your subject in the list above? Type it below to request admin to add it to the database.
                       </p>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                         <input
                           type="text"
                           value={customSubject}
                           onChange={(e) => setCustomSubject(e.target.value)}
                           placeholder="e.g. व्याकरण, हिंदी पद्य, Robotics..."
-                          className="flex-1 px-3.5 py-2 rounded-xl border border-[#E5E1D8] text-xs focus:outline-none focus:border-[#A84C32] bg-white"
+                          className="w-full sm:flex-1 min-w-0 px-3.5 py-2 rounded-xl border border-[#E5E1D8] text-xs focus:outline-none focus:border-[#A84C32] bg-white"
                         />
                         <button
                           type="button"
                           onClick={handleAddProposedSubject}
-                          className="px-4 py-2 rounded-xl bg-[#1A1A1A] text-white text-xs font-semibold hover:bg-[#A84C32] transition-colors shrink-0 cursor-pointer"
+                          className="w-full sm:w-auto px-4 py-2.5 sm:py-2 rounded-xl bg-[#1A1A1A] text-white text-xs font-semibold hover:bg-[#A84C32] transition-colors shrink-0 cursor-pointer"
                         >
                           Propose Subject
                         </button>
@@ -962,7 +983,7 @@ export default function BecomeTeacherClient() {
                             />
                           </div>
                         </div>
-                        <div className="w-1/2">
+                        <div className="w-full sm:w-1/2">
                           <span className="text-[11px] text-[#5C5A55]">Duration</span>
                           <input
                             type="text"
@@ -1073,7 +1094,7 @@ export default function BecomeTeacherClient() {
               )}
 
               {/* Navigation Bar */}
-              <div className="mt-10 flex items-center justify-between pt-6 border-t border-[#E5E1D8]">
+              <div className="mt-10 flex flex-wrap items-center justify-between gap-3 pt-6 border-t border-[#E5E1D8]">
                 {currentStep > 1 ? (
                   <button
                     type="button"
