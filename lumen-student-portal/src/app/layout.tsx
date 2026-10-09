@@ -7,6 +7,7 @@ import Footer from "@/components/Footer";
 import AuthModal from "@/components/AuthModal";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
 import CookieConsentBanner from "@/components/CookieConsentBanner";
+import Script from "next/script";
 import { Toaster } from "sonner";
 
 export const viewport: Viewport = {
@@ -34,6 +35,8 @@ export const metadata: Metadata = {
     "learning platform",
     "learning",
     "physics",
+    "hindi",
+    "chemistry",
     "mathematics",
     "literature",
     "teachers",
@@ -103,6 +106,13 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col bg-[#FAF8F5] text-[#1A1A1A]">
+        <Script
+          id="google-adsense"
+          async
+          strategy="afterInteractive"
+          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID}`}
+          crossOrigin="anonymous"
+        />
         <Suspense fallback={null}>
           <GoogleAnalytics />
         </Suspense>
