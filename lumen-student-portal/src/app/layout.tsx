@@ -6,6 +6,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import AuthModal from "@/components/AuthModal";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
+import CookieConsentBanner from "@/components/CookieConsentBanner";
 import { Toaster } from "sonner";
 
 export const viewport: Viewport = {
@@ -116,6 +117,7 @@ export default function RootLayout({
           </main>
           <Footer />
           <AuthModal />
+          <CookieConsentBanner />
           <Toaster position="top-center" richColors closeButton />
         </AuthProvider>
       </body>

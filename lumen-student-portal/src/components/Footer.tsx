@@ -107,6 +107,19 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof window !== "undefined") {
+                      window.dispatchEvent(new CustomEvent("open-cookie-settings"));
+                    }
+                  }}
+                  className="hover:text-[#1A1A1A] transition-colors text-left cursor-pointer"
+                >
+                  Cookie Preferences
+                </button>
+              </li>
+              <li>
                 <Link
                   href="/help"
                   className="hover:text-[#1A1A1A] transition-colors text-[#A84C32] font-medium"
@@ -135,6 +148,18 @@ export default function Footer() {
           <Link href="/privacy" className="hover:text-[#1A1A1A] hover:underline">
             Privacy Policy
           </Link>
+          <span>•</span>
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent("open-cookie-settings"));
+              }
+            }}
+            className="hover:text-[#1A1A1A] hover:underline cursor-pointer"
+          >
+            Cookie Settings
+          </button>
           <span>•</span>
           <Link href="/help" className="hover:text-[#1A1A1A] hover:underline">
             Support
