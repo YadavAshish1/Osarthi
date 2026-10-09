@@ -116,9 +116,8 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-[#FAF8F5] text-[#1A1A1A]">
         <Script
           id="google-adsense"
-          async
-          strategy="afterInteractive"
-          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${process.env.NEXT_ADSENSE_CLIENT_ID}`}
+          strategy="beforeInteractive"
+          async src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${process.env.NEXT_ADSENSE_CLIENT_ID}`}
           crossOrigin="anonymous"
         />
         <Suspense fallback={null}>
