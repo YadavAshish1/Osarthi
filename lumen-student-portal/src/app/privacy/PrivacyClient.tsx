@@ -48,7 +48,7 @@ export default function PrivacyClient() {
     { id: "sharing", title: "6. Zero Data-Selling & Service Providers", icon: EyeOff },
     { id: "retention", title: "7. Data Retention & Right to Erasure", icon: Clock },
     { id: "rights", title: "8. Your Legal Rights (DPDP & GDPR)", icon: Scale },
-    { id: "cookies", title: "9. Cookies & Session Technologies", icon: Globe2 },
+    { id: "cookies", title: "9. Cookies & Advertising", icon: Globe2 },
     { id: "grievance", title: "10. Grievance Officer & Contact", icon: Mail },
   ];
 
@@ -615,15 +615,15 @@ export default function PrivacyClient() {
               {s9.content[0] && <p>{s9.content[0]}</p>}
 
               <div className="bg-white border border-[#E5E1D8] rounded-xl p-5 font-sans text-xs space-y-3">
-                <div className="font-semibold text-[#1A1A1A] text-sm">
-                  {s9.title}:
-                </div>
                 <ul className="space-y-2 text-[#5C5A55]">
                   {s9.content.slice(1, -1).map((c, cIdx) => (
-                    <li key={cIdx} className="leading-relaxed">{c}</li>
+                    <li key={cIdx} className="leading-relaxed flex items-start gap-2">
+                      <span className="text-[#A84C32] font-bold mt-0.5">•</span>
+                      <span>{c}</span>
+                    </li>
                   ))}
                 </ul>
-                <div className="p-3 bg-[#FAF8F5] rounded-lg border border-[#E5E1D8] text-[#A84C32] font-medium">
+                <div className="p-3 bg-[#FAF8F5] rounded-lg border border-[#E5E1D8] text-[#5C5A55] text-[11px]">
                   {s9.content[s9.content.length - 1]}
                 </div>
               </div>

@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Privacy Policy & Student Data Charter | Medhashine",
     description:
-      "Our founding commitment: Student data is sacred. Zero data selling, zero behavioral advertising, enterprise-grade encryption, and full privacy transparency.",
+      "Our founding commitment: Student data is sacred. Zero data selling, robust privacy safeguards, enterprise-grade encryption, and full transparency.",
     url: "https://www.medhashine.in/privacy",
     type: "website",
   },

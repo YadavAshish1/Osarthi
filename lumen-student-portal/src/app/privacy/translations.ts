@@ -58,7 +58,7 @@ export const TRANSLATIONS: Record<string, PolicyTranslation> = {
     heroBadge: "Trust & Data Governance Framework",
     heroTitle: "Privacy Policy & Student Data Charter",
     heroSubtitle:
-      "At Medhashine, we believe educational curiosity thrives only in an environment of total digital safety. We do not sell student data, we do not run behavioral advertising networks, and we hold ourselves to the highest global data protection standards.",
+      "At Medhashine, we believe educational curiosity thrives only in an environment of total digital safety. We do not sell student data, we respect learner privacy, and we hold ourselves to the highest global data protection standards.",
     effectiveDateLabel: "Effective Date: September 19, 2026",
     policyVersionLabel: "Policy: Version 2.4 (Enterprise Edition)",
     statutoryCompliance: "DPDP Act (India) 2023 & COPPA Compliant",
@@ -97,8 +97,8 @@ export const TRANSLATIONS: Record<string, PolicyTranslation> = {
           title: "The Medhashine Guarantee",
           points: [
             "We never sell your personal information or school reading logs to third parties.",
-            "We never display targeted third-party advertisements to students or educators.",
-            "We never engage in behavioral profiling or automated surveillance of minors.",
+            "All advertisements and sponsored educational materials comply strictly with student privacy and minor safety standards (COPPA & DPDP Act).",
+            "We never engage in behavioral profiling or unauthorized surveillance of minors.",
           ],
         },
       },
@@ -181,13 +181,13 @@ export const TRANSLATIONS: Record<string, PolicyTranslation> = {
       {
         id: "cookies",
         num: "Section 9",
-        title: "Cookies & Session Technologies Policy",
+        title: "Cookies & Advertising",
         content: [
-          "We use cookies exclusively for functional authentication, platform security, and user session continuity.",
-          "Authentication & Session Continuity Cookies: Strictly necessary, cryptographically secure session cookies that keep you safely signed in as you explore learning topics.",
-          "Security & CSRF Protection Markers: Temporary security verification tokens used to confirm that requests originate legitimately from you and protect against cross-site request forgery.",
-          "Educational Preferences: Ephemeral settings that remember your selected subject filter or reading layout preference.",
-          "We do NOT use invasive advertising tracking cookies, marketing pixels, or third-party behavioral profiling.",
+          "We use essential cookies to maintain platform security and deliver a seamless reading experience.",
+          "Authentication & Security: Secure session cookies (HttpOnly) that keep you safely signed in and defend against CSRF attacks.",
+          "Analytics & Telemetry: Anonymized metrics to understand reader engagement and improve educational content.",
+          "Third-Party Advertising: Google and authorized partners use cookies to serve relevant ads based on prior visits. You can opt out anytime via Google Ads Settings.",
+          "You can manage or disable cookies at any time through your browser settings.",
         ],
       },
       {
@@ -213,7 +213,7 @@ export const TRANSLATIONS: Record<string, PolicyTranslation> = {
     heroBadge: "विश्वास एवं डेटा गवर्नेंस रूपरेखा",
     heroTitle: "गोपनीयता नीति एवं छात्र डेटा चार्टर",
     heroSubtitle:
-      "मेधाशाइन (Medhashine) में हमारा दृढ़ विश्वास है कि शैक्षणिक जिज्ञासा केवल पूर्ण डिजिटल सुरक्षा के वातावरण में ही फल-फूल सकती है। हम कभी भी छात्र डेटा नहीं बेचते, कोई विज्ञापन नेटवर्क नहीं चलाते, और उच्चतम वैश्विक डेटा सुरक्षा मानकों का पालन करते हैं।",
+      "मेधाशाइन (Medhashine) में हमारा दृढ़ विश्वास है कि शैक्षणिक जिज्ञासा केवल डिजिटल सुरक्षा के वातावरण में ही फल-फूल सकती है। हम कभी भी छात्र डेटा नहीं बेचते, पाठक गोपनीयता का सम्मान करते हैं, और उच्चतम वैश्विक डेटा सुरक्षा मानकों का पालन करते हैं।",
     effectiveDateLabel: "प्रभावी तिथि: 19 सितम्बर 2026",
     policyVersionLabel: "नीति संस्करण: 2.4 (एंटरप्राइज संस्करण)",
     statutoryCompliance: "DPDP अधिनियम (भारत) 2023 एवं COPPA अनुपालित",
@@ -252,8 +252,8 @@ export const TRANSLATIONS: Record<string, PolicyTranslation> = {
           title: "मेधाशाइन की गारंटी",
           points: [
             "हम आपकी व्यक्तिगत जानकारी या पठन रिकॉर्ड किसी तीसरे पक्ष को कभी नहीं बेचते।",
-            "हम छात्रों या शिक्षकों को कोई लक्षित विज्ञापन (targeted ads) नहीं दिखाते।",
-            "हम नाबालिगों की डिजिटल निगरानी या प्रोफाइलिंग में कभी भाग नहीं लेते।",
+            "प्लेटफ़ॉर्म पर प्रदर्शित सभी विज्ञापन और प्रायोजित सामग्री बाल सुरक्षा और गोपनीयता मानकों (DPDP अधिनियम एवं COPPA) के पूर्णतः अनुकूल हैं।",
+            "हम नाबालिगों की अवांछित डिजिटल निगरानी या निजी प्रोफाइलिंग में कभी भाग नहीं लेते।",
           ],
         },
       },
@@ -336,13 +336,13 @@ export const TRANSLATIONS: Record<string, PolicyTranslation> = {
       {
         id: "cookies",
         num: "खंड 9",
-        title: "कुकीज़ एवं सत्र नीतियां",
+        title: "कुकीज़ एवं विज्ञापन",
         content: [
-          "हम कुकीज़ का उपयोग केवल सुरक्षित प्रमाणीकरण और सत्र निरंतरता के लिए करते हैं।",
-          "प्रमाणीकरण कुकीज़: सुरक्षित सत्र कुकीज़ जो आपको प्लेटफॉर्म पर सीखते समय सुरक्षित रूप से लॉग इन रखती हैं।",
-          "सुरक्षा एवं CSRF टोकन: सुरक्षा जांच टोकन जो यह सत्यापित करते हैं कि अनुरोध आपके द्वारा ही किया गया है।",
-          "शैक्षणिक प्राथमिकताएं: आपकी चुनी हुई कक्षा या पठन शैली को याद रखने वाली सेटिंग्स।",
-          "हम किसी भी विज्ञापन ट्रैकिंग कुकीज़ या व्यवहारिक प्रोफाइलिंग का उपयोग नहीं करते हैं।",
+          "हम प्लेटफ़ॉर्म की सुरक्षा और बेहतर पठन अनुभव के लिए आवश्यक कुकीज़ का उपयोग करते हैं।",
+          "प्रमाणीकरण एवं सुरक्षा: सुरक्षित सत्र कुकीज़ (HttpOnly) जो आपको लॉग इन रखती हैं और अनधिकृत अनुरोधों से रक्षा करती हैं।",
+          "एनालिटिक्स: प्लेटफ़ॉर्म के प्रदर्शन और पाठकों की रुचि को समझने के लिए अज्ञात मेट्रिक्स।",
+          "तृतीय-पक्ष विज्ञापन: Google और अधिकृत भागीदार प्रासंगिक विज्ञापन दिखाने के लिए कुकीज़ का उपयोग करते हैं। आप Google Ads Settings से कभी भी ऑप्ट-आउट कर सकते हैं।",
+          "आप अपनी ब्राउज़र सेटिंग्स से किसी भी समय कुकीज़ को प्रबंधित या बंद कर सकते हैं।",
         ],
       },
       {
@@ -487,10 +487,12 @@ export const TRANSLATIONS: Record<string, PolicyTranslation> = {
       {
         id: "cookies",
         num: "Sección 9",
-        title: "Política de Cookies de Sesión",
+        title: "Política de Cookies y Publicidad de Terceros (Google AdSense)",
         content: [
-          "Utilizamos cookies exclusivamente para autenticación segura y funcionalidad del sistema.",
-          "No utilizamos cookies publicitarias invasivas ni píxeles de seguimiento de terceros.",
+          "Utilizamos cookies y tecnologías web para seguridad, inicio de sesión, analítica web y sustentar el acceso educativo gratuito mediante publicidad transparente.",
+          "Proveedores externos, incluido Google, utilizan cookies (como la cookie de DoubleClick) para publicar anuncios basados en visitas anteriores de los usuarios a este sitio web u otros sitios.",
+          "Los usuarios pueden inhabilitar la publicidad personalizada consultando Configuración de anuncios de Google (https://www.google.com/settings/ads) o a través de www.aboutads.info.",
+          "Puede configurar o bloquear las cookies desde los ajustes de su navegador web en cualquier momento.",
         ],
       },
       {
