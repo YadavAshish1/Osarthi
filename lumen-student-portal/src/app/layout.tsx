@@ -88,7 +88,13 @@ export const metadata: Metadata = {
     shortcut: "/logo/favicon.ico",
     apple: "/logo/apple-icon.png",
   },
+  other: {
+    "google-adsense-account": "ca-pub-3501059367732668",
+  },
 };
+
+const adsenseClientId =
+  process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID || "ca-pub-3501059367732668";
 
 export default function RootLayout({
   children,
@@ -106,10 +112,10 @@ export default function RootLayout({
 
   return (
     <html lang="en" className="h-full antialiased">
-      <head>
+      <head>        <meta name="google-adsense-account" content={adsenseClientId} />
         <script
           async
-          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID}`}
+          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClientId}`}
           crossOrigin="anonymous"
         />
         <script
