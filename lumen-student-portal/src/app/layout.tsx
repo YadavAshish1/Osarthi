@@ -108,18 +108,17 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full antialiased">
       <head>
+        <Script
+          async
+          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID}`}
+          crossOrigin="anonymous"
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       </head>
       <body className="min-h-full flex flex-col bg-[#FAF8F5] text-[#1A1A1A]">
-        <Script
-          id="google-adsense"
-          strategy="beforeInteractive"
-          async src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${process.env.NEXT_ADSENSE_CLIENT_ID}`}
-          crossOrigin="anonymous"
-        />
         <Suspense fallback={null}>
           <GoogleAnalytics />
         </Suspense>
