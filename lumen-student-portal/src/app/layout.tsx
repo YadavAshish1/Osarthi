@@ -7,7 +7,6 @@ import Footer from "@/components/Footer";
 import AuthModal from "@/components/AuthModal";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
 import CookieConsentBanner from "@/components/CookieConsentBanner";
-import Script from "next/script";
 import { Toaster } from "sonner";
 
 export const viewport: Viewport = {
@@ -108,7 +107,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full antialiased">
       <head>
-        <Script
+        <script
           async
           src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID}`}
           crossOrigin="anonymous"
