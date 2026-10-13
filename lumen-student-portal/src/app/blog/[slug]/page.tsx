@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import BlogDetailClient from "./BlogDetailClient";
 import { API, BlogItem, FALLBACK_BLOGS, mapContentToBlog, getDefaultSubjectCover } from "@/lib/api";
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.medhashine.in";
+
 function extractIdFromSlug(slug: string): string {
   const mongoMatch = slug.match(/([a-f0-9]{24})$/);
   if (mongoMatch) return mongoMatch[1];
@@ -51,6 +53,9 @@ export async function generateMetadata({
   const description = blog.excerpt || `Read "${blog.title}" by ${blog.teacher_name} on Medhashine.`;
   const coverUrl = blog.cover || getDefaultSubjectCover(blog.subject);
 
+  const canonicalSlug = blog.slug || rawSlug;
+  const canonicalUrl = `/blog/${canonicalSlug}`;
+
   return {
     title,
     description,
@@ -65,9 +70,13 @@ export async function generateMetadata({
       "education",
     ],
     authors: [{ name: blog.teacher_name }],
+    alternates: {
+      canonical: canonicalUrl,
+    },
     openGraph: {
       title: `${blog.title} | Medhashine`,
       description,
+      url: `${siteUrl}${canonicalUrl}`,
       type: "article",
       publishedTime: blog.created_at,
       authors: [blog.teacher_name],

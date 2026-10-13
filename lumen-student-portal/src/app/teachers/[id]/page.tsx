@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import TeacherProfileClient from "./TeacherProfileClient";
-import { API, TeacherProfile, BlogItem, mapContentToBlog } from "@/lib/api";
+import { API, TeacherProfile, BlogItem, mapContentToBlog, getTeacherSlug } from "@/lib/api";
+
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.medhashine.in";
 
 function extractTeacherIdFromSlug(slug: string): string {
   const mongoMatch = slug.match(/([a-f0-9]{24})$/);
@@ -60,14 +62,21 @@ export async function generateMetadata({
     teacher.bio ||
     `Read academic insights, qualifications, and educational articles authored by ${teacher.name} on Medhashine.`;
 
+  const teacherSlug = teacher ? getTeacherSlug(teacher._id, teacher.name) : id;
+  const canonicalUrl = `/teachers/${teacherSlug}`;
+
   return {
     title,
     description,
     keywords: [teacher.name, "Educator", "Medhashine", "Faculty", "Teacher Profile", "Insights"],
     authors: [{ name: teacher.name }],
+    alternates: {
+      canonical: canonicalUrl,
+    },
     openGraph: {
       title,
       description,
+      url: `${siteUrl}${canonicalUrl}`,
       type: "profile",
       images: teacher.avatar ? [{ url: teacher.avatar, alt: teacher.name }] : [],
     },

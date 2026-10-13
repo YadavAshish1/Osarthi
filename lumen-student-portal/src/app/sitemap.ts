@@ -63,7 +63,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }));
 
   try {
-    const res = await fetch(`${API}/explore/blogs?limit=200`, { next: { revalidate: 3600 } });
+    const res = await fetch(`${API}/explore/blogs?limit=500`, { next: { revalidate: 3600 } });
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data.items) && data.items.length > 0) {

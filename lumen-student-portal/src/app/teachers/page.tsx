@@ -13,10 +13,14 @@ export const metadata: Metadata = {
     "Faculty Profiles",
     "Academic Mentors",
   ],
+  alternates: {
+    canonical: "/teachers",
+  },
   openGraph: {
     title: "Find My Teachers & Educators | Medhashine",
     description:
       "Explore and connect with verified Medhashine faculty members, read their academic articles, and discover educator profiles.",
+    url: "https://www.medhashine.in/teachers",
     type: "website",
   },
   twitter: {
