@@ -9,6 +9,7 @@ import BlogCard from "@/components/BlogCard";
 import EmptyState from "@/components/EmptyState";
 import { api, BlogItem, FALLBACK_BLOGS, mapContentToBlog } from "@/lib/api";
 import BecomeTeacherBanner from "@/components/BecomeTeacherBanner";
+import AdSenseBanner from "@/components/google-ad-sense/AdSenseBanner";
 
 const PAGE_SIZE = 21;
 
@@ -244,9 +245,24 @@ export default function Home() {
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {blogs.map((b, i) => (
-                <BlogCard key={b.id} blog={b} index={i} />
+                <React.Fragment key={b.id}>
+                  <BlogCard blog={b} index={i} />
+                  {/* Non-intrusive In-Feed Ad after 6 articles (2 complete rows) */}
+                  {i === 5 && (
+                    <div className="col-span-full">
+                      <AdSenseBanner slot="4103581240" />
+                    </div>
+                  )}
+                </React.Fragment>
               ))}
             </div>
+
+            {/* If fewer than 6 blogs, display ad gracefully at bottom */}
+            {blogs.length > 0 && blogs.length < 6 && (
+              <div className="max-w-3xl mx-auto">
+                <AdSenseBanner slot="4103581240" />
+              </div>
+            )}
 
             {/* Load More Section */}
             {hasMore && (
