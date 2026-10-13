@@ -23,7 +23,7 @@ import exploreRoutes from './routes/explore.js';
 import commentsRoutes from './routes/comments.js';
 import contactRoutes from './routes/contact.js';
 import teacherApplicationRoutes from './routes/teacherApplications.js';
-import superAdminRoutes, { seedSuperAdmin } from './routes/superAdmin.js';
+import superAdminRoutes, { seedSuperAdmin, seedTopTeacherCards, seedDefaultTestimonials } from './routes/superAdmin.js';
 import taxonomyRequestRoutes from './routes/taxonomyRequests.js';
 import supportTicketRoutes from './routes/supportTicket.js';
 import { getStorageMode, isCloudinaryEnabled } from './services/storage.js';
@@ -35,6 +35,8 @@ const PORT = process.env.PORT || 5000;
 await connectDB();
 await seedSuperAdmin();
 await seedDefaultTaxonomy();
+await seedTopTeacherCards();
+await seedDefaultTestimonials();
 
 // Behind Render/other reverse proxies, allow Express to trust X-Forwarded-* headers.
 // This is required for express-rate-limit to correctly identify clients.

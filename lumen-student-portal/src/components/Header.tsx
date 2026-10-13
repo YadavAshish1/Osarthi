@@ -75,13 +75,8 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
     if (q.trim()) {
       trackSearch(q.trim());
     }
-    if (pathname !== "/") {
-      router.push(`/?q=${encodeURIComponent(q)}`);
-    } else if (onSearch) {
-      onSearch(q);
-    } else {
-      router.push(`/?q=${encodeURIComponent(q)}`);
-    }
+    // Always redirect to /insights for search
+    router.push(`/insights?q=${encodeURIComponent(q)}`);
   };
 
   return (
@@ -122,6 +117,14 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
               }`}
           >
             Home
+          </Link>
+          <Link
+            data-testid="nav-insights"
+            href="/insights"
+            className={`whitespace-nowrap hover:text-[#A84C32] transition-colors ${pathname === "/insights" ? "font-semibold text-[#A84C32]" : ""
+              }`}
+          >
+            Insights
           </Link>
           <Link
             data-testid="nav-teachers"
@@ -227,7 +230,7 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
               <button
                 onClick={() => openAuth("login")}
                 data-testid="open-auth-button"
-                className="px-4 py-2 lg:px-5 lg:py-2.5 rounded-full bg-[#1A1A1A] text-white hover:bg-[#A84C32] transition-colors font-medium text-xs lg:text-sm cursor-pointer whitespace-nowrap shrink-0"
+                className="px-4 py-2 lg:px-5 lg:py-2.5 rounded-full bg-[#A84C32] text-white hover:bg-[#8B3A25] transition-colors font-medium text-xs lg:text-sm cursor-pointer whitespace-nowrap shrink-0"
               >
                 Sign In
               </button>
@@ -268,6 +271,12 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
               className={`py-1.5 transition-colors ${pathname === "/" ? "font-semibold text-[#A84C32]" : "text-[#1A1A1A] hover:text-[#A84C32]"}`}
             >
               Home
+            </Link>
+            <Link
+              href="/insights"
+              className={`py-1.5 transition-colors ${pathname === "/insights" ? "font-semibold text-[#A84C32]" : "text-[#1A1A1A] hover:text-[#A84C32]"}`}
+            >
+              Insights
             </Link>
             <Link
               href="/teachers"
@@ -354,7 +363,7 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
             ) : (
               <button
                 onClick={() => openAuth("login")}
-                className="mt-2 w-full py-3 rounded-full bg-[#1A1A1A] text-white font-medium text-center cursor-pointer hover:bg-[#A84C32] transition-colors"
+                className="mt-2 w-full py-3 rounded-full bg-[#A84C32] text-white font-medium text-center cursor-pointer hover:bg-[#8B3A25] transition-colors"
               >
                 Sign In
               </button>

@@ -126,7 +126,7 @@ export default function BecomeTeacherBanner() {
                 }}
               />
               <Image
-                src="/images/teacher-hero.png"
+                src="https://res.cloudinary.com/dve3lbolq/image/upload/v1791907114/medhashine/banners/teacher-hero.jpg"
                 alt="Join Medhashine as a teacher and inspire students"
                 width={600}
                 height={600}

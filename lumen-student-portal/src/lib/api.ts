@@ -180,29 +180,62 @@ export function slugify(text: string): string {
 }
 
 /**
+ * Curated high-res educational editorial photography pools.
+ */
+const HINDI_COVERS = [
+  "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&q=80&w=800", // Vintage warm library
+  "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&q=80&w=800", // Elegant open book with glasses
+  "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&q=80&w=800", // Ink pen writing on manuscript
+  "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&q=80&w=800", // Architectural library stacks
+  "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&q=80&w=800", // Stack of classical books
+];
+
+const SCIENCE_COVERS = [
+  "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=800", // Cosmic vibrant gradient
+  "https://images.unsplash.com/photo-1507668077129-56e32842fceb?auto=format&fit=crop&q=80&w=800", // Physics laboratory prism light
+  "https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&q=80&w=800", // Chemistry beaker & reaction
+  "https://images.unsplash.com/photo-1509869175650-a1d97972541a?auto=format&fit=crop&q=80&w=800", // Science mechanics & motion
+];
+
+const MATH_COVERS = [
+  "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?auto=format&fit=crop&q=80&w=800", // Glowing geometry & calculus
+  "https://images.unsplash.com/photo-1509228468518-180dd4864904?auto=format&fit=crop&q=80&w=800", // Blackboard equations
+  "https://images.unsplash.com/photo-1596495578065-6e0763fa1178?auto=format&fit=crop&q=80&w=800", // Geometric compass & rulers
+];
+
+const GENERAL_COVERS = [
+  "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&q=80&w=800",
+  "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&q=80&w=800",
+  "https://images.unsplash.com/photo-1427504494785-3a9ca7044f45?auto=format&fit=crop&q=80&w=800",
+];
+
+function pickFromPool(pool: string[], seed: string = ""): string {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = (hash << 5) - hash + seed.charCodeAt(i);
+    hash |= 0;
+  }
+  const idx = Math.abs(hash) % pool.length;
+  return pool[idx];
+}
+
+/**
  * Returns a subject-relevant default cover image URL for blog listing cards.
  */
-export function getDefaultSubjectCover(subject?: string): string {
+export function getDefaultSubjectCover(subject?: string, seed: string = ""): string {
   const s = (subject || "").toLowerCase();
 
   if (s.includes("hindi") || s.includes("हिन्दी") || s.includes("हिंदी") || s.includes("पद्य") || s.includes("गद्य")) {
-    return "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?crop=entropy&cs=srgb&fm=jpg&q=85&w=800"; // Warm aesthetic open book
+    return pickFromPool(HINDI_COVERS, seed);
   }
   if (s.includes("science") || s.includes("physics") || s.includes("chem") || s.includes("bio") || s.includes("विज्ञान") || s.includes("भौतिक")) {
-    return "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?crop=entropy&cs=srgb&fm=jpg&q=85&w=800"; // Vibrant science art
+    return pickFromPool(SCIENCE_COVERS, seed);
   }
   if (s.includes("math") || s.includes("algebra") || s.includes("geom") || s.includes("गणित")) {
-    return "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?crop=entropy&cs=srgb&fm=jpg&q=85&w=800"; // Glowing math geometry
-  }
-  if (s.includes("english") || s.includes("lit") || s.includes("साहित्य") || s.includes("भाषा")) {
-    return "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?crop=entropy&cs=srgb&fm=jpg&q=85&w=800"; // Warm library
-  }
-  if (s.includes("hist") || s.includes("social") || s.includes("geog") || s.includes("इतिहास") || s.includes("भूगोल")) {
-    return "https://images.unsplash.com/photo-1461360370896-922624d12aa1?crop=entropy&cs=srgb&fm=jpg&q=85&w=800"; // Vintage history
+    return pickFromPool(MATH_COVERS, seed);
   }
 
-  // Default educational book stack
-  return "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?crop=entropy&cs=srgb&fm=jpg&q=85&w=800";
+  return pickFromPool(GENERAL_COVERS, seed);
 }
 
 /**
@@ -317,6 +350,57 @@ export const FALLBACK_BLOGS: BlogItem[] = [
     read_minutes: 7,
     created_at: "2026-07-27T15:34:14.881470+00:00",
     likes_count: 22,
+  },
+  {
+    id: "blog-4",
+    slug: "calculus-intuition-finding-motion-in-stillness-blog-4",
+    title: "The Intuition Behind Calculus: Finding Motion in Stillness",
+    excerpt: "Why derivatives and integrals are the natural language of change — and how to visualize them intuitively.",
+    content: "Calculus is often taught as a list of formulas to memorize. But at its core, it is the simple art of zooming in until curves look like straight lines.",
+    cover: "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?auto=format&fit=crop&q=80&w=800",
+    teacher_id: "t-rohan",
+    teacher_name: "Mr. Rohan Iyer",
+    teacher_avatar: "https://images.unsplash.com/photo-1560250097-0b93528c311a?crop=entropy&cs=srgb&fm=jpg&q=85",
+    class_level: "Grade 12",
+    subject: "Mathematics",
+    topic: "Calculus",
+    read_minutes: 8,
+    created_at: "2026-07-26T15:34:14.881470+00:00",
+    likes_count: 19,
+  },
+  {
+    id: "blog-5",
+    slug: "geometric-beauty-of-eulers-identity-blog-5",
+    title: "The Geometric Wonder of Euler's Formula",
+    excerpt: "Connecting five fundamental mathematical constants in a single equation of unparalleled harmony.",
+    content: "Euler's identity is frequently called the most beautiful theorem in mathematics. Let's see how geometry makes it feel obvious rather than magical.",
+    cover: "https://images.unsplash.com/photo-1509228468518-180dd4864904?auto=format&fit=crop&q=80&w=800",
+    teacher_id: "t-rohan",
+    teacher_name: "Mr. Rohan Iyer",
+    teacher_avatar: "https://images.unsplash.com/photo-1560250097-0b93528c311a?crop=entropy&cs=srgb&fm=jpg&q=85",
+    class_level: "Grade 11",
+    subject: "Mathematics",
+    topic: "Trigonometry & Algebra",
+    read_minutes: 5,
+    created_at: "2026-07-25T15:34:14.881470+00:00",
+    likes_count: 17,
+  },
+  {
+    id: "blog-6",
+    slug: "crafting-persuasive-essays-the-orwellian-rules-blog-6",
+    title: "Mastering the Art of Clear English Prose",
+    excerpt: "Six timeless principles for writing clear, convincing, and evocative arguments in high school essays.",
+    content: "Clear writing is the consequence of clear thinking. When we eliminate unnecessary jargon, ideas shine with clarity.",
+    cover: "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&q=80&w=800",
+    teacher_id: "t-meera",
+    teacher_name: "Ms. Meera Kapoor",
+    teacher_avatar: "https://images.pexels.com/photos/27086922/pexels-photo-27086922.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+    class_level: "Grade 10",
+    subject: "English",
+    topic: "Writing & Composition",
+    read_minutes: 6,
+    created_at: "2026-07-24T15:34:14.881470+00:00",
+    likes_count: 15,
   },
 ];
 

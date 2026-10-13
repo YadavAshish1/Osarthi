@@ -8,6 +8,8 @@ import UserManagement from './pages/UserManagement';
 import TaxonomyRequests from './pages/TaxonomyRequests';
 import TaxonomyManagement from './pages/TaxonomyManagement';
 import SupportTickets from './pages/SupportTickets';
+import EducatorCards from './pages/EducatorCards';
+import TestimonialsManagement from './pages/TestimonialsManagement';
 
 export default function App() {
   return (
@@ -29,6 +31,14 @@ export default function App() {
           <Route
             path="/applications"
             element={<ProtectedRoute><TeacherApplications /></ProtectedRoute>}
+          />
+          <Route
+            path="/educator-cards"
+            element={<ProtectedRoute><EducatorCards /></ProtectedRoute>}
+          />
+          <Route
+            path="/testimonials"
+            element={<ProtectedRoute><TestimonialsManagement /></ProtectedRoute>}
           />
           <Route
             path="/users"

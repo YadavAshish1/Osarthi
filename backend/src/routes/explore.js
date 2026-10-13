@@ -1,10 +1,14 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import Class from '../models/Class.js';
 import Subject from '../models/Subject.js';
 import Topic from '../models/Topic.js';
 import Content from '../models/Content.js';
 import User from '../models/User.js';
 import SeoSettings from '../models/SeoSettings.js';
+import Testimonial from '../models/Testimonial.js';
+import HomeSettings from '../models/HomeSettings.js';
+import TopTeacherCard from '../models/TopTeacherCard.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { escapeRegex } from '../utils/sanitize.js';
 
@@ -70,6 +74,9 @@ router.get('/teachers', async (req, res, next) => {
 router.get('/teachers/:id', async (req, res, next) => {
   try {
     const { page = 1, limit = 20 } = req.query;
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(404).json({ message: 'Teacher profile not found' });
+    }
     const user = await User.findById(req.params.id).select(
       'name avatar bio education experience role createdAt'
     );
@@ -242,18 +249,49 @@ router.get('/blogs', async (req, res, next) => {
   }
 });
 
-/** GET /api/explore/featured - recently published across all topics */
+/** GET /api/explore/featured - recently published across all topics (with optional subject & limit) */
 router.get('/featured', async (req, res, next) => {
   try {
-    const items = await Content.find({ published: true })
+    const { limit = 60, subject } = req.query;
+    const query = { published: true };
+
+    if (subject) {
+      const matchingSubs = await Subject.find({
+        name: { $regex: new RegExp(escapeRegex(subject), 'i') },
+      }).distinct('_id');
+      if (matchingSubs.length > 0) {
+        query.subjectRef = { $in: matchingSubs };
+      }
+    }
+
+    // Check if admin pinned specific content IDs in HomeSettings
+    const settings = await HomeSettings.findOne();
+    let pinnedItems = [];
+    if (settings?.featuredInsightIds?.length > 0 && !subject) {
+      pinnedItems = await Content.find({ _id: { $in: settings.featuredInsightIds }, published: true })
+        .select('title createdAt topicRef subjectRef classRef createdBy blocks')
+        .populate('classRef', 'name')
+        .populate('subjectRef', 'name')
+        .populate('topicRef', 'name')
+        .populate('createdBy', 'name avatar');
+    }
+
+    const pinnedIds = pinnedItems.map((p) => p._id.toString());
+    const remainingLimit = Math.max(1, parseInt(limit) - pinnedItems.length);
+
+    const normalItems = await Content.find({
+      ...query,
+      _id: { $nin: pinnedIds },
+    })
       .sort({ createdAt: -1 })
-      .limit(6)
-      .select('title createdAt topicRef subjectRef classRef createdBy')
+      .limit(remainingLimit)
+      .select('title createdAt topicRef subjectRef classRef createdBy blocks')
       .populate('classRef', 'name')
       .populate('subjectRef', 'name')
       .populate('topicRef', 'name')
       .populate('createdBy', 'name avatar');
-    res.json(items);
+
+    res.json([...pinnedItems, ...normalItems]);
   } catch (err) {
     next(err);
   }
@@ -308,6 +346,98 @@ router.get('/tree', async (req, res, next) => {
     }));
 
     res.json(tree);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /api/explore/stats - home page marketing stats (admin-set) */
+router.get('/stats', async (req, res, next) => {
+  try {
+    let settings = await HomeSettings.findOne();
+    if (!settings) {
+      settings = await HomeSettings.create({});
+    }
+    res.json(settings.stats);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /api/explore/banners - home page active banners (admin-managed) */
+router.get('/banners', async (req, res, next) => {
+  try {
+    let settings = await HomeSettings.findOne();
+    if (!settings) {
+      settings = await HomeSettings.create({});
+    }
+    const banners = (settings.banners || [])
+      .filter((b) => b.active !== false)
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+    res.json(banners);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /api/explore/testimonials - active testimonials (public) */
+router.get('/testimonials', async (req, res, next) => {
+  try {
+    const testimonials = await Testimonial.find({ isActive: true })
+      .sort({ order: 1, createdAt: -1 })
+      .select('name role avatar review rating');
+    res.json(testimonials);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /api/explore/top-teachers - top teachers from TopTeacherCard collection or fallback */
+router.get('/top-teachers', async (req, res, next) => {
+  try {
+    const customCards = await TopTeacherCard.find({ active: true }).sort({ order: 1, createdAt: 1 }).lean();
+    if (customCards && customCards.length > 0) {
+      return res.json(customCards);
+    }
+
+    const publishedCreatorIds = await Content.find({ published: true }).distinct('createdBy');
+    const teachers = await User.find({
+      $or: [
+        { role: { $in: ['teacher', 'admin'] } },
+        { _id: { $in: publishedCreatorIds } },
+      ],
+    })
+      .select('name _id avatar bio education experience role')
+      .lean();
+
+    const contents = await Content.find({ published: true })
+      .populate('subjectRef', 'name')
+      .select('createdBy subjectRef')
+      .lean();
+
+    const countMap = new Map();
+    const subjectsMap = new Map();
+    for (const c of contents) {
+      if (!c.createdBy) continue;
+      const tid = c.createdBy.toString();
+      countMap.set(tid, (countMap.get(tid) || 0) + 1);
+      const subName = c.subjectRef?.name?.trim() || '';
+      if (subName) {
+        if (!subjectsMap.has(tid)) subjectsMap.set(tid, new Set());
+        subjectsMap.get(tid).add(subName);
+      }
+    }
+
+    const result = teachers
+      .map((t) => ({
+        ...t,
+        blogsCount: countMap.get(t._id.toString()) || 0,
+        subjects: Array.from(subjectsMap.get(t._id.toString()) || []),
+      }))
+      .sort((a, b) => b.blogsCount - a.blogsCount)
+      .slice(0, 10);
+
+    res.json(result);
   } catch (err) {
     next(err);
   }

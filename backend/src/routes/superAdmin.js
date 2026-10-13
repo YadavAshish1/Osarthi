@@ -1,8 +1,18 @@
 import { Router } from 'express';
+import multer from 'multer';
 import User from '../models/User.js';
+import Testimonial from '../models/Testimonial.js';
+import HomeSettings from '../models/HomeSettings.js';
+import TopTeacherCard from '../models/TopTeacherCard.js';
+import { uploadMedia } from '../services/storage.js';
 import { hashPassword } from '../utils/authHelpers.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { escapeRegex } from '../utils/sanitize.js';
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
 
 const router = Router();
 
@@ -171,7 +181,289 @@ router.delete('/users/:id', async (req, res, next) => {
     }
 
     await User.findByIdAndDelete(req.params.id);
-    res.json({ message: `User ${targetUser.name} (${targetUser.email}) has been permanently deleted` });
+  res.json({ message: `User ${targetUser.name} (${targetUser.email}) has been permanently deleted` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Testimonials CRUD ────────────────────────────────────────────────────────
+
+/** GET /api/superadmin/testimonials — List all testimonials */
+router.get('/testimonials', async (req, res, next) => {
+  try {
+    const testimonials = await Testimonial.find().sort({ order: 1, createdAt: -1 });
+    res.json(testimonials);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** POST /api/superadmin/testimonials — Create new testimonial */
+router.post('/testimonials', async (req, res, next) => {
+  try {
+    const { name, role, avatar, review, rating, isActive, order } = req.body;
+    if (!name || !review) {
+      return res.status(400).json({ message: 'name and review are required' });
+    }
+    const t = await Testimonial.create({ name, role, avatar, review, rating, isActive, order });
+    res.status(201).json(t);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** PUT /api/superadmin/testimonials/:id — Update testimonial */
+router.put('/testimonials/:id', async (req, res, next) => {
+  try {
+    const { name, role, avatar, review, rating, isActive, order } = req.body;
+    const t = await Testimonial.findByIdAndUpdate(
+      req.params.id,
+      { name, role, avatar, review, rating, isActive, order },
+      { new: true, runValidators: true }
+    );
+    if (!t) return res.status(404).json({ message: 'Testimonial not found' });
+    res.json(t);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** DELETE /api/superadmin/testimonials/:id — Delete testimonial */
+router.delete('/testimonials/:id', async (req, res, next) => {
+  try {
+    const t = await Testimonial.findByIdAndDelete(req.params.id);
+    if (!t) return res.status(404).json({ message: 'Testimonial not found' });
+    res.json({ message: 'Testimonial deleted' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** POST /api/superadmin/testimonials/upload — Upload student avatar */
+router.post('/testimonials/upload', upload.single('image'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+    const result = await uploadMedia(req.file, { userId: req.user._id.toString(), folder: 'testimonials' });
+    res.json({ url: result.url });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Seed authentic Indian student testimonials if collection is empty */
+export async function seedDefaultTestimonials() {
+  try {
+    const count = await Testimonial.countDocuments();
+    if (count === 0) {
+      const defaultTestimonials = [
+        {
+          name: 'Aarav Sharma',
+          role: 'Class 10 Student, Delhi',
+          avatar: 'https://res.cloudinary.com/dve3lbolq/image/upload/v1791907115/medhashine/students/aarav-sharma.jpg',
+          review: 'Medhashine completely changed how I study for board exams. The insights written by real mentors actually explain the core logic — not just rote formulas. Scored 94% in Science this year!',
+          rating: 5,
+          isActive: true,
+          order: 0,
+        },
+        {
+          name: 'Ananya Iyer',
+          role: 'Grade 12 Student, Bengaluru',
+          avatar: 'https://res.cloudinary.com/dve3lbolq/image/upload/v1791907115/medhashine/students/ananya-iyer.jpg',
+          review: 'The Biology and Chemistry breakdowns helped me connect textbook theory with deep conceptual clarity. Having access to genuine subject scholars solved all my doubts.',
+          rating: 5,
+          isActive: true,
+          order: 1,
+        },
+        {
+          name: 'Rohan Verma',
+          role: 'Class 11 Student, Kota',
+          avatar: 'https://res.cloudinary.com/dve3lbolq/image/upload/v1791907116/medhashine/students/rohan-verma.jpg',
+          review: 'Finally found a platform where teachers care about building intuition. The calculus notes and physics mechanics breakdowns saved my foundation for competitive exams.',
+          rating: 5,
+          isActive: true,
+          order: 2,
+        },
+        {
+          name: 'Pooja Deshmukh',
+          role: 'Class 10 Student, Pune',
+          avatar: 'https://res.cloudinary.com/dve3lbolq/image/upload/v1791907117/medhashine/students/pooja-deshmukh.jpg',
+          review: 'The daily reading room is like having an intellectual elder sibling who explains concepts beautifully. I look forward to reading a new insight every morning before school.',
+          rating: 5,
+          isActive: true,
+          order: 3,
+        },
+        {
+          name: 'Aditya Patel',
+          role: 'Grade 12 Student, Ahmedabad',
+          avatar: 'https://res.cloudinary.com/dve3lbolq/image/upload/v1791907118/medhashine/students/aditya-patel.jpg',
+          review: 'I was struggling with Chemistry and literature analysis and couldn\'t afford expensive coaching. Medhashine\'s free insights are coaching institute quality. Absolutely recommend it.',
+          rating: 5,
+          isActive: true,
+          order: 4,
+        },
+      ];
+      await Testimonial.insertMany(defaultTestimonials);
+      console.log('[Testimonials] Seeded 5 authentic student testimonials');
+    }
+  } catch (err) {
+    console.error('[Testimonials] Failed to seed testimonials:', err.message);
+  }
+}
+
+// ─── Home Settings (Stats) ────────────────────────────────────────────────────
+
+/** GET /api/superadmin/home-settings — Get home page settings */
+router.get('/home-settings', async (req, res, next) => {
+  try {
+    let settings = await HomeSettings.findOne();
+    if (!settings) settings = await HomeSettings.create({});
+    res.json(settings);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** PUT /api/superadmin/home-settings — Update stats, featured insights & banners */
+router.put('/home-settings', async (req, res, next) => {
+  try {
+    const { stats, featuredInsightIds, banners } = req.body;
+    let settings = await HomeSettings.findOne();
+    if (featuredInsightIds !== undefined) settings.featuredInsightIds = featuredInsightIds;
+    if (banners !== undefined) settings.banners = banners;
+    await settings.save();
+    res.json(settings);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Top Teacher Cards (Educator Spotlight) ──────────────────────────────────
+
+/** Seed default educator cards if collection is empty */
+export async function seedTopTeacherCards() {
+  try {
+    const count = await TopTeacherCard.countDocuments();
+    if (count === 0) {
+      const defaultCards = [
+        {
+          headerText: 'Hindi Literature Mentor',
+          name: 'Dr. Ramesh Yaduvanshi',
+          image: 'https://res.cloudinary.com/dve3lbolq/image/upload/v1791907110/medhashine/teachers/ramesh-yaduvanshi.png',
+          themeColor: '#A84C32',
+          ctaUrl: '/teachers/6a1ecc54f03ba84730cfb054-dr-ramesh-yaduvanshi',
+          metricCount: '115 Insights',
+          verifiedText: 'Verified Mentor',
+          order: 0,
+          active: true,
+        },
+        {
+          headerText: 'Science & Chemistry Mentor',
+          name: 'A.K Singh',
+          image: 'https://res.cloudinary.com/dve3lbolq/image/upload/v1791907111/medhashine/teachers/ak-singh.png',
+          themeColor: '#2B3A67',
+          ctaUrl: '/teachers/6a9834bdfb53aa95cffb5225-ak-singh',
+          metricCount: '5 Insights',
+          verifiedText: 'Verified Mentor',
+          order: 1,
+          active: true,
+        },
+        {
+          headerText: 'Mathematics Mentor',
+          name: 'Ashish Yadav',
+          image: 'https://res.cloudinary.com/dve3lbolq/image/upload/v1791907112/medhashine/teachers/ashish-yadav.png',
+          themeColor: '#2E7D32',
+          ctaUrl: '/teachers/6a74cfd3ffed93e33170c81e-ashish-yadav',
+          metricCount: 'Lead Educator',
+          verifiedText: 'Verified Mentor',
+          order: 2,
+          active: true,
+        },
+        {
+          headerText: 'Academic Scholar',
+          name: 'Dr Satyendra',
+          image: 'https://res.cloudinary.com/dve3lbolq/image/upload/v1791907113/medhashine/teachers/dr-satyendra.png',
+          themeColor: '#D97706',
+          ctaUrl: '/teachers/6abbe076200af705bade595d-dr-satyendra',
+          metricCount: 'Senior Mentor',
+          verifiedText: 'Verified Mentor',
+          order: 3,
+          active: true,
+        },
+      ];
+      await TopTeacherCard.insertMany(defaultCards);
+      console.log('[TopTeacherCard] Seeded 4 default educator cards');
+    }
+  } catch (err) {
+    console.error('[TopTeacherCard] Failed to seed cards:', err.message);
+  }
+}
+
+/** GET /api/superadmin/top-teachers — List all educator cards */
+router.get('/top-teachers', async (_req, res, next) => {
+  try {
+    const cards = await TopTeacherCard.find().sort({ order: 1, createdAt: 1 });
+    res.json(cards);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** POST /api/superadmin/top-teachers/upload — Upload teacher image */
+router.post('/top-teachers/upload', upload.single('image'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+    const result = await uploadMedia(req.file, { userId: req.user._id.toString(), folder: 'top-teachers' });
+    res.json({ url: result.url });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** POST /api/superadmin/top-teachers — Create a new educator card */
+router.post('/top-teachers', async (req, res, next) => {
+  try {
+    const { headerText, name, image, themeColor, ctaUrl, metricCount, verifiedText, active, order } = req.body;
+    if (!name || !image) {
+      return res.status(400).json({ message: 'Teacher name and image are required' });
+    }
+    const card = await TopTeacherCard.create({
+      headerText: headerText || 'Academic Mentor',
+      name: name.trim(),
+      image: image.trim(),
+      themeColor: themeColor || '#A84C32',
+      ctaUrl: ctaUrl?.trim() || '',
+      metricCount: metricCount || 'Verified Mentor',
+      verifiedText: verifiedText || 'Verified Mentor',
+      active: active !== undefined ? active : true,
+      order: order !== undefined ? Number(order) : 0,
+    });
+    res.status(201).json(card);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** PUT /api/superadmin/top-teachers/:id — Update an educator card */
+router.put('/top-teachers/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    const card = await TopTeacherCard.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
+    if (!card) return res.status(404).json({ message: 'Card not found' });
+    res.json(card);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** DELETE /api/superadmin/top-teachers/:id — Delete an educator card */
+router.delete('/top-teachers/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const card = await TopTeacherCard.findByIdAndDelete(id);
+    if (!card) return res.status(404).json({ message: 'Card not found' });
+    res.json({ message: 'Card deleted successfully' });
   } catch (err) {
     next(err);
   }

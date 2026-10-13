@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, Menu, X, LayoutDashboard, Users, GraduationCap, Send, BookOpen, LifeBuoy } from 'lucide-react';
+import { LogOut, Menu, X, LayoutDashboard, Users, GraduationCap, Send, BookOpen, LifeBuoy, Sparkles, Quote } from 'lucide-react';
 
 export default function AdminHeader({ activePage }) {
   const { user, logout } = useAuth();
@@ -9,6 +9,8 @@ export default function AdminHeader({ activePage }) {
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    { id: 'educator-cards', label: 'Educator Spotlight', path: '/educator-cards', icon: Sparkles },
+    { id: 'testimonials', label: 'Student Reviews', path: '/testimonials', icon: Quote },
     { id: 'users', label: 'Users', path: '/users', icon: Users },
     { id: 'applications', label: 'Educators', path: '/applications', icon: GraduationCap },
     { id: 'taxonomy-requests', label: 'Requests', path: '/taxonomy-requests', icon: Send },
