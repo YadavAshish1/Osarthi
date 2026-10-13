@@ -3,7 +3,7 @@ import TeachersListClient from "./TeachersListClient";
 import { API, TeacherProfile, FALLBACK_FACETS } from "@/lib/api";
 
 export const metadata: Metadata = {
-  title: "Find My Teachers & Educators | Medhashine",
+  title: "Medhashine Teachers & Verified Educators",
   description:
     "Explore and connect with verified Medhashine faculty members, read their academic articles, and discover educator profiles designed for curious minds.",
   keywords: [
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     canonical: "/teachers",
   },
   openGraph: {
-    title: "Find My Teachers & Educators | Medhashine",
+    title: "Medhashine Teachers & Verified Educators | Medhashine",
     description:
       "Explore and connect with verified Medhashine faculty members, read their academic articles, and discover educator profiles.",
     url: "https://www.medhashine.in/teachers",
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Find My Teachers & Educators | Medhashine",
+    title: "Medhashine Teachers & Verified Educators | Medhashine",
     description:
       "Explore and connect with verified Medhashine faculty members, read their academic articles, and discover educator profiles.",
   },

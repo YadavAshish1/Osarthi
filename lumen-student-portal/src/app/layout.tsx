@@ -24,46 +24,48 @@ export const metadata: Metadata = {
     template: "%s | Medhashine",
   },
   description:
-    "A quiet library of insights, ideas, and encouragements — written by teachers, meant for curious young minds.",
+    "Medhashine — free educational insights for Class 9, 10, 11, 12 students. NCERT, UP Board, CBSE notes on Hindi, Science, Maths, Sanskrit, Social Science written by verified teachers.",
   keywords: [
-    "education",
-    "insights",
-    "learning platform",
-    "learning",
-    "physics",
-    "hindi",
-    "chemistry",
-    "mathematics",
-    "science",
-    "social-studies",
-    "computer-science",
-    "english",
-    "history",
-    "geography",
-    "civics",
-    "economics",
-    "literature",
-    "teachers",
-    "Osarthi",
-    "Medhashine",
+    // Brand
+    "Medhashine", "medhashine.in",
+    // Platform
+    "free education", "learning platform", "educational insights", "student notes",
+    // Board & Exams
+    "UP Board", "CBSE", "NCERT", "board exam preparation",
+    "UP Board Hindi notes", "UP Board Science notes", "UP Board Maths notes",
+    "class 9 notes", "class 10 notes", "class 11 notes", "class 12 notes",
+    // Subjects
+    "Hindi", "हिंदी", "Sanskrit", "संस्कृत",
+    "Mathematics", "गणित", "Science", "विज्ञान",
+    "Physics", "भौतिकी", "Chemistry", "रसायन विज्ञान",
+    "Biology", "जीव विज्ञान", "English",
+    "Social Science", "सामाजिक विज्ञान",
+    "History", "इतिहास", "Geography", "भूगोल",
+    "Civics", "नागरिक शास्त्र", "Economics", "अर्थशास्त्र",
+    "Computer Science",
+    // Content type
+    "essay", "निबंध", "question answer", "प्रश्न उत्तर",
+    "summary", "सारांश", "explanation", "व्याख्या",
+    "teachers", "verified educators",
   ],
   authors: [{ name: "Medhashine Education Team" }],
   creator: "Osarthi Team",
   publisher: "Medhashine",
   openGraph: {
     type: "website",
-    locale: "en_US",
+    locale: "hi_IN",
+    alternateLocale: ["en_US", "en_IN"],
     url: siteUrl,
     title: "Medhashine | Insights for Curious Minds",
     description:
-      "A quiet library of insights, ideas, and encouragements — written by teachers, meant for curious young minds.",
+      "Medhashine — free educational insights for Class 9, 10, 11, 12 students. NCERT, UP Board, CBSE notes on Hindi, Science, Maths, English written by verified teachers.",
     siteName: "Medhashine",
   },
   twitter: {
     card: "summary_large_image",
     title: "Medhashine | Insights for Curious Minds",
     description:
-      "A quiet library of insights, ideas, and encouragements — written by teachers, meant for curious young minds.",
+      "Free Class 9-12 notes on Hindi, Science, Maths, Sanskrit — written by verified educators. UP Board, CBSE, NCERT.",
   },
   robots: {
     index: true,
@@ -103,12 +105,14 @@ export default function RootLayout({
     name: "Medhashine",
     url: siteUrl,
     description:
-      "A quiet library of insights, ideas, and encouragements — written by teachers, meant for curious young minds.",
-    sameAs: [],
+      "Medhashine — free educational insights for Class 9, 10, 11, 12 students on Hindi, Science, Maths, Sanskrit written by verified teachers.",
+    sameAs: [
+      "https://www.medhashine.in",
+    ],
   };
 
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang="hi" className="h-full antialiased">
       <head>        <meta name="google-adsense-account" content={adsenseClientId} />
         <script
           async

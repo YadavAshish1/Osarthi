@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import TermsClient from "./TermsClient";
 
 export const metadata: Metadata = {
-  title: "Terms of Service & Copyright Charter | Medhashine",
+  title: "Terms of Service & Copyright Charter",
   description:
     "Official Terms of Service, Intellectual Property Policy, and Statutory Copyright Charter protecting educational content authored by Medhashine, its creators, and contributing educators.",
   keywords: [

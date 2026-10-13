@@ -56,11 +56,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ];
 
-  let blogs: { id: string; slug: string; created_at?: string }[] = FALLBACK_BLOGS.map((b) => ({
-    id: b.id,
-    slug: b.slug || `${slugify(b.title)}-${b.id}`,
-    created_at: b.created_at,
-  }));
+  let blogs: { id: string; slug: string; created_at?: string; updated_at?: string }[] =
+    FALLBACK_BLOGS.map((b) => ({
+      id: b.id,
+      slug: b.slug || `${slugify(b.title)}-${b.id}`,
+      created_at: b.created_at,
+      updated_at: b.updated_at || b.created_at,
+    }));
 
   try {
     const res = await fetch(`${API}/explore/blogs?limit=500`, { next: { revalidate: 3600 } });
@@ -75,6 +77,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
             id,
             slug,
             created_at: item.createdAt || item.created_at,
+            updated_at: item.updatedAt || item.updated_at || item.createdAt || item.created_at,
           };
         });
       }
@@ -83,7 +86,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const blogRoutes: MetadataRoute.Sitemap = blogs.map((blog) => ({
     url: `${baseUrl}/blog/${blog.slug}`,
-    lastModified: blog.created_at ? new Date(blog.created_at) : new Date(),
+    lastModified: blog.updated_at
+      ? new Date(blog.updated_at)
+      : blog.created_at
+      ? new Date(blog.created_at)
+      : new Date(),
     changeFrequency: "weekly",
     priority: 0.9,
   }));

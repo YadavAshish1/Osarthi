@@ -6,10 +6,14 @@ export const metadata: Metadata = {
   title: "Get in Touch",
   description:
     "Send us a note about an insight, a topic you'd love to see, or a teacher you'd like to hear from. We read everything.",
+  alternates: {
+    canonical: "/contact",
+  },
   openGraph: {
     title: "Get in Touch | Medhashine",
     description:
       "Send us a note about an insight, a topic you'd love to see, or a teacher you'd like to hear from.",
+    url: "https://www.medhashine.in/contact",
   },
 };
 
