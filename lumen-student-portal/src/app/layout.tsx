@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
+import Script from "next/script";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import Header from "@/components/Header";
@@ -112,18 +113,18 @@ export default function RootLayout({
 
   return (
     <html lang="en" className="h-full antialiased">
-      <head>        <meta name="google-adsense-account" content={adsenseClientId} />
+      <body className="min-h-full flex flex-col bg-[#FAF8F5] text-[#1A1A1A]">
+        {/* Organization JSON-LD Schema */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+        {/* Google AdSense */}
         <script
           async
           src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClientId}`}
           crossOrigin="anonymous"
         />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
-      </head>
-      <body className="min-h-full flex flex-col bg-[#FAF8F5] text-[#1A1A1A]">
         <Suspense fallback={null}>
           <GoogleAnalytics />
         </Suspense>

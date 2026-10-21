@@ -10,6 +10,7 @@ import TaxonomyManagement from './pages/TaxonomyManagement';
 import SupportTickets from './pages/SupportTickets';
 import EducatorCards from './pages/EducatorCards';
 import TestimonialsManagement from './pages/TestimonialsManagement';
+import HomeSettingsManagement from './pages/HomeSettingsManagement';
 
 export default function App() {
   return (
@@ -27,6 +28,18 @@ export default function App() {
           <Route
             path="/dashboard"
             element={<ProtectedRoute><Dashboard /></ProtectedRoute>}
+          />
+          <Route
+            path="/seo"
+            element={<ProtectedRoute><Dashboard /></ProtectedRoute>}
+          />
+          <Route
+            path="/home-settings"
+            element={<ProtectedRoute><HomeSettingsManagement /></ProtectedRoute>}
+          />
+          <Route
+            path="/home-cms"
+            element={<Navigate to="/home-settings" replace />}
           />
           <Route
             path="/applications"

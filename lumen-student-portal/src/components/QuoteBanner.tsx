@@ -166,50 +166,67 @@ export default function QuoteBanner() {
           className={`grid grid-cols-1 ${banner.quote ? "md:grid-cols-12 gap-8 md:gap-10" : "max-w-3xl"} items-center transition-opacity duration-400`}
           style={{ opacity: isFading ? 0 : 1 }}
         >
-          {/* Left Column: Headline, Subtitle & CTAs */}
-          <div className={`${banner.quote ? "md:col-span-7" : "w-full"} flex flex-col gap-3.5`}>
+          {/* Left Column: Tag, Headline, Subtitle & CTAs (all optional) */}
+          {(banner.tag || banner.title || banner.subtitle || banner.ctaText || banner.secondaryCtaText) && (
+            <div className={`${banner.quote ? "md:col-span-7" : "w-full"} flex flex-col gap-3.5`}>
+              {/* Optional Category Tag / Badge */}
+              {banner.tag && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] sm:text-xs font-semibold text-[#F7D8C8] bg-white/10 backdrop-blur-md border border-white/15 w-fit">
+                  <Sparkles className="h-3 w-3 text-[#E67E22]" />
+                  <span>{banner.tag}</span>
+                </div>
+              )}
 
-            <h1
-              className="font-serif-display text-2xl sm:text-3xl md:text-4xl lg:text-[2.75rem] font-medium text-white leading-[1.2]"
-              style={{ textShadow: "0 2px 14px rgba(0,0,0,0.6)" }}
-            >
-              {banner.title}
-            </h1>
-
-            {banner.subtitle && (
-              <p className="font-ui text-sm sm:text-base text-white/85 leading-relaxed max-w-xl">
-                {banner.subtitle}
-              </p>
-            )}
-
-            {/* Action Row: Full-width stacked on mobile, side-by-side on desktop */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 pt-2 w-full sm:w-auto">
-              <Link
-                href={banner.ctaLink || "/insights"}
-                id="hero-explore-cta"
-                className="group inline-flex items-center justify-center gap-2 px-6 py-3 sm:py-2.5 rounded-full font-ui text-xs sm:text-sm font-bold text-white transition-all duration-300 hover:shadow-xl hover:scale-105 text-center shadow-md cursor-pointer"
-                style={{ background: "linear-gradient(135deg, #A84C32 0%, #8B3A25 100%)" }}
-              >
-                <BookOpen className="h-4 w-4" />
-                <span>{banner.ctaText || "Explore All Insights"}</span>
-                <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
-              </Link>
-
-              {banner.secondaryCtaText && (
-                <Link
-                  href={banner.secondaryCtaLink || "/teachers"}
-                  id="hero-teachers-cta"
-                  className="inline-flex items-center justify-center gap-1.5 px-5 py-3 sm:py-2.5 rounded-full font-ui text-xs sm:text-sm font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/40 backdrop-blur-sm transition-all text-center cursor-pointer"
+              {/* Optional Title Heading */}
+              {banner.title && (
+                <h1
+                  className="font-serif-display text-2xl sm:text-3xl md:text-4xl lg:text-[2.75rem] font-medium text-white leading-[1.2]"
+                  style={{ textShadow: "0 2px 14px rgba(0,0,0,0.6)" }}
                 >
-                  {banner.secondaryCtaText}
-                </Link>
+                  {banner.title}
+                </h1>
+              )}
+
+              {/* Optional Subtitle */}
+              {banner.subtitle && (
+                <p className="font-ui text-sm sm:text-base text-white/85 leading-relaxed max-w-xl">
+                  {banner.subtitle}
+                </p>
+              )}
+
+              {/* Optional Action CTAs (only rendered if at least one CTA text is provided) */}
+              {(banner.ctaText || banner.secondaryCtaText) && (
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 pt-2 w-full sm:w-auto">
+                  {banner.ctaText && (
+                    <Link
+                      href={banner.ctaLink || "/insights"}
+                      id="hero-explore-cta"
+                      className="group inline-flex items-center justify-center gap-2 px-6 py-3 sm:py-2.5 rounded-full font-ui text-xs sm:text-sm font-bold text-white transition-all duration-300 hover:shadow-xl hover:scale-105 text-center shadow-md cursor-pointer"
+                      style={{ background: "linear-gradient(135deg, #A84C32 0%, #8B3A25 100%)" }}
+                    >
+                      <BookOpen className="h-4 w-4" />
+                      <span>{banner.ctaText}</span>
+                      <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
+                    </Link>
+                  )}
+
+                  {banner.secondaryCtaText && (
+                    <Link
+                      href={banner.secondaryCtaLink || "/teachers"}
+                      id="hero-teachers-cta"
+                      className="inline-flex items-center justify-center gap-1.5 px-5 py-3 sm:py-2.5 rounded-full font-ui text-xs sm:text-sm font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/40 backdrop-blur-sm transition-all text-center cursor-pointer"
+                    >
+                      {banner.secondaryCtaText}
+                    </Link>
+                  )}
+                </div>
               )}
             </div>
-          </div>
+          )}
 
-          {/* Right Column: Floating Glass Quote Card */}
+          {/* Right Column: Floating Glass Quote Card (Only if quote text is present) */}
           {banner.quote && (
-            <div className="md:col-span-5 flex justify-center md:justify-end">
+            <div className={`${(banner.tag || banner.title || banner.subtitle || banner.ctaText || banner.secondaryCtaText) ? "md:col-span-5" : "w-full max-w-xl mx-auto"} flex justify-center md:justify-end`}>
               <div
                 className="p-5 sm:p-6 rounded-2xl backdrop-blur-md border border-white/20 max-w-md w-full shadow-2xl relative overflow-hidden"
                 style={{

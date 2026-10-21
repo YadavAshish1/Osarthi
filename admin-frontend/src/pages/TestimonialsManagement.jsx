@@ -15,6 +15,9 @@ import {
   AlertCircle,
   CheckCircle2,
   Users,
+  MessageSquare,
+  BarChart3,
+  TrendingUp,
 } from 'lucide-react';
 
 export default function TestimonialsManagement() {
@@ -211,24 +214,39 @@ export default function TestimonialsManagement() {
 
         {/* Stats Row */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-5 rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-sm">
-            <div className="text-xs text-slate-400 font-medium">Total Reviews</div>
-            <div className="text-2xl font-bold text-white mt-1">{testimonials.length}</div>
-            <div className="text-[11px] text-slate-400 mt-1">Managed in database</div>
-          </div>
-          <div className="p-5 rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-sm">
-            <div className="text-xs text-slate-400 font-medium">Active on Portal</div>
-            <div className="text-2xl font-bold text-emerald-400 mt-1">
-              {testimonials.filter((t) => t.isActive).length}
+          <div className="p-5 rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-sm flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/20 flex items-center justify-center shrink-0">
+              <MessageSquare size={18} className="text-sky-400" />
             </div>
-            <div className="text-[11px] text-slate-400 mt-1">Visible to students</div>
-          </div>
-          <div className="p-5 rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-sm">
-            <div className="text-xs text-slate-400 font-medium">Average Rating</div>
-            <div className="text-2xl font-bold text-amber-400 mt-1 flex items-center gap-1.5">
-              5.0 <Star size={18} className="fill-amber-400 text-amber-400" />
+            <div>
+              <div className="text-xs text-slate-400 font-medium">Total Reviews</div>
+              <div className="text-2xl font-bold text-white">{testimonials.length}</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">Managed in database</div>
             </div>
-            <div className="text-[11px] text-slate-400 mt-1">Student satisfaction</div>
+          </div>
+          <div className="p-5 rounded-2xl bg-slate-900/60 border border-emerald-500/20 backdrop-blur-sm flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center shrink-0">
+              <TrendingUp size={18} className="text-emerald-400" />
+            </div>
+            <div>
+              <div className="text-xs text-slate-400 font-medium">Active on Portal</div>
+              <div className="text-2xl font-bold text-emerald-400">
+                {testimonials.filter((t) => t.isActive).length}
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5">Visible to students</div>
+            </div>
+          </div>
+          <div className="p-5 rounded-2xl bg-slate-900/60 border border-amber-500/20 backdrop-blur-sm flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/20 flex items-center justify-center shrink-0">
+              <Star size={18} className="text-amber-400 fill-amber-400" />
+            </div>
+            <div>
+              <div className="text-xs text-slate-400 font-medium">Average Rating</div>
+              <div className="text-2xl font-bold text-amber-400 flex items-center gap-1.5">
+                5.0
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5">Student satisfaction</div>
+            </div>
           </div>
         </div>
 

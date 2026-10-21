@@ -2,8 +2,11 @@ import { Router } from 'express';
 import multer from 'multer';
 import User from '../models/User.js';
 import Testimonial from '../models/Testimonial.js';
-import HomeSettings from '../models/HomeSettings.js';
+import HomeSettings, { DEFAULT_BANNERS } from '../models/HomeSettings.js';
 import TopTeacherCard from '../models/TopTeacherCard.js';
+import TeacherApplication from '../models/TeacherApplication.js';
+import SupportTicket from '../models/SupportTicket.js';
+import Content from '../models/Content.js';
 import { uploadMedia } from '../services/storage.js';
 import { hashPassword } from '../utils/authHelpers.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
@@ -42,6 +45,58 @@ export async function seedSuperAdmin() {
 // Endpoints require authentication & admin or super_admin role
 router.use(authenticate);
 router.use(requireRole('admin', 'super_admin'));
+
+/** GET /api/superadmin/dashboard-stats — Aggregated overview for admin dashboard */
+router.get('/dashboard-stats', async (req, res, next) => {
+  try {
+    const [
+      totalUsers,
+      totalStudents,
+      totalTeachers,
+      totalAdmins,
+      totalInsights,
+      pendingApplications,
+      openTickets,
+      homeSettings,
+      activeTeacherCards,
+      activeTestimonials,
+    ] = await Promise.all([
+      User.countDocuments(),
+      User.countDocuments({ role: 'student' }),
+      User.countDocuments({ role: 'teacher' }),
+      User.countDocuments({ role: { $in: ['admin', 'super_admin'] } }),
+      Content.countDocuments({ status: 'published' }).catch(() => 0),
+      TeacherApplication.countDocuments({ status: 'pending' }).catch(() => 0),
+      SupportTicket.countDocuments({ status: { $in: ['open', 'in_progress'] } }).catch(() => 0),
+      HomeSettings.findOne().catch(() => null),
+      TopTeacherCard.countDocuments({ active: true }).catch(() => 0),
+      Testimonial.countDocuments({ isActive: true }).catch(() => 0),
+    ]);
+
+    res.json({
+      users: {
+        total: totalUsers,
+        students: totalStudents,
+        teachers: totalTeachers,
+        admins: totalAdmins,
+      },
+      insights: totalInsights,
+      pendingApplications,
+      openTickets,
+      homeStats: homeSettings?.stats || {
+        learners: '10,000+',
+        insights: '250+',
+        mentors: '50+',
+        subjects: '20+',
+      },
+      bannersCount: homeSettings?.banners?.length || 2,
+      activeTeacherCards,
+      activeTestimonials,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 /** GET /api/superadmin/users — List users across system */
 router.get('/users', async (req, res, next) => {
@@ -317,7 +372,12 @@ export async function seedDefaultTestimonials() {
 router.get('/home-settings', async (req, res, next) => {
   try {
     let settings = await HomeSettings.findOne();
-    if (!settings) settings = await HomeSettings.create({});
+    if (!settings) {
+      settings = await HomeSettings.create({ banners: DEFAULT_BANNERS });
+    } else if (!settings.banners || settings.banners.length === 0) {
+      settings.banners = DEFAULT_BANNERS;
+      await settings.save();
+    }
     res.json(settings);
   } catch (err) {
     next(err);
@@ -329,10 +389,32 @@ router.put('/home-settings', async (req, res, next) => {
   try {
     const { stats, featuredInsightIds, banners } = req.body;
     let settings = await HomeSettings.findOne();
+    if (!settings) {
+      settings = new HomeSettings();
+    }
+    if (stats !== undefined) {
+      settings.stats = {
+        learners: stats.learners !== undefined ? String(stats.learners) : (settings.stats?.learners || '10,000+'),
+        insights: stats.insights !== undefined ? String(stats.insights) : (settings.stats?.insights || '250+'),
+        mentors: stats.mentors !== undefined ? String(stats.mentors) : (settings.stats?.mentors || '50+'),
+        subjects: stats.subjects !== undefined ? String(stats.subjects) : (settings.stats?.subjects || '20+'),
+      };
+    }
     if (featuredInsightIds !== undefined) settings.featuredInsightIds = featuredInsightIds;
     if (banners !== undefined) settings.banners = banners;
     await settings.save();
     res.json(settings);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** POST /api/superadmin/home-settings/upload — Upload banner background image */
+router.post('/home-settings/upload', upload.single('image'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+    const result = await uploadMedia(req.file, { userId: req.user._id.toString(), folder: 'banners' });
+    res.json({ url: result.url });
   } catch (err) {
     next(err);
   }

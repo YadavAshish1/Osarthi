@@ -291,7 +291,7 @@ function EducatorInviteCard({
             <PlaySquare className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
           </div>
           <span className="font-ui text-[11px] sm:text-xs font-bold text-[#1A1A1A] tracking-tight">
-            10K+ Students
+            1K+ Students
           </span>
         </div>
 

@@ -322,13 +322,18 @@ export default function EducatorCards() {
                     <h3 className="font-bold text-white text-base tracking-tight truncate">
                       {card.name}
                     </h3>
-                    <p className="text-xs text-slate-400 mt-0.5 truncate">
+                    <p className="text-xs mt-0.5">
                       {card.ctaUrl ? (
-                        <span className="flex items-center justify-center gap-1 text-sky-400 hover:underline">
-                          {card.ctaUrl} <ExternalLink size={10} />
-                        </span>
+                        <a
+                          href={card.ctaUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-sky-400 hover:text-sky-300 transition-colors"
+                        >
+                          View Profile <ExternalLink size={10} />
+                        </a>
                       ) : (
-                        <span>Default Profile Link</span>
+                        <span className="text-slate-500 italic">No profile link</span>
                       )}
                     </p>
                   </div>

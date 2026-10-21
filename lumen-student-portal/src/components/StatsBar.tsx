@@ -25,11 +25,11 @@ export default function StatsBar() {
     api
       .get("/explore/stats")
       .then(({ data }) => {
-        if (data?.learners) {
+        if (data && typeof data === "object") {
           setStats({
-            learners: data.learners,
-            insights: data.insights,
-            mentors: data.mentors,
+            learners: data.learners || FALLBACK_STATS.learners,
+            insights: data.insights || FALLBACK_STATS.insights,
+            mentors: data.mentors || FALLBACK_STATS.mentors,
           });
         }
       })

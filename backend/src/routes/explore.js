@@ -7,7 +7,7 @@ import Content from '../models/Content.js';
 import User from '../models/User.js';
 import SeoSettings from '../models/SeoSettings.js';
 import Testimonial from '../models/Testimonial.js';
-import HomeSettings from '../models/HomeSettings.js';
+import HomeSettings, { DEFAULT_BANNERS } from '../models/HomeSettings.js';
 import TopTeacherCard from '../models/TopTeacherCard.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { escapeRegex } from '../utils/sanitize.js';
@@ -369,7 +369,10 @@ router.get('/banners', async (req, res, next) => {
   try {
     let settings = await HomeSettings.findOne();
     if (!settings) {
-      settings = await HomeSettings.create({});
+      settings = await HomeSettings.create({ banners: DEFAULT_BANNERS });
+    } else if (!settings.banners || settings.banners.length === 0) {
+      settings.banners = DEFAULT_BANNERS;
+      await settings.save();
     }
     const banners = (settings.banners || [])
       .filter((b) => b.active !== false)

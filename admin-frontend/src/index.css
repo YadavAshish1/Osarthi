@@ -1,11 +1,12 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
 /* ── Custom Theme Tokens ───────────────────────────────────── */
 @theme {
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --color-surface: #0f172a;
-  --color-card: #1e293b;
-  --color-elevated: #334155;
+  --color-surface: #080f1a;
+  --color-card: #111827;
+  --color-elevated: #1e2a3a;
   --color-border: rgba(255, 255, 255, 0.08);
   --color-accent: #38bdf8;
   --color-accent-hover: #0ea5e9;
@@ -24,10 +25,28 @@ html, body, #root {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Subtle radial gradient: depth/atmosphere without distraction */
+body {
+  background-image:
+    radial-gradient(ellipse 80% 60% at 10% 0%, rgba(56, 189, 248, 0.05) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 90% 100%, rgba(99, 102, 241, 0.04) 0%, transparent 60%);
+  background-attachment: fixed;
+}
+
 /* ── Scrollbar ────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
+
+/* ── Micro-animations ────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.18s ease-out both;
+}
 
 /* ── Old CSS class overrides for pages not yet migrated ──── */
 .admin-layout { display: flex; flex-direction: column; min-height: 100vh; }
