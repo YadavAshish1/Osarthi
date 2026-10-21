@@ -328,16 +328,16 @@ export default function GlobalSearchModal({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-start justify-center pt-8 sm:pt-16 md:pt-20 px-3 sm:px-4 bg-black/55 backdrop-blur-md animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-5 sm:pt-8 md:pt-10 lg:pt-12 px-3 sm:px-4 bg-black/55 backdrop-blur-md animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl bg-[#FAF8F5] rounded-2xl sm:rounded-3xl border border-[#E5E1D8] shadow-2xl overflow-hidden flex flex-col max-h-[88vh] animate-in zoom-in-95 duration-150"
+        className="w-full max-w-[580px] bg-[#FAF8F5] rounded-2xl border border-[#E5E1D8] shadow-2xl overflow-hidden flex flex-col max-h-[82vh] animate-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
         {/* Search Input Bar */}
-        <div className="relative p-3.5 sm:p-5 border-b border-[#E5E1D8] bg-white flex items-center gap-3">
+        <div className="relative p-3 sm:p-4 border-b border-[#E5E1D8] bg-white flex items-center gap-2.5">
           <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-[#FAF8F5] border border-[#E5E1D8] text-[#A84C32] shrink-0">
             {loading ? (
               <Loader2 className="h-4.5 w-4.5 animate-spin text-[#A84C32]" />
@@ -439,7 +439,7 @@ export default function GlobalSearchModal({
         )}
 
         {/* Scrollable Content Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 space-y-5">
           {/* CASE 1: EMPTY QUERY (Popular & Recommendations) */}
           {!query.trim() && (
             <div className="space-y-6">
