@@ -99,6 +99,7 @@ export interface BlogItem {
   topic: string;
   read_minutes: number;
   created_at: string;
+  updated_at?: string;
   likes_count?: number;
   user_liked?: boolean;
 }
@@ -292,6 +293,7 @@ export function mapContentToBlog(raw: any): BlogItem {
     topic: raw.topicRef?.name || raw.topicRef || "",
     read_minutes,
     created_at: raw.createdAt || raw.created_at || new Date().toISOString(),
+    updated_at: raw.updatedAt || raw.updated_at || undefined,
     likes_count: raw.likes_count || 0,
     user_liked: raw.user_liked || false,
   };

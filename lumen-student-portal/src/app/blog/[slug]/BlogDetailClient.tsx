@@ -6,6 +6,7 @@ import { ArrowLeft, Clock, Heart, Share2, Check, Bookmark, BookmarkCheck, Bookma
 import { api, BlogItem, CommentItem, FALLBACK_BLOGS, mapContentToBlog, getTeacherSlug } from "@/lib/api";
 import { renderMarkedText, mediaUrl } from "@/lib/renderMarks";
 import CommentThread from "@/components/CommentThread";
+import AdSenseBanner from "@/components/google-ad-sense/AdSenseBanner";
 import { useAuth } from "@/context/AuthContext";
 import { trackInsightView, trackAppreciation, trackShare } from "@/lib/gtag";
 import { toast } from "sonner";
@@ -98,7 +99,7 @@ export default function BlogDetailClient({
           setBookmarked(isSaved);
           setLiked(isLiked);
         }
-      } catch {}
+      } catch { }
     })();
   }, [user, blog?.id]);
 
@@ -357,11 +358,10 @@ export default function BlogDetailClient({
                 onClick={handleBookmark}
                 data-testid="desktop-bookmark-button"
                 title={bookmarked ? "Click to unsave this insight" : "Save insight"}
-                className={`flex items-center gap-1.5 font-ui text-xs px-3.5 py-1.5 rounded-full border transition-all cursor-pointer ${
-                  bookmarked
+                className={`flex items-center gap-1.5 font-ui text-xs px-3.5 py-1.5 rounded-full border transition-all cursor-pointer ${bookmarked
                     ? "bg-[#F5F2EB] border-[#A84C32] text-[#A84C32] font-semibold hover:bg-red-50 hover:border-red-500 hover:text-red-600"
                     : "bg-white border-[#E5E1D8] text-[#5C5A55] hover:border-[#A84C32] hover:text-[#A84C32]"
-                }`}
+                  }`}
               >
                 {bookmarked ? (
                   <>
@@ -505,9 +505,8 @@ export default function BlogDetailClient({
           blog.blocks!.map((block) => (
             <div key={block.id} style={{ textAlign: (block as any).align || "left" }}>
               {block.type === "heading" && (
-                <h2 className={`font-serif-display font-semibold text-[#1A1A1A] pt-6 pb-2 border-b border-[#E5E1D8]/60 ${
-                  block.level === 1 ? "text-3xl md:text-4xl" : "text-2xl md:text-3xl"
-                }`}>
+                <h2 className={`font-serif-display font-semibold text-[#1A1A1A] pt-6 pb-2 border-b border-[#E5E1D8]/60 ${block.level === 1 ? "text-3xl md:text-4xl" : "text-2xl md:text-3xl"
+                  }`}>
                   {renderMarkedText(block.text || "", block.marks || [])}
                 </h2>
               )}
@@ -590,8 +589,8 @@ export default function BlogDetailClient({
             onClick={toggleLike}
             data-testid="like-blog-button"
             className={`flex items-center gap-3 px-8 py-3.5 rounded-full font-ui text-sm font-semibold transition-all cursor-pointer shadow-xs hover:shadow-md ${liked
-                ? "bg-[#A84C32] text-white"
-                : "bg-white border border-[#E5E1D8] text-[#1A1A1A] hover:border-[#A84C32]"
+              ? "bg-[#A84C32] text-white"
+              : "bg-white border border-[#E5E1D8] text-[#1A1A1A] hover:border-[#A84C32]"
               }`}
           >
             <Heart className={`h-5 w-5 ${liked ? "fill-white" : "text-[#A84C32]"}`} />
@@ -617,6 +616,11 @@ export default function BlogDetailClient({
             )}
           </button>
         </div>
+      </div>
+
+      {/* Non-intrusive Ad Banner — After Reading & Before Comments */}
+      <div className="max-w-3xl mx-auto px-6">
+        <AdSenseBanner slot="4103581240" />
       </div>
 
       {/* Reflections / Comments */}

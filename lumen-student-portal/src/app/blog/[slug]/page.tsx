@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import BlogDetailClient from "./BlogDetailClient";
 import { API, BlogItem, FALLBACK_BLOGS, mapContentToBlog, getDefaultSubjectCover } from "@/lib/api";
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.medhashine.in";
+
 function extractIdFromSlug(slug: string): string {
   const mongoMatch = slug.match(/([a-f0-9]{24})$/);
   if (mongoMatch) return mongoMatch[1];
@@ -28,6 +30,19 @@ async function fetchBlogServer(id: string, slug: string): Promise<BlogItem | nul
   return FALLBACK_BLOGS.find((b) => b.id === id || b.slug === slug) || null;
 }
 
+// Detect article language based on subject + title content
+function detectLanguage(subject: string, title: string): "hi-IN" | "en-IN" {
+  const hindiSubjects = [
+    "Hindi", "हिंदी", "हिन्दी", "Sanskrit", "संस्कृत",
+    "हिंदी पद्य", "हिन्दी पद्य", "हिंदी गद्य", "हिन्दी गद्य",
+    "व्याकरण", "पद्य", "गद्य", "कहानी", "कविता",
+  ];
+  if (hindiSubjects.includes(subject)) return "hi-IN";
+  // Check if title has Devanagari characters
+  if (/[\u0900-\u097F]/.test(title)) return "hi-IN";
+  return "en-IN";
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -51,24 +66,55 @@ export async function generateMetadata({
   const description = blog.excerpt || `Read "${blog.title}" by ${blog.teacher_name} on Medhashine.`;
   const coverUrl = blog.cover || getDefaultSubjectCover(blog.subject);
 
+  const canonicalSlug = blog.slug || rawSlug;
+  const canonicalUrl = `/blog/${canonicalSlug}`;
+  const lang = detectLanguage(blog.subject, blog.title);
+  const isHindi = lang === "hi-IN";
+
   return {
     title,
     description,
     keywords: [
+      // Core content identifiers
       blog.subject,
       blog.topic,
       blog.class_level,
       blog.teacher_name,
-      "Medhashine",
-      "essays",
-      "insights",
-      "education",
-    ],
+      // Combination keywords
+      blog.class_level && blog.subject ? `${blog.class_level} ${blog.subject}` : null,
+      blog.class_level && blog.subject ? `${blog.class_level} ${blog.subject} notes` : null,
+      blog.class_level && blog.subject ? `${blog.class_level} ${blog.subject} Medhashine` : null,
+      blog.topic && blog.subject ? `${blog.topic} ${blog.subject}` : null,
+      blog.topic ? `${blog.topic} notes` : null,
+      blog.topic ? `${blog.topic} question answer` : null,
+      // Hindi-specific variants
+      isHindi && blog.topic ? `${blog.topic} प्रश्न उत्तर` : null,
+      isHindi && blog.topic ? `${blog.topic} सारांश` : null,
+      isHindi && blog.topic ? `${blog.topic} व्याख्या` : null,
+      isHindi && blog.topic ? `${blog.topic} निबंध` : null,
+      // English-specific variants
+      !isHindi && blog.topic ? `${blog.topic} summary` : null,
+      !isHindi && blog.topic ? `${blog.topic} explanation` : null,
+      !isHindi && blog.topic ? `${blog.topic} solved` : null,
+      !isHindi && blog.topic ? `${blog.topic} essay` : null,
+      // Board variants
+      blog.class_level && blog.subject ? `UP Board ${blog.class_level} ${blog.subject}` : null,
+      blog.class_level && blog.subject ? `CBSE ${blog.class_level} ${blog.subject}` : null,
+      blog.class_level && blog.subject ? `NCERT ${blog.class_level} ${blog.subject}` : null,
+      // Brand
+      "Medhashine", "medhashine.in",
+      "educational insights", "student notes", "board exam",
+    ].filter(Boolean) as string[],
     authors: [{ name: blog.teacher_name }],
+    alternates: {
+      canonical: canonicalUrl,
+    },
     openGraph: {
       title: `${blog.title} | Medhashine`,
       description,
+      url: `${siteUrl}${canonicalUrl}`,
       type: "article",
+      locale: isHindi ? "hi_IN" : "en_IN",
       publishedTime: blog.created_at,
       authors: [blog.teacher_name],
       images: coverUrl ? [{ url: coverUrl, alt: blog.title }] : [],
@@ -98,22 +144,38 @@ export default async function BlogDetailPage({
   const jsonLd = blog
     ? {
         "@context": "https://schema.org",
-        "@type": "BlogPosting",
+        "@type": "Article",
         headline: blog.title,
         description: blog.excerpt,
         image: blog.cover || getDefaultSubjectCover(blog.subject),
         datePublished: blog.created_at,
+        dateModified: blog.updated_at || blog.created_at,
+        inLanguage: detectLanguage(blog.subject, blog.title),
+        educationalLevel: blog.class_level || undefined,
+        about: [
+          blog.subject ? { "@type": "Thing", name: blog.subject } : null,
+          blog.topic ? { "@type": "Thing", name: blog.topic } : null,
+        ].filter(Boolean),
         author: {
           "@type": "Person",
           name: blog.teacher_name,
+          worksFor: {
+            "@type": "EducationalOrganization",
+            name: "Medhashine",
+            url: siteUrl,
+          },
         },
         publisher: {
-          "@type": "Organization",
+          "@type": "EducationalOrganization",
           name: "Medhashine",
-          url: process.env.NEXT_PUBLIC_SITE_URL || "https://www.medhashine.in",
+          url: siteUrl,
+        },
+        mainEntityOfPage: {
+          "@type": "WebPage",
+          "@id": `${siteUrl}/blog/${blog.slug || ""}`,
         },
         articleSection: blog.subject,
-        keywords: [blog.subject, blog.topic, blog.class_level],
+        keywords: [blog.subject, blog.topic, blog.class_level].filter(Boolean).join(", "),
       }
     : null;
 

@@ -2,8 +2,11 @@ import React from "react";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "About Us | Medhashine",
+  title: "About Us — Our Story & Mission",
   description: "A quiet room for insights written by teachers who care.",
+  alternates: {
+    canonical: "/about",
+  },
   openGraph: {
     title: "About Us | Medhashine",
     description: "A quiet room for insights written by teachers who care.",

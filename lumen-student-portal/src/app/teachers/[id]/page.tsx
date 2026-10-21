@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import TeacherProfileClient from "./TeacherProfileClient";
-import { API, TeacherProfile, BlogItem, mapContentToBlog } from "@/lib/api";
+import { API, TeacherProfile, BlogItem, mapContentToBlog, getTeacherSlug } from "@/lib/api";
+
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.medhashine.in";
 
 function extractTeacherIdFromSlug(slug: string): string {
   const mongoMatch = slug.match(/([a-f0-9]{24})$/);
@@ -50,30 +52,50 @@ export async function generateMetadata({
 
   if (!teacher) {
     return {
-      title: "Educator Profile Not Found | Medhashine",
-      description: "The requested educator profile could not be found.",
+      title: "Educator Profile Not Found",
+      description: "The requested educator profile could not be found on Medhashine.",
     };
   }
 
-  const title = `${teacher.name} | Medhashine Educator Profile`;
+  // Title without "| Medhashine" suffix — root layout template adds it automatically
+  const title = `${teacher.name} — Educator Profile`;
+  const ogTitle = `${teacher.name} | Medhashine Educator`;
   const description =
     teacher.bio ||
     `Read academic insights, qualifications, and educational articles authored by ${teacher.name} on Medhashine.`;
 
+  const teacherSlug = teacher ? getTeacherSlug(teacher._id, teacher.name) : id;
+  const canonicalUrl = `/teachers/${teacherSlug}`;
+
+  // Keyword variants that match "Ashish by Medhashine", "Ashish Medhashine teacher" etc.
+  const nameKeywords = [
+    teacher.name,
+    `${teacher.name} Medhashine`,
+    `${teacher.name} by Medhashine`,
+    `${teacher.name} teacher Medhashine`,
+    `${teacher.name} educator`,
+    `${teacher.name} insights`,
+    ...(teacher.subjects ? teacher.subjects.map((s: string) => `${teacher.name} ${s}`) : []),
+  ];
+
   return {
     title,
     description,
-    keywords: [teacher.name, "Educator", "Medhashine", "Faculty", "Teacher Profile", "Insights"],
+    keywords: [...nameKeywords, "Educator", "Medhashine", "Faculty", "Teacher Profile", "Insights"],
     authors: [{ name: teacher.name }],
+    alternates: {
+      canonical: canonicalUrl,
+    },
     openGraph: {
-      title,
+      title: ogTitle,
       description,
+      url: `${siteUrl}${canonicalUrl}`,
       type: "profile",
       images: teacher.avatar ? [{ url: teacher.avatar, alt: teacher.name }] : [],
     },
     twitter: {
       card: "summary_large_image",
-      title,
+      title: ogTitle,
       description,
       images: teacher.avatar ? [teacher.avatar] : [],
     },
@@ -91,14 +113,19 @@ export default async function TeacherProfilePage({
   const { teacher, blogs, total, hasMore } = await fetchTeacherServer(id);
 
   // Structured Data (JSON-LD) for Schema.org Person / Educator for Google Search indexing
+  const teacherSlugForLd = teacher ? getTeacherSlug(teacher._id, teacher.name) : id;
   const jsonLd = teacher
     ? {
       "@context": "https://schema.org",
       "@type": "Person",
       name: teacher.name,
+      url: `${siteUrl}/teachers/${teacherSlugForLd}`,
       image: teacher.avatar || undefined,
       description: teacher.bio || undefined,
-      jobTitle: "Educator / Faculty",
+      jobTitle: (teacher.subjects && teacher.subjects.length > 0)
+        ? `${teacher.subjects[0]} Educator`
+        : "Educator",
+      knowsAbout: teacher.subjects || [],
       worksFor: {
         "@type": "EducationalOrganization",
         name: "Medhashine",

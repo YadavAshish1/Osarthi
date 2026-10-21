@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import PrivacyClient from "./PrivacyClient";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy & Student Data Charter | Medhashine",
+  title: "Privacy Policy & Student Data Charter",
   description:
     "Learn how Medhashine protects student and educator data with our enterprise-grade privacy policy, zero data-selling guarantee, and full DPDP Act & COPPA compliance.",
   keywords: [

@@ -8,6 +8,7 @@ import TopTeachers from "@/components/TopTeachers";
 import TestimonialsSection from "@/components/TestimonialsSection";
 import StartLearningBanner from "@/components/StartLearningBanner";
 import BecomeTeacherBanner from "@/components/BecomeTeacherBanner";
+import AdSenseBanner from "@/components/google-ad-sense/AdSenseBanner";
 
 export default function Home() {
   return (
@@ -20,6 +21,11 @@ export default function Home() {
 
       {/* 3. Platform Impact Stats — Interactive 3-metric highlight cards (under Handpicked Insights) */}
       <StatsBar />
+
+      {/* Non-intrusive AdSense Banner */}
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 my-6">
+        <AdSenseBanner slot="4103581240" />
+      </div>
 
       {/* 4. Top Teachers / Creators — Educators showcase */}
       <TopTeachers />
