@@ -7,6 +7,7 @@ import { Search, User as UserIcon, LogOut, Menu, X, PenSquare, Clock } from "luc
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { trackSearch } from "@/lib/gtag";
+import GlobalSearchModal from "@/components/GlobalSearchModal";
 
 export default function Header({ onSearch }: { onSearch?: (q: string) => void }) {
   const { user, ready, logout, openAuth } = useAuth();
@@ -17,6 +18,7 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
   const [mounted, setMounted] = useState(false);
   const [q, setQ] = useState(searchParams.get("q") || "");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [teacherStatus, setTeacherStatus] = useState<"none" | "pending" | "approved">("none");
 
   useEffect(() => {
@@ -26,6 +28,18 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
   useEffect(() => {
     setMenuOpen(false);
   }, [pathname]);
+
+  // Global Command/Ctrl + K shortcut to open search modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchModalOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
 
   // Support ?auth=login or ?auth=register query param
@@ -95,19 +109,33 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
           </span>
         </Link>
 
-        <form onSubmit={submit} className="hidden md:flex items-center flex-1 min-w-[180px] max-w-[240px] xl:max-w-xs mx-2 lg:mx-4">
-          <div className="relative w-full">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#5C5A55]" />
-            <input
-              data-testid="global-search-input"
-              type="text"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search insights, teachers…"
-              className="w-full pl-9 pr-3.5 h-9.5 md:h-10 rounded-full bg-white border border-[#E5E1D8] font-ui text-xs lg:text-sm placeholder:text-[#5C5A55]/70 focus:outline-none focus:border-[#A84C32] focus:ring-1 focus:ring-[#A84C32] transition-colors shadow-2xs"
-            />
+        {/* Desktop Search Trigger */}
+        <div
+          data-testid="global-search-trigger"
+          onClick={() => setSearchModalOpen(true)}
+          className="hidden md:flex items-center flex-1 min-w-[200px] max-w-[260px] xl:max-w-xs mx-2 lg:mx-4 cursor-pointer group"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setSearchModalOpen(true);
+            }
+          }}
+          aria-label="Search insights, teachers, and topics"
+        >
+          <div className="relative w-full flex items-center pl-9.5 pr-2.5 h-9.5 md:h-10 rounded-full bg-white border border-[#E5E1D8] group-hover:border-[#A84C32] transition-all shadow-2xs">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#5C5A55] group-hover:text-[#A84C32] transition-colors" />
+            <span className="font-ui text-xs lg:text-sm text-[#5C5A55]/70 truncate select-none">
+              Search insights, teachers…
+            </span>
+            <div className="ml-auto flex items-center gap-0.5">
+              <kbd className="hidden lg:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono font-medium text-[#5C5A55] bg-[#FAF8F5] border border-[#E5E1D8] rounded shadow-2xs group-hover:border-[#A84C32]/40 transition-colors">
+                ⌘K
+              </kbd>
+            </div>
           </div>
-        </form>
+        </div>
 
         <nav className="hidden md:flex items-center gap-3.5 lg:gap-5 xl:gap-7 font-ui text-xs lg:text-sm text-[#1A1A1A] shrink-0">
           <Link
@@ -239,31 +267,40 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
 
         </nav>
 
-        {/* Mobile menu toggle */}
-        <button
-          onClick={() => setMenuOpen(!menuOpen)}
-          className="md:hidden p-2 text-[#1A1A1A] hover:text-[#A84C32]"
-          aria-label="Toggle menu"
-        >
-          {menuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        </button>
+        {/* Mobile Search & Menu Toggle */}
+        <div className="flex md:hidden items-center gap-1">
+          <button
+            onClick={() => setSearchModalOpen(true)}
+            className="p-2 text-[#1A1A1A] hover:text-[#A84C32] rounded-full transition-colors"
+            aria-label="Open search"
+          >
+            <Search className="h-5 w-5 text-[#1A1A1A]" />
+          </button>
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="p-2 text-[#1A1A1A] hover:text-[#A84C32]"
+            aria-label="Toggle menu"
+          >
+            {menuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Drawer */}
       {menuOpen && (
         <div className="md:hidden border-t border-[#E5E1D8] bg-[#FAF8F5] px-6 py-6 space-y-4 shadow-lg animate-in fade-in slide-in-from-top-2 duration-200">
-          <form onSubmit={submit} className="w-full mb-4">
-            <div className="relative w-full">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#5C5A55]" />
-              <input
-                type="text"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search insights, teachers, topics…"
-                className="w-full pl-11 pr-4 h-10 rounded-full bg-white border border-[#E5E1D8] font-ui text-sm focus:outline-none focus:border-[#A84C32]"
-              />
+          <div
+            onClick={() => {
+              setMenuOpen(false);
+              setSearchModalOpen(true);
+            }}
+            className="w-full mb-4 cursor-pointer group"
+          >
+            <div className="relative w-full flex items-center pl-11 pr-4 h-10 rounded-full bg-white border border-[#E5E1D8] group-hover:border-[#A84C32] transition-all font-ui text-sm text-[#5C5A55]/80 shadow-2xs">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#5C5A55] group-hover:text-[#A84C32] transition-colors" />
+              <span>Search insights, teachers, topics…</span>
             </div>
-          </form>
+          </div>
 
           <div className="flex flex-col space-y-2.5 font-ui text-base">
             <Link
@@ -372,6 +409,13 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
           </div>
         </div>
       )}
+
+      {/* Luxury Global Search Modal */}
+      <GlobalSearchModal
+        isOpen={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
+        initialQuery={q}
+      />
     </header>
   );
 }

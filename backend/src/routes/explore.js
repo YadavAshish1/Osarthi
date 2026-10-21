@@ -249,6 +249,204 @@ router.get('/blogs', async (req, res, next) => {
   }
 });
 
+/**
+ * GET /api/explore/search?q=
+ * Unified multi-entity search and recommendations endpoint:
+ * - Empty query: returns popular tags, recommended teachers, trending blogs, popular topics
+ * - With query: matches teachers, blogs (by title AND by related topic/subject), and topics/subjects
+ */
+router.get('/search', async (req, res, next) => {
+  try {
+    const q = (req.query.q || '').trim();
+
+    if (!q) {
+      // 1. Recommendations State
+      const [teachers, blogs, topics] = await Promise.all([
+        // Top 4 recommended teachers
+        User.find({
+          $or: [
+            { role: 'teacher' },
+            { role: 'admin' },
+          ],
+        })
+          .sort({ createdAt: -1 })
+          .limit(4)
+          .select('name _id avatar bio education experience role'),
+
+        // Top 5 trending / featured blogs
+        Content.find({ published: true })
+          .sort({ createdAt: -1 })
+          .limit(5)
+          .select('title blocks createdAt topicRef subjectRef classRef createdBy')
+          .populate('classRef', 'name')
+          .populate('subjectRef', 'name')
+          .populate('topicRef', 'name')
+          .populate('createdBy', 'name avatar'),
+
+        // Popular topics
+        Topic.find().limit(6).select('name _id subjectRef').populate('subjectRef', 'name'),
+      ]);
+
+      const teacherIds = teachers.map((t) => t._id);
+      const contentsForCounts = await Content.find({
+        published: true,
+        createdBy: { $in: teacherIds },
+      })
+        .populate('subjectRef', 'name')
+        .select('createdBy subjectRef');
+
+      const countMap = new Map();
+      const subMap = new Map();
+      for (const c of contentsForCounts) {
+        if (!c.createdBy) continue;
+        const tid = c.createdBy.toString();
+        countMap.set(tid, (countMap.get(tid) || 0) + 1);
+        const sName = c.subjectRef?.name || (typeof c.subjectRef === 'string' ? c.subjectRef : '');
+        if (sName) {
+          if (!subMap.has(tid)) subMap.set(tid, new Set());
+          subMap.get(tid).add(sName);
+        }
+      }
+
+      const formattedTeachers = teachers.map((t) => ({
+        _id: t._id,
+        name: t.name,
+        avatar: t.avatar,
+        bio: t.bio,
+        role: t.role,
+        blogsCount: countMap.get(t._id.toString()) || 0,
+        subjects: Array.from(subMap.get(t._id.toString()) || []),
+      }));
+
+      return res.json({
+        isRecommendation: true,
+        popularSearches: [
+          'कक्षा 10 विज्ञान',
+          'हिंदी पद्य',
+          'Class 12 Physics',
+          'Mathematics',
+          'व्याकरण (Grammar)',
+          'Newton Laws',
+          'संस्कृत श्लोक',
+          'Board Exam Preparation',
+        ],
+        teachers: formattedTeachers,
+        blogs,
+        topics: topics.map((top) => ({
+          _id: top._id,
+          name: top.name,
+          subjectName: top.subjectRef?.name || '',
+        })),
+      });
+    }
+
+    // 2. Query Search State
+    const searchRegex = new RegExp(escapeRegex(q), 'i');
+
+    const [matchingTopics, matchingSubjects] = await Promise.all([
+      Topic.find({ name: searchRegex }).select('_id name subjectRef').populate('subjectRef', 'name'),
+      Subject.find({ name: searchRegex }).select('_id name'),
+    ]);
+
+    const matchingTopicIds = matchingTopics.map((t) => t._id);
+    const matchingSubjectIds = matchingSubjects.map((s) => s._id);
+
+    const [matchedTeachers, matchedBlogs] = await Promise.all([
+      User.find({
+        $and: [
+          {
+            $or: [
+              { role: 'teacher' },
+              { role: 'admin' },
+            ],
+          },
+          {
+            $or: [
+              { name: searchRegex },
+              { bio: searchRegex },
+            ],
+          },
+        ],
+      })
+        .limit(6)
+        .select('name _id avatar bio education experience role'),
+
+      Content.find({
+        published: true,
+        $or: [
+          { title: searchRegex },
+          ...(matchingTopicIds.length > 0 ? [{ topicRef: { $in: matchingTopicIds } }] : []),
+          ...(matchingSubjectIds.length > 0 ? [{ subjectRef: { $in: matchingSubjectIds } }] : []),
+        ],
+      })
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .select('title blocks createdAt topicRef subjectRef classRef createdBy')
+        .populate('classRef', 'name')
+        .populate('subjectRef', 'name')
+        .populate('topicRef', 'name')
+        .populate('createdBy', 'name avatar'),
+    ]);
+
+    const teacherIds = matchedTeachers.map((t) => t._id);
+    const contentsForCounts = await Content.find({
+      published: true,
+      createdBy: { $in: teacherIds },
+    })
+      .populate('subjectRef', 'name')
+      .select('createdBy subjectRef');
+
+    const countMap = new Map();
+    const subMap = new Map();
+    for (const c of contentsForCounts) {
+      if (!c.createdBy) continue;
+      const tid = c.createdBy.toString();
+      countMap.set(tid, (countMap.get(tid) || 0) + 1);
+      const sName = c.subjectRef?.name || (typeof c.subjectRef === 'string' ? c.subjectRef : '');
+      if (sName) {
+        if (!subMap.has(tid)) subMap.set(tid, new Set());
+        subMap.get(tid).add(sName);
+      }
+    }
+
+    const formattedTeachers = matchedTeachers.map((t) => ({
+      _id: t._id,
+      name: t.name,
+      avatar: t.avatar,
+      bio: t.bio,
+      role: t.role,
+      blogsCount: countMap.get(t._id.toString()) || 0,
+      subjects: Array.from(subMap.get(t._id.toString()) || []),
+    }));
+
+    const formattedTopics = [
+      ...matchingTopics.map((top) => ({
+        _id: top._id,
+        name: top.name,
+        type: 'topic',
+        subjectName: top.subjectRef?.name || '',
+      })),
+      ...matchingSubjects.map((sub) => ({
+        _id: sub._id,
+        name: sub.name,
+        type: 'subject',
+        subjectName: sub.name,
+      })),
+    ].slice(0, 6);
+
+    res.json({
+      query: q,
+      isRecommendation: false,
+      teachers: formattedTeachers,
+      blogs: matchedBlogs,
+      topics: formattedTopics,
+      totalCount: formattedTeachers.length + matchedBlogs.length + formattedTopics.length,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 /** GET /api/explore/featured - recently published across all topics (with optional subject & limit) */
 router.get('/featured', async (req, res, next) => {
   try {
