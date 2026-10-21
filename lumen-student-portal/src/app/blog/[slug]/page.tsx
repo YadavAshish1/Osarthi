@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import BlogDetailClient from "./BlogDetailClient";
 import { API, BlogItem, FALLBACK_BLOGS, mapContentToBlog, getDefaultSubjectCover } from "@/lib/api";
+import { romanizeHindi, hasDevanagari } from "@/lib/transliterate";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.medhashine.in";
 
@@ -38,8 +39,7 @@ function detectLanguage(subject: string, title: string): "hi-IN" | "en-IN" {
     "व्याकरण", "पद्य", "गद्य", "कहानी", "कविता",
   ];
   if (hindiSubjects.includes(subject)) return "hi-IN";
-  // Check if title has Devanagari characters
-  if (/[\u0900-\u097F]/.test(title)) return "hi-IN";
+  if (hasDevanagari(title) || hasDevanagari(subject)) return "hi-IN";
   return "en-IN";
 }
 
@@ -63,13 +63,21 @@ export async function generateMetadata({
   }
 
   const title = blog.title;
-  const description = blog.excerpt || `Read "${blog.title}" by ${blog.teacher_name} on Medhashine.`;
+  const lang = detectLanguage(blog.subject, blog.title);
+  const isHindi = lang === "hi-IN";
+
+  const romanizedTitle = isHindi ? romanizeHindi(blog.title) : "";
+  const romanizedTopic = isHindi && blog.topic ? romanizeHindi(blog.topic) : "";
+
+  const description =
+    blog.excerpt ||
+    (isHindi && (romanizedTopic || romanizedTitle)
+      ? `Read "${blog.title}" (${romanizedTopic || romanizedTitle}) notes, explanation, and summary for ${blog.class_level || ""} ${blog.subject || ""} on Medhashine.`
+      : `Read "${blog.title}" by ${blog.teacher_name} on Medhashine.`);
   const coverUrl = blog.cover || getDefaultSubjectCover(blog.subject);
 
   const canonicalSlug = blog.slug || rawSlug;
   const canonicalUrl = `/blog/${canonicalSlug}`;
-  const lang = detectLanguage(blog.subject, blog.title);
-  const isHindi = lang === "hi-IN";
 
   return {
     title,
@@ -87,11 +95,22 @@ export async function generateMetadata({
       blog.topic && blog.subject ? `${blog.topic} ${blog.subject}` : null,
       blog.topic ? `${blog.topic} notes` : null,
       blog.topic ? `${blog.topic} question answer` : null,
-      // Hindi-specific variants
+      // Hindi-specific Devanagari variants
       isHindi && blog.topic ? `${blog.topic} प्रश्न उत्तर` : null,
       isHindi && blog.topic ? `${blog.topic} सारांश` : null,
       isHindi && blog.topic ? `${blog.topic} व्याख्या` : null,
       isHindi && blog.topic ? `${blog.topic} निबंध` : null,
+      // Hinglish & Romanized transliterated search variants (Google & Bing ranking)
+      romanizedTopic ? romanizedTopic : null,
+      romanizedTopic ? `${romanizedTopic} notes` : null,
+      romanizedTopic ? `${romanizedTopic} summary` : null,
+      romanizedTopic ? `${romanizedTopic} vyakhya` : null,
+      romanizedTopic ? `${romanizedTopic} question answer` : null,
+      romanizedTopic && blog.class_level ? `${romanizedTopic} ${blog.class_level}` : null,
+      romanizedTopic && blog.class_level ? `${romanizedTopic} ${blog.class_level} up board` : null,
+      romanizedTitle && romanizedTitle !== romanizedTopic ? romanizedTitle : null,
+      romanizedTitle ? `${romanizedTitle} notes` : null,
+      romanizedTitle ? `${romanizedTitle} vyakhya` : null,
       // English-specific variants
       !isHindi && blog.topic ? `${blog.topic} summary` : null,
       !isHindi && blog.topic ? `${blog.topic} explanation` : null,
@@ -174,8 +193,15 @@ export default async function BlogDetailPage({
           "@type": "WebPage",
           "@id": `${siteUrl}/blog/${blog.slug || ""}`,
         },
-        articleSection: blog.subject,
-        keywords: [blog.subject, blog.topic, blog.class_level].filter(Boolean).join(", "),
+        keywords: [
+          blog.subject,
+          blog.topic,
+          blog.class_level,
+          romanizeHindi(blog.topic),
+          romanizeHindi(blog.title),
+        ]
+          .filter(Boolean)
+          .join(", "),
       }
     : null;
 

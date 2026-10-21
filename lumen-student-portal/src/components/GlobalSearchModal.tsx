@@ -17,9 +17,11 @@ import {
   GraduationCap,
   ChevronRight,
   TrendingUp,
+  Heart,
 } from "lucide-react";
 import { api, mapContentToBlog, BlogItem } from "@/lib/api";
 import { trackSearch } from "@/lib/gtag";
+import { getExpandedHighlightTerms } from "@/lib/transliterate";
 
 interface SearchTeacher {
   _id: string;
@@ -300,14 +302,29 @@ export default function GlobalSearchModal({
     }
   };
 
-  // Highlight matching substring helper
+  // Highlight matching substring helper with cross-script transliteration support (100% dynamic)
   const highlightMatch = (text: string, search: string) => {
     if (!search || !text) return text;
-    const parts = text.split(new RegExp(`(${search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"));
+    const clean = search.trim();
+    if (!clean) return text;
+
+    const terms = getExpandedHighlightTerms(clean);
+    if (terms.length === 0) return text;
+
+    const regexPattern = terms
+      .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .join("|");
+
+    if (!regexPattern) return text;
+
+    const parts = text.split(new RegExp(`(${regexPattern})`, "gi"));
     return (
       <>
-        {parts.map((part, i) =>
-          part.toLowerCase() === search.toLowerCase() ? (
+        {parts.map((part, i) => {
+          const isMatch = terms.some(
+            (t) => t.toLowerCase() === part.toLowerCase()
+          );
+          return isMatch ? (
             <mark
               key={i}
               className="bg-[#A84C32]/15 text-[#A84C32] font-semibold rounded-xs px-0.5"
@@ -316,8 +333,8 @@ export default function GlobalSearchModal({
             </mark>
           ) : (
             part
-          )
-        )}
+          );
+        })}
       </>
     );
   };
@@ -622,25 +639,121 @@ export default function GlobalSearchModal({
           {/* CASE 2: SEARCH QUERY RESULTS */}
           {query.trim() && results && (
             <div className="space-y-6">
-              {/* No results state */}
+              {/* No direct results state — display 'Loved by Learners' & popular alternatives */}
               {results.totalCount === 0 && !loading && (
-                <div className="py-12 text-center space-y-3">
-                  <div className="w-12 h-12 mx-auto rounded-full bg-white border border-[#E5E1D8] flex items-center justify-center text-[#5C5A55]">
-                    <Search className="h-5 w-5" />
+                <div className="space-y-4 animate-in fade-in duration-200">
+                  {/* Notice banner */}
+                  <div className="p-3 rounded-xl bg-white border border-[#E5E1D8] flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-[#FAF8F5] border border-[#E5E1D8] flex items-center justify-center text-[#5C5A55] shrink-0">
+                        <Search className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs sm:text-sm font-medium text-[#1A1A1A] truncate">
+                          No direct matches for &ldquo;{query}&rdquo;
+                        </p>
+                        <p className="text-[11px] text-[#5C5A55] font-ui">
+                          Explore these popular insights loved by students
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleFullSearch(query)}
+                      className="px-2.5 py-1.5 rounded-full bg-[#FAF8F5] hover:bg-[#A84C32] text-[#A84C32] hover:text-white border border-[#E5E1D8] hover:border-[#A84C32] text-xs font-ui font-medium transition-all whitespace-nowrap shrink-0 flex items-center gap-1"
+                    >
+                      <span>All Insights</span>
+                      <ArrowRight className="h-3 w-3" />
+                    </button>
                   </div>
-                  <h3 className="font-serif-display text-lg text-[#1A1A1A]">
-                    No direct matches for &ldquo;{query}&rdquo;
-                  </h3>
-                  <p className="text-xs sm:text-sm text-[#5C5A55] font-ui max-w-sm mx-auto">
-                    Try searching with broader terms or check out our full reading room.
-                  </p>
-                  <button
-                    onClick={() => handleFullSearch(query)}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#A84C32] text-white text-xs font-ui font-medium hover:bg-[#8C3A27] transition-all shadow-2xs mt-2"
-                  >
-                    <span>Search all in Insights</span>
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </button>
+
+                  {/* Loved by Learners • Trending Insights */}
+                  {recommendations?.blogs && recommendations.blogs.length > 0 && (
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-[#5C5A55] font-ui">
+                        <span className="flex items-center gap-1.5">
+                          <Heart className="h-3.5 w-3.5 text-rose-500 fill-rose-500" />
+                          Loved by Learners • Trending Insights
+                        </span>
+                        <button
+                          onClick={() => handleSelect("/insights")}
+                          className="text-xs text-[#A84C32] hover:underline font-ui font-medium flex items-center gap-0.5"
+                        >
+                          View all <ChevronRight className="h-3 w-3" />
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        {recommendations.blogs.slice(0, 4).map((blog) => (
+                          <div
+                            key={blog.id}
+                            onClick={() => handleSelect(`/blog/${blog.slug || blog.id}`, blog.title)}
+                            className="p-3 rounded-xl bg-white border border-[#E5E1D8] hover:border-[#A84C32] transition-all cursor-pointer flex items-center gap-3.5 group hover:shadow-2xs"
+                          >
+                            {blog.cover ? (
+                              <img
+                                src={blog.cover}
+                                alt={blog.title}
+                                className="w-12 h-12 rounded-lg object-cover shrink-0 border border-[#E5E1D8]"
+                              />
+                            ) : (
+                              <div className="w-12 h-12 rounded-lg bg-[#FAF8F5] border border-[#E5E1D8] flex items-center justify-center text-[#A84C32] shrink-0">
+                                <BookOpen className="h-5 w-5" />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-0.5">
+                                {blog.subject && (
+                                  <span className="text-[10px] uppercase font-semibold text-[#A84C32] tracking-wider font-ui">
+                                    {blog.subject}
+                                  </span>
+                                )}
+                                {blog.class_level && (
+                                  <span className="text-[10px] text-[#5C5A55] font-ui">
+                                    • {blog.class_level}
+                                  </span>
+                                )}
+                                {blog.read_minutes && (
+                                  <span className="text-[10px] text-[#5C5A55] font-ui">
+                                    • {blog.read_minutes}m read
+                                  </span>
+                                )}
+                              </div>
+                              <h4 className="text-sm font-serif-display font-medium text-[#1A1A1A] truncate group-hover:text-[#A84C32] transition-colors">
+                                {blog.title}
+                              </h4>
+                              {blog.teacher_name && (
+                                <p className="text-[11px] text-[#5C5A55] truncate font-ui mt-0.5">
+                                  By {blog.teacher_name}
+                                </p>
+                              )}
+                            </div>
+                            <ChevronRight className="h-4 w-4 text-[#5C5A55] opacity-40 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all shrink-0" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Popular Searches Alternative Suggestions */}
+                  {recommendations?.popularSearches && recommendations.popularSearches.length > 0 && (
+                    <div className="pt-2 border-t border-[#E5E1D8]/60 space-y-2">
+                      <span className="text-[11px] font-medium text-[#5C5A55] font-ui flex items-center gap-1.5">
+                        <Sparkles className="h-3 w-3 text-amber-500" />
+                        Or try searching for:
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {recommendations.popularSearches.slice(0, 5).map((tag) => (
+                          <button
+                            key={tag}
+                            onClick={() => setQuery(tag)}
+                            className="px-2.5 py-1 rounded-full bg-white border border-[#E5E1D8] hover:border-[#A84C32] hover:text-[#A84C32] text-xs font-ui text-[#1A1A1A] transition-all shadow-2xs"
+                          >
+                            {tag}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

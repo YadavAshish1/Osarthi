@@ -11,6 +11,7 @@ import HomeSettings, { DEFAULT_BANNERS } from '../models/HomeSettings.js';
 import TopTeacherCard from '../models/TopTeacherCard.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { escapeRegex } from '../utils/sanitize.js';
+import { buildSearchRegex, expandSearchVariants } from '../utils/hindiTransliterate.js';
 
 const router = Router();
 
@@ -220,7 +221,7 @@ router.get('/blogs', async (req, res, next) => {
     if (parsedTeacher) filter.createdBy = parsedTeacher;
 
     if (search) {
-      filter.title = { $regex: escapeRegex(search), $options: 'i' };
+      filter.title = buildSearchRegex(search);
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -340,8 +341,8 @@ router.get('/search', async (req, res, next) => {
       });
     }
 
-    // 2. Query Search State
-    const searchRegex = new RegExp(escapeRegex(q), 'i');
+    // 2. Query Search State (with phonetic & transliteration expansion)
+    const searchRegex = buildSearchRegex(q);
 
     const [matchingTopics, matchingSubjects] = await Promise.all([
       Topic.find({ name: searchRegex }).select('_id name subjectRef').populate('subjectRef', 'name'),
