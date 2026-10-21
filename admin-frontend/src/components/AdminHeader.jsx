@@ -18,13 +18,16 @@ import {
   Users,
   GraduationCap,
   LifeBuoy,
+  Edit3,
 } from 'lucide-react';
+import AdminEditProfileModal from './AdminEditProfileModal';
 
 export default function AdminHeader({ activePage }) {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState(null);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
   const navRef = useRef(null);
 
   // Close dropdown on outside click
@@ -150,7 +153,8 @@ export default function AdminHeader({ activePage }) {
   ];
 
   return (
-    <header className="sticky top-0 z-50 bg-slate-900/90 backdrop-blur-xl border-b border-white/10">
+    <>
+      <header className="sticky top-0 z-50 bg-slate-900/90 backdrop-blur-xl border-b border-white/10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16" ref={navRef}>
           {/* Brand Logo */}
@@ -263,25 +267,40 @@ export default function AdminHeader({ activePage }) {
           </nav>
 
           {/* Right Section: User & Sign Out */}
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:block text-right">
-              <div className="text-xs font-semibold text-white">
-                {user?.name || user?.email || 'Admin'}
-              </div>
-              <div className="text-[10px] font-semibold mt-0.5">
-                {user?.role === 'super_admin' ? (
-                  <span className="text-red-400">Super Admin</span>
-                ) : user?.role === 'admin' ? (
-                  <span className="text-sky-400">Admin</span>
+          <div className="flex items-center gap-2.5">
+            {/* Clickable Profile Card to edit bio & profile */}
+            <button
+              onClick={() => setProfileModalOpen(true)}
+              className="flex items-center gap-2.5 p-1 sm:px-3 sm:py-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-sky-500/30 transition-all cursor-pointer group text-left"
+              title="Click to view & edit your profile"
+            >
+              <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0 border border-white/20 bg-sky-500/20 text-sky-400 flex items-center justify-center font-bold text-xs uppercase">
+                {user?.avatar ? (
+                  <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
                 ) : (
-                  <span className="text-slate-400">{user?.role}</span>
+                  user?.name?.[0] || 'A'
                 )}
               </div>
-            </div>
+              <div className="hidden sm:block">
+                <div className="text-xs font-semibold text-white group-hover:text-sky-400 transition-colors flex items-center gap-1.5">
+                  <span className="truncate max-w-[120px]">{user?.name || user?.email || 'Admin'}</span>
+                  <Edit3 size={11} className="text-slate-500 group-hover:text-sky-400" />
+                </div>
+                <div className="text-[10px] font-semibold">
+                  {user?.role === 'super_admin' ? (
+                    <span className="text-red-400">Super Admin</span>
+                  ) : user?.role === 'admin' ? (
+                    <span className="text-sky-400">Admin</span>
+                  ) : (
+                    <span className="text-slate-400">{user?.role}</span>
+                  )}
+                </div>
+              </div>
+            </button>
 
             <button
               onClick={logout}
-              className="p-2 rounded-lg border border-white/10 bg-white/5 text-red-400 hover:bg-red-500/10 hover:border-red-500/30 transition-all cursor-pointer"
+              className="p-2 rounded-xl border border-white/10 bg-white/5 text-red-400 hover:bg-red-500/10 hover:border-red-500/30 transition-all cursor-pointer"
               title="Sign Out"
             >
               <LogOut size={15} />
@@ -356,5 +375,16 @@ export default function AdminHeader({ activePage }) {
         )}
       </div>
     </header>
+
+    {/* Admin / Teacher Profile Edit Modal */}
+    {profileModalOpen && (
+      <AdminEditProfileModal
+        isOpen={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+        user={user}
+        onUserUpdated={(updated) => updateUser?.(updated)}
+      />
+    )}
+  </>
   );
 }

@@ -24,7 +24,9 @@ const upload = multer({
 /** GET /api/profile — return current user profile */
 router.get('/', async (req, res, next) => {
   try {
-    const user = await User.findById(req.user._id).select('-passwordHash -refreshTokenHash -googleId');
+    const user = await User.findById(req.user._id)
+      .select('-passwordHash -refreshTokenHash -googleId')
+      .populate('classRef', 'name');
     if (!user) return res.status(404).json({ message: 'User not found' });
     res.json(user);
   } catch (err) {
@@ -32,22 +34,31 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-/** PUT /api/profile — update name, bio, education, experience */
+/** PUT /api/profile — update name, bio, education, experience, classId */
 router.put('/', async (req, res, next) => {
   try {
-    const { name, bio, education, experience } = req.body;
+    const { name, bio, education, experience, classId } = req.body;
 
     const updates = {};
     if (name !== undefined) updates.name = sanitizeString(name);
     if (bio !== undefined) updates.bio = sanitizeString(bio);
-    if (education !== undefined) updates.education = education;
-    if (experience !== undefined) updates.experience = experience;
+    if (education !== undefined && Array.isArray(education)) updates.education = education;
+    if (experience !== undefined && Array.isArray(experience)) updates.experience = experience;
+    if (classId !== undefined) {
+      if (classId && mongoose.Types.ObjectId.isValid(classId)) {
+        updates.classRef = classId;
+      } else {
+        updates.classRef = null;
+      }
+    }
 
     const user = await User.findByIdAndUpdate(
       req.user._id,
       { $set: updates },
       { new: true, runValidators: true }
-    ).select('-passwordHash -refreshTokenHash -googleId');
+    )
+      .select('-passwordHash -refreshTokenHash -googleId')
+      .populate('classRef', 'name');
 
     res.json(user);
   } catch (err) {

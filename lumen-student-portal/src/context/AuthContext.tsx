@@ -9,6 +9,10 @@ export interface User {
   email: string;
   role?: string;
   avatar?: string;
+  bio?: string;
+  classRef?: { _id: string; name: string } | string | null;
+  education?: Array<{ institution?: string; degree?: string; year?: string }>;
+  experience?: Array<{ title?: string; organization?: string; duration?: string }>;
   savedTeachers?: string[];
 }
 
@@ -68,6 +72,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             email: u.email,
             role: u.role,
             avatar: u.avatar,
+            bio: u.bio || "",
+            classRef: u.classRef || null,
+            education: Array.isArray(u.education) ? u.education : [],
+            experience: Array.isArray(u.experience) ? u.experience : [],
             savedTeachers: Array.isArray(u.savedTeachers) ? u.savedTeachers.map((id: any) => id.toString()) : [],
           });
         } else {
@@ -92,6 +100,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email: u.email,
         role: u.role,
         avatar: u.avatar,
+        bio: u.bio || "",
+        classRef: u.classRef || null,
+        education: Array.isArray(u.education) ? u.education : [],
+        experience: Array.isArray(u.experience) ? u.experience : [],
         savedTeachers: Array.isArray(u.savedTeachers) ? u.savedTeachers.map((id: any) => id.toString()) : [],
       });
       return { ok: true };

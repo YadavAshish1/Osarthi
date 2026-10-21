@@ -178,14 +178,14 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
           >
             Contact
           </Link>
-          <Link
+          {/* <Link
             data-testid="nav-help"
             href="/help"
             className={`whitespace-nowrap hover:text-[#A84C32] transition-colors ${pathname === "/help" ? "font-semibold text-[#A84C32]" : ""
               }`}
           >
             Help Center
-          </Link>
+          </Link> */}
 
           {mounted && ready && user ? (
             <div

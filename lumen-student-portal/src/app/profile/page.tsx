@@ -20,10 +20,14 @@ import {
   Trash2,
   X,
   PenSquare,
+  Pencil,
+  GraduationCap,
+  Briefcase,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api, BlogItem, mapContentToBlog, TeacherProfile, getTeacherSlug } from "@/lib/api";
 import BlogCard from "@/components/BlogCard";
+import EditProfileModal from "@/components/EditProfileModal";
 import { toast } from "sonner";
 
 // Swiper imports
@@ -38,6 +42,7 @@ export default function ProfilePage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
 
   const [activeActivityTab, setActiveActivityTab] = useState<"liked" | "commented">("liked");
   const [savedBlogs, setSavedBlogs] = useState<BlogItem[]>([]);
@@ -240,7 +245,7 @@ export default function ProfilePage() {
             />
 
             {/* Profile Information */}
-            <div className="flex-1 text-center md:text-left">
+            <div className="flex-1 text-center md:text-left min-w-0">
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mb-2">
                 <span className="text-xs font-ui uppercase tracking-wider bg-[#F5F2EB] text-[#A84C32] px-3 py-1 rounded-full border border-[#E5E1D8] font-semibold flex items-center gap-1.5">
                   <ShieldCheck className="h-3.5 w-3.5" />
@@ -252,17 +257,83 @@ export default function ProfilePage() {
                         ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
                         : "Student"}
                 </span>
+
+                {user.role === "student" && user.classRef && (
+                  <span className="text-xs font-ui uppercase tracking-wider bg-[#FAF8F5] text-[#5C5A55] px-3 py-1 rounded-full border border-[#E5E1D8] font-semibold flex items-center gap-1.5">
+                    <GraduationCap className="h-3.5 w-3.5 text-[#A84C32]" />
+                    {typeof user.classRef === "object" ? user.classRef.name : user.classRef}
+                  </span>
+                )}
               </div>
 
-              <h1 className="font-serif-display text-3xl md:text-4xl font-semibold text-[#1A1A1A]">
-                {user.name}
-              </h1>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h1 className="font-serif-display text-3xl md:text-4xl font-semibold text-[#1A1A1A]">
+                    {user.name}
+                  </h1>
 
-              {user.email && (
-                <p className="mt-2 font-ui text-xs text-[#5C5A55] flex items-center justify-center md:justify-start gap-1.5">
-                  <Mail className="h-3.5 w-3.5 text-[#A84C32]" />
-                  {user.email}
+                  {user.email && (
+                    <p className="mt-1 font-ui text-xs text-[#5C5A55] flex items-center justify-center md:justify-start gap-1.5">
+                      <Mail className="h-3.5 w-3.5 text-[#A84C32]" />
+                      {user.email}
+                    </p>
+                  )}
+                </div>
+
+                {/* Edit Profile Action Button */}
+                <button
+                  onClick={() => setEditModalOpen(true)}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full border border-[#E5E1D8] bg-[#FAF8F5] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-white hover:border-[#1A1A1A] transition-all font-ui text-xs font-semibold cursor-pointer shadow-2xs self-center md:self-start shrink-0"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  <span>Edit Profile</span>
+                </button>
+              </div>
+
+              {/* Bio Section */}
+              {user.bio ? (
+                <p className="mt-4 text-sm text-[#3E3C38] font-serif-body leading-relaxed bg-[#FAF8F5] p-4 rounded-2xl border border-[#E5E1D8]/80 max-w-2xl">
+                  {user.bio}
                 </p>
+              ) : (
+                <div className="mt-3 flex items-center justify-center md:justify-start gap-2">
+                  <span className="text-xs text-[#8C8983] font-ui italic">
+                    No bio added yet.
+                  </span>
+                  <button
+                    onClick={() => setEditModalOpen(true)}
+                    className="text-xs text-[#A84C32] font-semibold hover:underline cursor-pointer"
+                  >
+                    + Add Bio
+                  </button>
+                </div>
+              )}
+
+              {/* Education & Experience Pills if available */}
+              {((Array.isArray(user.education) && user.education.length > 0) ||
+                (Array.isArray(user.experience) && user.experience.length > 0)) && (
+                <div className="mt-4 flex flex-wrap gap-2 justify-center md:justify-start">
+                  {user.education?.map((edu, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white border border-[#E5E1D8] text-[11px] font-ui text-[#5C5A55]"
+                    >
+                      <GraduationCap className="h-3.5 w-3.5 text-[#A84C32]" />
+                      <span className="font-semibold text-[#1A1A1A]">{edu.degree || edu.institution}</span>
+                      {edu.institution && edu.degree && <span>at {edu.institution}</span>}
+                    </span>
+                  ))}
+                  {user.experience?.map((exp, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white border border-[#E5E1D8] text-[11px] font-ui text-[#5C5A55]"
+                    >
+                      <Briefcase className="h-3.5 w-3.5 text-[#A84C32]" />
+                      <span className="font-semibold text-[#1A1A1A]">{exp.title || exp.organization}</span>
+                      {exp.organization && exp.title && <span>({exp.organization})</span>}
+                    </span>
+                  ))}
+                </div>
               )}
             </div>
           </div>
@@ -333,6 +404,16 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Edit Profile Full Details Modal */}
+      {editModalOpen && (
+        <EditProfileModal
+          isOpen={editModalOpen}
+          onClose={() => setEditModalOpen(false)}
+          user={user}
+          onProfileUpdated={(updated) => updateUser(updated)}
+        />
       )}
 
       {/* Main Profile Sections */}
