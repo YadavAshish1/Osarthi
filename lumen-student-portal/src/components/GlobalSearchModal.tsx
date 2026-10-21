@@ -55,6 +55,35 @@ export default function GlobalSearchModal({
 }: GlobalSearchModalProps) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  // Close reliably on outside click, touch, or global Escape
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    window.addEventListener("keydown", handleGlobalKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+      window.removeEventListener("keydown", handleGlobalKeyDown);
+    };
+  }, [isOpen, onClose]);
 
   const [query, setQuery] = useState(initialQuery);
   const [activeTab, setActiveTab] = useState<"all" | "blogs" | "teachers" | "topics">("all");
@@ -345,12 +374,19 @@ export default function GlobalSearchModal({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-start justify-center pt-5 sm:pt-8 md:pt-10 lg:pt-12 px-3 sm:px-4 bg-black/55 backdrop-blur-md animate-in fade-in duration-150"
-      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-start justify-center pt-5 sm:pt-8 md:pt-10 lg:pt-12 px-3 sm:px-4 overflow-y-auto animate-in fade-in duration-150"
     >
+      {/* Fullscreen Backdrop Layer */}
       <div
-        className="w-full max-w-[580px] bg-[#FAF8F5] rounded-2xl border border-[#E5E1D8] shadow-2xl overflow-hidden flex flex-col max-h-[82vh] animate-in zoom-in-95 duration-150"
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 bg-black/55 backdrop-blur-md transition-opacity cursor-pointer"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      {/* Modal Dialog Box */}
+      <div
+        ref={modalRef}
+        className="relative z-10 w-full max-w-[580px] bg-[#FAF8F5] rounded-2xl border border-[#E5E1D8] shadow-2xl overflow-hidden flex flex-col max-h-[82vh] animate-in zoom-in-95 duration-150"
         onKeyDown={handleKeyDown}
       >
         {/* Search Input Bar */}

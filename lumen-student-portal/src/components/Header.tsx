@@ -94,10 +94,11 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
   };
 
   return (
-    <header
-      data-testid="site-header"
-      className="sticky top-0 z-50 backdrop-blur-xl bg-[#FAF8F5]/90 border-b border-[#E5E1D8]"
-    >
+    <>
+      <header
+        data-testid="site-header"
+        className="sticky top-0 z-50 backdrop-blur-xl bg-[#FAF8F5]/90 border-b border-[#E5E1D8]"
+      >
       <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-10 flex items-center justify-between gap-3 lg:gap-6 h-16 md:h-20">
         <Link
           href="/"
@@ -410,12 +411,14 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
         </div>
       )}
 
+      </header>
+
       {/* Luxury Global Search Modal */}
       <GlobalSearchModal
         isOpen={searchModalOpen}
         onClose={() => setSearchModalOpen(false)}
         initialQuery={q}
       />
-    </header>
+    </>
   );
 }
