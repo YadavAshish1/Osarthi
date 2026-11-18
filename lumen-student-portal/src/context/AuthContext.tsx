@@ -26,9 +26,9 @@ interface AuthContextType {
   user: User | null;
   ready: boolean;
   authModal: AuthModalState;
-  login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<{ ok: boolean; error?: string; user?: any }>;
   sendOtp: (name: string, email: string, password: string, role: string) => Promise<{ ok: boolean; error?: string }>;
-  register: (name: string, email: string, password: string, role: string, otp: string) => Promise<{ ok: boolean; error?: string }>;
+  register: (name: string, email: string, password: string, role: string, otp: string) => Promise<{ ok: boolean; error?: string; user?: any }>;
   forgotPassword: (email: string) => Promise<{ ok: boolean; error?: string }>;
   resetPassword: (email: string, otp: string, newPassword: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
@@ -106,7 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         experience: Array.isArray(u.experience) ? u.experience : [],
         savedTeachers: Array.isArray(u.savedTeachers) ? u.savedTeachers.map((id: any) => id.toString()) : [],
       });
-      return { ok: true };
+      return { ok: true, user: u };
     } catch (e: any) {
       return {
         ok: false,
@@ -156,7 +156,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const u = data.user;
         if (!u) throw new Error("Invalid response");
         setUser({ id: u._id, name: u.name, email: u.email, role: u.role, avatar: u.avatar });
-        return { ok: true };
+        return { ok: true, user: u };
       } catch (e: any) {
         return {
           ok: false,

@@ -2,12 +2,39 @@ import { Router } from 'express';
 import Content from '../models/Content.js';
 import Topic from '../models/Topic.js';
 import Subject from '../models/Subject.js';
+import Notification from '../models/Notification.js';
+import Subscription from '../models/Subscription.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { sanitizeString, sanitizeBlocks } from '../utils/sanitize.js';
 
 const router = Router();
 
 router.use(authenticate);
+
+async function notifySubscribersOfInsight(content, teacher) {
+  try {
+    const subscriptions = await Subscription.find({ teacherRef: teacher._id }).populate('subscriberRef', 'name email');
+    if (!subscriptions || subscriptions.length === 0) return;
+
+    const notificationsToInsert = subscriptions
+      .filter((sub) => sub.subscriberRef?._id)
+      .map((sub) => ({
+        userRef: sub.subscriberRef._id,
+        type: 'insight_published',
+        title: `New Insight from ${teacher.name}`,
+        message: `"${content.title}" has been published. Read it now!`,
+        teacherRef: teacher._id,
+        contentRef: content._id,
+        link: `/blog/${content.slug || content._id}`,
+      }));
+
+    if (notificationsToInsert.length > 0) {
+      await Notification.insertMany(notificationsToInsert);
+    }
+  } catch (err) {
+    console.error('[Insight Notification Error]', err);
+  }
+}
 
 // Auto cleanup expired bin insights (>30 days retention)
 async function cleanupExpiredBinInsights() {
@@ -20,24 +47,19 @@ async function cleanupExpiredBinInsights() {
 }
 
 async function assertTopicAccess(topicId, user) {
-  const topic = await Topic.findById(topicId);
+  const topic = await Topic.findOne({ _id: topicId, deletedAt: null });
   if (!topic) return { error: { status: 404, message: 'Topic not found' } };
 
-  if (user.role === 'teacher') {
-    if (topic.createdBy.toString() !== user._id.toString()) {
-      return { error: { status: 403, message: 'Forbidden' } };
-    }
-  } else if (user.role === 'student') {
-    const subject = await Subject.findById(topic.subjectRef);
-    if (!subject || subject.deletedAt) {
-      return { error: { status: 404, message: 'Subject not found' } };
-    }
-    if (subject.classRef.toString() !== user.classRef?.toString()) {
+  const subject = await Subject.findOne({ _id: topic.subjectRef, deletedAt: null });
+  if (!subject) return { error: { status: 404, message: 'Subject not found' } };
+
+  if (user.role === 'student') {
+    if (subject.classRef && user.classRef && subject.classRef.toString() !== user.classRef?.toString()) {
       return { error: { status: 403, message: 'Forbidden' } };
     }
   }
 
-  return { topic, subject: await Subject.findById(topic.subjectRef) };
+  return { topic, subject };
 }
 
 /** List all active blogs/posts in a topic */
@@ -227,6 +249,10 @@ router.post('/topic/:topicId', requireRole('teacher'), async (req, res, next) =>
       published: published ?? false,
     });
 
+    if (content.published) {
+      notifySubscribersOfInsight(content, req.user);
+    }
+
     res.status(201).json(content);
   } catch (err) {
     next(err);
@@ -243,6 +269,7 @@ router.put('/:contentId', requireRole('teacher'), async (req, res, next) => {
     }
 
     const { title, blocks, published, topicRef, subjectRef, classRef } = req.body;
+    const wasPublished = existing.published;
 
     const content = await Content.findByIdAndUpdate(
       req.params.contentId,
@@ -256,6 +283,10 @@ router.put('/:contentId', requireRole('teacher'), async (req, res, next) => {
       },
       { new: true, runValidators: true }
     );
+
+    if (content && content.published && !wasPublished) {
+      notifySubscribersOfInsight(content, req.user);
+    }
 
     res.json(content);
   } catch (err) {
@@ -273,8 +304,13 @@ router.patch('/:contentId/publish', requireRole('teacher'), async (req, res, nex
     }
 
     const targetStatus = req.body.published !== undefined ? Boolean(req.body.published) : !existing.published;
+    const wasPublished = existing.published;
     existing.published = targetStatus;
     await existing.save();
+
+    if (existing.published && !wasPublished) {
+      notifySubscribersOfInsight(existing, req.user);
+    }
 
     res.json({
       message: `Insight ${existing.published ? 'published' : 'unpublished'} successfully`,

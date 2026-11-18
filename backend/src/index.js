@@ -26,6 +26,7 @@ import teacherApplicationRoutes from './routes/teacherApplications.js';
 import superAdminRoutes, { seedSuperAdmin, seedTopTeacherCards, seedDefaultTestimonials } from './routes/superAdmin.js';
 import taxonomyRequestRoutes from './routes/taxonomyRequests.js';
 import supportTicketRoutes from './routes/supportTicket.js';
+import subscriptionRoutes from './routes/subscription.js';
 import { getStorageMode, isCloudinaryEnabled } from './services/storage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -149,6 +150,8 @@ app.use('/api/teacher-applications', teacherApplicationRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/taxonomy-requests', taxonomyRequestRoutes);
 app.use('/api/support', formSubmitLimiter, supportTicketRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/subscription', subscriptionRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 

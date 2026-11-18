@@ -11,8 +11,20 @@ router.get('/', async (req, res, next) => {
     const notifications = await Notification.find({ userRef: req.user._id })
       .sort({ createdAt: -1 })
       .limit(50)
-      .populate('quizRef', 'title');
+      .populate('quizRef', 'title')
+      .populate('contentRef', 'title')
+      .populate('teacherRef', 'name avatar')
+      .populate('subscriberRef', 'name avatar');
     res.json(notifications);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/unread-count', async (req, res, next) => {
+  try {
+    const count = await Notification.countDocuments({ userRef: req.user._id, read: false });
+    res.json({ count });
   } catch (err) {
     next(err);
   }

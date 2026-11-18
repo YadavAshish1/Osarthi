@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { X, ArrowLeft, KeyRound, Mail, ShieldCheck } from "lucide-react";
 
 export default function AuthModal() {
+  const router = useRouter();
   const { authModal, closeAuth, login, sendOtp, register, forgotPassword, resetPassword } = useAuth();
   const [mode, setMode] = useState<"login" | "register" | "forgot">("login");
   const [step, setStep] = useState<"form" | "otp" | "forgot-email" | "forgot-reset">("form");
@@ -84,7 +86,11 @@ export default function AuthModal() {
       toast.success("Account created successfully!");
       const cb = authModal.onSuccess;
       closeAuth();
-      setTimeout(() => cb?.(), 50);
+      if (cb) {
+        setTimeout(() => cb(), 50);
+      } else if (res.user?.role === "teacher") {
+        router.push("/teacher/dashboard");
+      }
     } else {
       setErr(res.error || "Invalid verification code");
     }
@@ -102,7 +108,11 @@ export default function AuthModal() {
       toast.success("Welcome back!");
       const cb = authModal.onSuccess;
       closeAuth();
-      setTimeout(() => cb?.(), 50);
+      if (cb) {
+        setTimeout(() => cb(), 50);
+      } else if (res.user?.role === "teacher") {
+        router.push("/teacher/dashboard");
+      }
     } else {
       setErr(res.error || "Authentication failed");
     }

@@ -52,11 +52,22 @@ export async function seedDefaultTaxonomy() {
   }
 }
 
+function sortClassesNaturally(list) {
+  return list.sort((a, b) => {
+    const numA = parseInt((a.name || '').replace(/\D/g, ''), 10);
+    const numB = parseInt((b.name || '').replace(/\D/g, ''), 10);
+    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+    if (!isNaN(numA)) return -1;
+    if (!isNaN(numB)) return 1;
+    return (a.name || '').localeCompare(b.name || '', undefined, { numeric: true });
+  });
+}
+
 router.get('/classes/public', async (req, res, next) => {
   try {
     const classes = await Class.find({ deletedAt: null }).sort({ name: 1 }).select('name _id');
     const unique = [...new Map(classes.map((c) => [c.name.toLowerCase(), c])).values()];
-    res.json(unique);
+    res.json(sortClassesNaturally(unique));
   } catch (err) {
     next(err);
   }
@@ -73,7 +84,7 @@ router.get('/classes', async (req, res, next) => {
     // Return all active classes
     const classes = await Class.find({ deletedAt: null }).sort({ name: 1 });
     const unique = [...new Map(classes.map((c) => [c.name.toLowerCase().trim(), c])).values()];
-    res.json(unique);
+    res.json(sortClassesNaturally(unique));
   } catch (err) {
     next(err);
   }
@@ -97,8 +108,22 @@ router.post('/classes', requireRole('teacher'), async (req, res, next) => {
 
 router.get('/subjects', async (req, res, next) => {
   try {
-    const { classId } = req.query;
-    if (!classId) return res.status(400).json({ message: 'classId required' });
+    const classId = req.query.classId || req.params.classId;
+    const filter = { deletedAt: null };
+    if (classId) {
+      filter.classRef = classId;
+    }
+    const subjects = await Subject.find(filter).sort({ name: 1 });
+    const unique = [...new Map(subjects.map((s) => [s.name.toLowerCase().trim(), s])).values()];
+    res.json(unique);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/subjects/:classId', async (req, res, next) => {
+  try {
+    const classId = req.params.classId;
     const filter = { classRef: classId, deletedAt: null };
     const subjects = await Subject.find(filter).sort({ name: 1 });
     const unique = [...new Map(subjects.map((s) => [s.name.toLowerCase().trim(), s])).values()];
@@ -132,14 +157,36 @@ router.post('/subjects', requireRole('teacher'), async (req, res, next) => {
 
 router.get('/topics', async (req, res, next) => {
   try {
-    const { subjectId, all } = req.query;
+    const { subjectId, classId, all, myOnly } = req.query;
     const filter = { deletedAt: null };
+
     if (subjectId) {
       filter.subjectRef = subjectId;
-    } else if (!all && req.user.role !== 'teacher') {
-      return res.status(400).json({ message: 'subjectId required' });
+    } else if (classId) {
+      const subjectsInClass = await Subject.find({ classRef: classId, deletedAt: null }).select('_id');
+      const subjectIds = subjectsInClass.map((s) => s._id);
+      filter.subjectRef = { $in: subjectIds };
+    } else if (!all && req.user?.role !== 'teacher') {
+      return res.status(400).json({ message: 'subjectId or classId required' });
     }
-    if (req.user.role === 'teacher') {
+
+    if (myOnly === 'true' && req.user?._id) {
+      filter.createdBy = req.user._id;
+    }
+
+    const topics = await Topic.find(filter).sort({ name: 1 });
+    const unique = [...new Map(topics.map((t) => [t.name.toLowerCase().trim(), t])).values()];
+    res.json(unique);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/topics/:subjectId', async (req, res, next) => {
+  try {
+    const { subjectId } = req.params;
+    const filter = { subjectRef: subjectId, deletedAt: null };
+    if (req.query.myOnly === 'true' && req.user?._id) {
       filter.createdBy = req.user._id;
     }
     const topics = await Topic.find(filter).sort({ name: 1 });

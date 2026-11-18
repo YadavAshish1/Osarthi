@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -30,10 +31,17 @@ import {
   ArrowUpDown,
   SlidersHorizontal,
   Layers,
+  Brain,
+  PlaySquare,
+  Plus,
 } from "lucide-react";
 import TopicDeleteModal from "@/components/TopicDeleteModal";
 import TopicEditModal from "@/components/TopicEditModal";
 import TopicRecycleBinModal from "@/components/TopicRecycleBinModal";
+import QuizAnalyticsDashboard from "@/components/QuizAnalyticsDashboard";
+import QuizCollectionManager from "@/components/QuizCollectionManager";
+import SubscriberList from "@/components/SubscriberList";
+import QuizCreateModal from "@/components/QuizCreateModal";
 
 interface TeacherTopicItem {
   _id: string;
@@ -84,6 +92,7 @@ interface AnalyticsData {
 }
 
 export default function TeacherDashboardPage() {
+  const router = useRouter();
   const { user, ready } = useAuth();
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [binItems, setBinItems] = useState<BinItem[]>([]);
@@ -112,8 +121,12 @@ export default function TeacherDashboardPage() {
 
   const [submitting, setSubmitting] = useState(false);
 
-  // Main Tabs: Insights vs Topics
-  const [activeMainTab, setActiveMainTab] = useState<"insights" | "topics">("insights");
+  // Main Tabs: Insights vs Quizzes vs Test Series vs Subscribers vs Topics
+  const [activeMainTab, setActiveMainTab] = useState<
+    "insights" | "quizzes" | "series" | "subscribers" | "topics"
+  >("insights");
+  const [quizCreateModalOpen, setQuizCreateModalOpen] = useState(false);
+  const [editingQuizId, setEditingQuizId] = useState<string | null>(null);
   const [teacherTopics, setTeacherTopics] = useState<TeacherTopicItem[]>([]);
   const [loadingTopics, setLoadingTopics] = useState(false);
   const [topicSearch, setTopicSearch] = useState("");
@@ -456,17 +469,27 @@ export default function TeacherDashboardPage() {
             Educator Studio & Audience Analytics
           </h1>
           <p className="font-serif-body text-xs sm:text-sm text-[#5C5A55] mt-1">
-            Track student readership, engagement metrics, and saved academic insights in real time.
+            Track student readership, engagement metrics, and insights in real time.
           </p>
         </div>
 
-        <Link
-          href="/teacher/write"
-          className="lumen-button-primary py-3 sm:py-3.5 px-5 sm:px-6 text-xs font-semibold shadow-xs shrink-0 inline-flex items-center justify-center gap-2 w-full sm:w-auto"
-        >
-          <PenSquare className="h-4 w-4" />
-          <span>Write New Insight</span>
-        </Link>
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <Link
+            href="/teacher/quiz/create"
+            className="px-4 py-3 sm:py-3.5 rounded-xl bg-white border border-[#E5E1D8] text-xs font-semibold text-[#1A1A1A] hover:border-[#A84C32] hover:text-[#A84C32] shadow-xs inline-flex items-center justify-center gap-2 cursor-pointer flex-1 sm:flex-initial transition-colors"
+          >
+            <Brain className="h-4 w-4 text-[#A84C32]" />
+            <span>+ Create Quiz</span>
+          </Link>
+
+          <Link
+            href="/teacher/write"
+            className="lumen-button-primary py-3 sm:py-3.5 px-5 sm:px-6 text-xs font-semibold shadow-xs shrink-0 inline-flex items-center justify-center gap-2 flex-1 sm:flex-initial"
+          >
+            <PenSquare className="h-4 w-4" />
+            <span>Write New Insight</span>
+          </Link>
+        </div>
       </div>
 
       {/* Overview Stat Cards */}
@@ -561,13 +584,13 @@ export default function TeacherDashboardPage() {
 
       {/* Content Management Table with Publish/Unpublish & 30-Day Recycle Bin */}
       <div className="p-4 sm:p-6 md:p-8 rounded-2xl sm:rounded-3xl bg-white border border-[#E5E1D8] shadow-xs space-y-5 sm:space-y-6">
-        {/* Navigation Tab Header: Insights & Publishing vs Manage Topics */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#E5E1D8] pb-5">
+        {/* Navigation Tab Header: Insights vs Quizzes vs Playlists vs Subscribers vs Topics */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-[#E5E1D8] pb-5">
           <div>
             <span className="eyebrow text-[#A84C32] block mb-1 text-[11px] sm:text-xs">
-              Content &amp; Taxonomy Management
+              Content &amp; Classroom Management
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
                 onClick={() => setActiveMainTab("insights")}
@@ -579,6 +602,45 @@ export default function TeacherDashboardPage() {
               >
                 <BookOpen className="h-4 w-4" />
                 <span>Insights ({contents.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveMainTab("quizzes")}
+                className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+                  activeMainTab === "quizzes"
+                    ? "bg-[#1A1A1A] text-white shadow-xs"
+                    : "bg-white border border-[#E5E1D8] text-[#5C5A55] hover:text-[#1A1A1A] hover:border-[#A84C32]"
+                }`}
+              >
+                <Brain className="h-4 w-4 text-[#A84C32]" />
+                <span>Quizzes &amp; Results</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveMainTab("series")}
+                className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+                  activeMainTab === "series"
+                    ? "bg-[#1A1A1A] text-white shadow-xs"
+                    : "bg-white border border-[#E5E1D8] text-[#5C5A55] hover:text-[#1A1A1A] hover:border-[#A84C32]"
+                }`}
+              >
+                <Layers className="h-4 w-4 text-[#A84C32]" />
+                <span>Quiz Series</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveMainTab("subscribers")}
+                className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+                  activeMainTab === "subscribers"
+                    ? "bg-[#1A1A1A] text-white shadow-xs"
+                    : "bg-white border border-[#E5E1D8] text-[#5C5A55] hover:text-[#1A1A1A] hover:border-[#A84C32]"
+                }`}
+              >
+                <Users className="h-4 w-4 text-[#A84C32]" />
+                <span>Subscribers</span>
               </button>
 
               <button
@@ -621,7 +683,15 @@ export default function TeacherDashboardPage() {
                 </button>
               ))}
             </div>
-          ) : (
+          ) : activeMainTab === "quizzes" ? (
+            <Link
+              href="/teacher/quiz/create"
+              className="px-4 py-2 rounded-xl bg-[#A84C32] text-white text-xs font-semibold hover:bg-[#8B3A25] transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer shrink-0"
+            >
+              <Plus className="h-4 w-4" />
+              <span>+ Create Quiz</span>
+            </Link>
+          ) : activeMainTab === "topics" ? (
             /* Action controls for Topics tab */
             <div className="flex items-center gap-2 flex-wrap">
               <button
@@ -647,7 +717,7 @@ export default function TeacherDashboardPage() {
                 <span>+ New Topic (Studio)</span>
               </Link>
             </div>
-          )}
+          ) : null}
         </div>
 
         {activeMainTab === "insights" ? (
@@ -1244,6 +1314,19 @@ export default function TeacherDashboardPage() {
           )
         )}
       </>
+    ) : activeMainTab === "quizzes" ? (
+      <QuizAnalyticsDashboard
+        onNewQuiz={() => {
+          router.push("/teacher/quiz/create");
+        }}
+        onEditQuiz={(quizId) => {
+          router.push(`/teacher/quiz/create?edit=${quizId}`);
+        }}
+      />
+    ) : activeMainTab === "series" ? (
+      <QuizCollectionManager />
+    ) : activeMainTab === "subscribers" ? (
+      <SubscriberList />
     ) : (
       /* ─── VIEW: TOPIC MANAGEMENT TABLE & CARDS ─────────────────────── */
           <div className="space-y-4">
@@ -1684,6 +1767,21 @@ export default function TeacherDashboardPage() {
         onRestored={() => {
           fetchTeacherTopics();
           fetchAnalytics();
+        }}
+      />
+
+      {/* Quiz Creation / Editing Modal */}
+      <QuizCreateModal
+        isOpen={quizCreateModalOpen}
+        editingQuizId={editingQuizId}
+        onClose={() => {
+          setQuizCreateModalOpen(false);
+          setEditingQuizId(null);
+        }}
+        onSuccess={() => {
+          setEditingQuizId(null);
+          setQuizCreateModalOpen(false);
+          setActiveMainTab("quizzes");
         }}
       />
     </div>

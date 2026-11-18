@@ -5,6 +5,9 @@ import Link from "next/link";
 import { ArrowLeft, BookOpen, GraduationCap, Briefcase, Clock, Calendar, Share2, Check, ChevronDown, Loader2 } from "lucide-react";
 import { api, BlogItem, TeacherProfile, mapContentToBlog, FALLBACK_BLOGS, getDefaultSubjectCover } from "@/lib/api";
 import { toast } from "sonner";
+import SubscribeButton from "@/components/SubscribeButton";
+import { useAuth } from "@/context/AuthContext";
+import TeacherSelfBanner from "@/components/teacher/TeacherSelfBanner";
 
 export default function TeacherProfileClient({
   id,
@@ -19,6 +22,7 @@ export default function TeacherProfileClient({
   initialTotal?: number;
   initialHasMore?: boolean;
 }) {
+  const { user } = useAuth();
   const [teacher, setTeacher] = useState<TeacherProfile | null>(initialTeacher);
   const [blogs, setBlogs] = useState<BlogItem[]>(initialBlogs);
   const [page, setPage] = useState(1);
@@ -28,6 +32,14 @@ export default function TeacherProfileClient({
   const [loadingMore, setLoadingMore] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  const isSelf = Boolean(
+    user &&
+      teacher &&
+      (user.id === teacher._id ||
+        (user as any)._id === teacher._id ||
+        (user.email && user.email === (teacher as any).email))
+  );
 
   const handleShare = async () => {
     const shareUrl = typeof window !== "undefined" ? window.location.href : "";
@@ -161,7 +173,7 @@ export default function TeacherProfileClient({
   return (
     <div className="pb-24">
       {/* Top Navigation */}
-      <div className="max-w-4xl mx-auto px-6 pt-10 md:pt-16 flex items-center justify-between">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-6 sm:pt-10 md:pt-16 flex items-center justify-between">
         <Link
           href="/"
           data-testid="back-to-insights"
@@ -170,29 +182,42 @@ export default function TeacherProfileClient({
           <ArrowLeft className="h-3.5 w-3.5" /> Back to insights
         </Link>
 
-        <button
-          onClick={handleShare}
-          data-testid="header-share-teacher-button"
-          title="Share educator profile"
-          className="flex items-center gap-1.5 font-ui text-xs text-[#5C5A55] bg-white border border-[#E5E1D8] px-3.5 py-1.5 rounded-full hover:border-[#A84C32] hover:text-[#A84C32] transition-colors cursor-pointer"
-        >
-          {copied ? (
-            <>
-              <Check className="h-3.5 w-3.5 text-green-600" />
-              <span className="text-green-700 font-medium">Copied!</span>
-            </>
-          ) : (
-            <>
-              <Share2 className="h-3.5 w-3.5 text-[#A84C32]" />
-              <span>Share</span>
-            </>
+        <div className="flex items-center gap-2">
+          {!isSelf && (
+            <SubscribeButton
+              teacherId={teacher._id}
+              teacherName={teacher.name}
+              size="sm"
+            />
           )}
-        </button>
+
+          <button
+            onClick={handleShare}
+            data-testid="header-share-teacher-button"
+            title="Share educator profile"
+            className="flex items-center gap-1.5 font-ui text-xs text-[#5C5A55] bg-white border border-[#E5E1D8] px-3.5 py-1.5 rounded-full hover:border-[#A84C32] hover:text-[#A84C32] transition-colors cursor-pointer"
+          >
+            {copied ? (
+              <>
+                <Check className="h-3.5 w-3.5 text-green-600" />
+                <span className="text-green-700 font-medium">Copied!</span>
+              </>
+            ) : (
+              <>
+                <Share2 className="h-3.5 w-3.5 text-[#A84C32]" />
+                <span>Share</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
+      {/* Educator Self-View Indicator Banner */}
+      {isSelf && <TeacherSelfBanner />}
+
       {/* Header Profile Hero Card */}
-      <header className="max-w-4xl mx-auto px-6 pt-8 pb-10">
-        <div className="bg-white rounded-3xl border border-[#E5E1D8] p-8 md:p-10 shadow-xs relative overflow-hidden">
+      <header className="max-w-4xl mx-auto px-4 sm:px-6 pt-4 sm:pt-6 pb-8 sm:pb-10">
+        <div className="bg-white rounded-3xl border border-[#E5E1D8] p-5 sm:p-8 md:p-10 shadow-xs relative overflow-hidden">
           <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
             {/* Avatar */}
             {teacher.avatar && !avatarError ? (

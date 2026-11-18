@@ -7,6 +7,7 @@ import { api, BlogItem, CommentItem, FALLBACK_BLOGS, mapContentToBlog, getTeache
 import { renderMarkedText, mediaUrl } from "@/lib/renderMarks";
 import CommentThread from "@/components/CommentThread";
 import AdSenseBanner from "@/components/google-ad-sense/AdSenseBanner";
+import SubscribeButton from "@/components/SubscribeButton";
 import { useAuth } from "@/context/AuthContext";
 import { trackInsightView, trackAppreciation, trackShare } from "@/lib/gtag";
 import { toast } from "sonner";
@@ -345,6 +346,11 @@ export default function BlogDetailClient({
                   })}
                 </div>
               </div>
+              <SubscribeButton
+                teacherId={blog.teacher_id}
+                teacherName={blog.teacher_name}
+                size="sm"
+              />
             </div>
 
             <div className="flex items-center gap-2">
@@ -439,7 +445,6 @@ export default function BlogDetailClient({
                     {blog.read_minutes} min read
                   </span>
                 </div>
-
               </div>
             </div>
 
@@ -461,6 +466,12 @@ export default function BlogDetailClient({
                     onClick={() => setMenuOpen(false)}
                   />
                   <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-[#E5E1D8] rounded-xl shadow-lg z-50 py-1.5 font-ui text-xs animate-in fade-in zoom-in-95 duration-150">
+                    <SubscribeButton
+                      teacherId={blog.teacher_id}
+                      teacherName={blog.teacher_name}
+                      variant="menu-item"
+                    />
+
                     <button
                       onClick={() => {
                         handleBookmark();
@@ -583,7 +594,7 @@ export default function BlogDetailClient({
           })
         )}
 
-        {/* Appreciation & Share Buttons */}
+        {/* Appreciation, Subscribe & Share Buttons */}
         <div className="pt-4 pb-6 flex flex-wrap items-center justify-center gap-4">
           <button
             onClick={toggleLike}
@@ -597,6 +608,12 @@ export default function BlogDetailClient({
             <span>{liked ? "Appreciated" : "Appreciate Insight"}</span>
             <span className="opacity-80">({likesCount})</span>
           </button>
+
+          <SubscribeButton
+            teacherId={blog.teacher_id}
+            teacherName={blog.teacher_name}
+            size="md"
+          />
 
           <button
             onClick={handleShare}

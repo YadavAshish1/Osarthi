@@ -241,8 +241,9 @@ export async function sendTeacherApplicationAdminNotification(applicantName, app
 export async function sendTeacherApprovalEmail(toEmail, name, teacherPortalLink) {
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.EMAIL_FROM || 'Medhashine <onboarding@resend.dev>';
+  const safePortalLink = (teacherPortalLink || 'https://medhashine.in/teacher/dashboard').replace(/^https?:\/\/localhost(:\d+)?/i, 'https://medhashine.in');
 
-  console.log(`[Teacher Approved] ${name} <${toEmail}> — Portal: ${teacherPortalLink}`);
+  console.log(`[Teacher Approved] ${name} <${toEmail}> — Portal: ${safePortalLink}`);
 
   if (!apiKey) {
     console.warn('[Resend] RESEND_API_KEY not set. Approval logged to console.');
@@ -263,7 +264,7 @@ export async function sendTeacherApprovalEmail(toEmail, name, teacherPortalLink)
           <p style="margin: 0; font-size: 15px; color: #5C5A55; line-height: 1.6;">Your expertise matters. Every insight you share helps shape the minds of tomorrow.</p>
         </div>
         <div style="text-align: center;">
-          <a href="${teacherPortalLink}" style="display: inline-block; background: linear-gradient(135deg, #16A34A 0%, #15803D 100%); color: #ffffff; padding: 14px 36px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 15px; letter-spacing: 0.3px;">Open Teacher Portal →</a>
+          <a href="${safePortalLink}" style="display: inline-block; background: linear-gradient(135deg, #16A34A 0%, #15803D 100%); color: #ffffff; padding: 14px 36px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 15px; letter-spacing: 0.3px;">Open Teacher Portal →</a>
           <p style="margin: 16px 0 0 0; font-size: 12px; color: #9CA3AF;">Bookmark this link to access your teacher dashboard anytime</p>
         </div>
       </div>
@@ -330,6 +331,116 @@ export async function sendTeacherRejectionEmail(toEmail, name, reason) {
     return { success: true, data };
   } catch (err) {
     console.error('[sendTeacherRejectionEmail Exception]', err);
+    return { success: false, error: err.message };
+  }
+}
+
+// ─── Quiz & Collection Notification Emails ───────────────────────────────────
+
+export async function sendQuizNotificationEmail(toEmail, name, teacherName, quizTitle, quizDescription, quizLink) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.EMAIL_FROM || 'Medhashine <onboarding@resend.dev>';
+  const safeQuizLink = (quizLink || 'https://medhashine.in').replace(/^https?:\/\/localhost(:\d+)?/i, 'https://medhashine.in');
+
+  console.log(`[Quiz Notification] Sending to ${toEmail} — Quiz: "${quizTitle}" by ${teacherName} — Link: ${safeQuizLink}`);
+
+  if (!apiKey) {
+    console.warn('[Resend] RESEND_API_KEY not set. Quiz notification logged to console.');
+    return { success: true, devMode: true };
+  }
+
+  const client = getResendClient();
+  const descriptionPreview = quizDescription ? quizDescription.substring(0, 200) + (quizDescription.length > 200 ? '…' : '') : '';
+
+  const html = `
+    <div style="font-family: 'Inter', system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; border-radius: 16px; overflow: hidden; border: 1px solid #E5E1D8;">
+      <div style="background: linear-gradient(135deg, #A84C32 0%, #8B3A25 100%); padding: 32px 28px; text-align: center;">
+        <div style="font-size: 40px; margin-bottom: 8px;">📝</div>
+        <h1 style="color: #ffffff; font-size: 22px; font-weight: 700; margin: 0 0 6px 0; letter-spacing: -0.3px;">New Quiz Available!</h1>
+        <p style="color: rgba(255,255,255,0.85); font-size: 14px; margin: 0;">${teacherName} just published a new quiz</p>
+      </div>
+      <div style="padding: 28px; background-color: #FAF8F5;">
+        <div style="background: #ffffff; border-radius: 12px; padding: 24px; border: 1px solid #E5E1D8; margin-bottom: 20px;">
+          <p style="margin: 0 0 6px 0; font-size: 12px; font-weight: 600; color: #A84C32; text-transform: uppercase; letter-spacing: 0.5px;">Quiz Title</p>
+          <h2 style="margin: 0 0 16px 0; font-size: 20px; color: #1A1A1A; font-weight: 700;">${quizTitle}</h2>
+          <p style="margin: 0 0 8px 0; font-size: 15px; color: #1A1A1A;"><strong>Teacher:</strong> ${teacherName}</p>
+          ${descriptionPreview ? `
+          <hr style="border: none; border-top: 1px solid #E5E1D8; margin: 16px 0;" />
+          <p style="margin: 0; font-size: 14px; color: #5C5A55; line-height: 1.6;">${descriptionPreview}</p>
+          ` : ''}
+        </div>
+        <div style="text-align: center;">
+          <a href="${safeQuizLink}" style="display: inline-block; background: linear-gradient(135deg, #A84C32 0%, #8B3A25 100%); color: #ffffff; padding: 14px 36px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 15px; letter-spacing: 0.3px;">Take Quiz Now →</a>
+          <p style="margin: 16px 0 0 0; font-size: 12px; color: #9CA3AF;">You're receiving this because you subscribed to ${teacherName} on Medhashine</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  try {
+    const { data, error } = await client.emails.send({
+      from: fromEmail,
+      to: [toEmail],
+      subject: `📝 New Quiz from ${teacherName} — ${quizTitle} | Medhashine`,
+      html,
+    });
+    if (error) { console.error('[Resend Error]', error); throw new Error(error.message); }
+    return { success: true, data };
+  } catch (err) {
+    console.error('[sendQuizNotificationEmail Exception]', err);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function sendCollectionNotificationEmail(toEmail, name, teacherName, collectionTitle, collectionDescription) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.EMAIL_FROM || 'Medhashine <onboarding@resend.dev>';
+
+  console.log(`[Test Series Notification] Sending to ${toEmail} — Series: "${collectionTitle}" by ${teacherName}`);
+
+  if (!apiKey) {
+    console.warn('[Resend] RESEND_API_KEY not set. Test series notification logged to console.');
+    return { success: true, devMode: true };
+  }
+
+  const client = getResendClient();
+  const descriptionPreview = collectionDescription ? collectionDescription.substring(0, 200) + (collectionDescription.length > 200 ? '…' : '') : '';
+
+  const html = `
+    <div style="font-family: 'Inter', system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; border-radius: 16px; overflow: hidden; border: 1px solid #E5E1D8;">
+      <div style="background: linear-gradient(135deg, #A84C32 0%, #8B3A25 100%); padding: 32px 28px; text-align: center;">
+        <div style="font-size: 40px; margin-bottom: 8px;">📚</div>
+        <h1 style="color: #ffffff; font-size: 22px; font-weight: 700; margin: 0 0 6px 0; letter-spacing: -0.3px;">New Test Series Available!</h1>
+        <p style="color: rgba(255,255,255,0.85); font-size: 14px; margin: 0;">${teacherName} published a new test series</p>
+      </div>
+      <div style="padding: 28px; background-color: #FAF8F5;">
+        <div style="background: #ffffff; border-radius: 12px; padding: 24px; border: 1px solid #E5E1D8; margin-bottom: 20px;">
+          <p style="margin: 0 0 6px 0; font-size: 12px; font-weight: 600; color: #A84C32; text-transform: uppercase; letter-spacing: 0.5px;">Test Series</p>
+          <h2 style="margin: 0 0 16px 0; font-size: 20px; color: #1A1A1A; font-weight: 700;">${collectionTitle}</h2>
+          <p style="margin: 0 0 8px 0; font-size: 15px; color: #1A1A1A;"><strong>By:</strong> ${teacherName}</p>
+          ${descriptionPreview ? `
+          <hr style="border: none; border-top: 1px solid #E5E1D8; margin: 16px 0;" />
+          <p style="margin: 0; font-size: 14px; color: #5C5A55; line-height: 1.6;">${descriptionPreview}</p>
+          ` : ''}
+        </div>
+        <div style="text-align: center;">
+          <p style="margin: 0 0 0 0; font-size: 12px; color: #9CA3AF;">You're receiving this because you subscribed to ${teacherName} on Medhashine</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  try {
+    const { data, error } = await client.emails.send({
+      from: fromEmail,
+      to: [toEmail],
+      subject: `📚 New Test Series from ${teacherName} — ${collectionTitle} | Medhashine`,
+      html,
+    });
+    if (error) { console.error('[Resend Error]', error); throw new Error(error.message); }
+    return { success: true, data };
+  } catch (err) {
+    console.error('[sendCollectionNotificationEmail Exception]', err);
     return { success: false, error: err.message };
   }
 }

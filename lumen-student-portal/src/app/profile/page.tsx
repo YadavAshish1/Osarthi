@@ -23,11 +23,13 @@ import {
   Pencil,
   GraduationCap,
   Briefcase,
+  Award,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api, BlogItem, mapContentToBlog, TeacherProfile, getTeacherSlug } from "@/lib/api";
 import BlogCard from "@/components/BlogCard";
 import EditProfileModal from "@/components/EditProfileModal";
+import EducatorProfileHub from "@/components/teacher/EducatorProfileHub";
 import { toast } from "sonner";
 
 // Swiper imports
@@ -280,14 +282,23 @@ export default function ProfilePage() {
                   )}
                 </div>
 
-                {/* Edit Profile Action Button */}
-                <button
-                  onClick={() => setEditModalOpen(true)}
-                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full border border-[#E5E1D8] bg-[#FAF8F5] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-white hover:border-[#1A1A1A] transition-all font-ui text-xs font-semibold cursor-pointer shadow-2xs self-center md:self-start shrink-0"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  <span>Edit Profile</span>
-                </button>
+                {/* Action Buttons (2-col grid on mobile, flex on desktop) */}
+                <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto self-center md:self-start shrink-0 justify-center pt-2 sm:pt-0">
+                  <Link
+                    href="/quiz/history"
+                    className="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-full border border-[#A84C32] bg-white text-[#A84C32] hover:bg-[#FAF8F5] transition-all font-ui text-xs font-semibold cursor-pointer shadow-2xs text-center"
+                  >
+                    <Award className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">Quiz History</span>
+                  </Link>
+                  <button
+                    onClick={() => setEditModalOpen(true)}
+                    className="inline-flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2.5 rounded-full border border-[#E5E1D8] bg-[#FAF8F5] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-white hover:border-[#1A1A1A] transition-all font-ui text-xs font-semibold cursor-pointer shadow-2xs text-center"
+                  >
+                    <Pencil className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">Edit Profile</span>
+                  </button>
+                </div>
               </div>
 
               {/* Bio Section */}
@@ -418,8 +429,11 @@ export default function ProfilePage() {
 
       {/* Main Profile Sections */}
       <main className="max-w-5xl mx-auto px-6 space-y-14">
-        {/* Section 0: Teacher Application Status (if user applied) */}
-        {teacherAppStatus && (
+        {/* Educator Hub for Verified Teachers */}
+        {user.role === "teacher" && <EducatorProfileHub user={user} />}
+
+        {/* Section 0: Teacher Application Status (for applicants who are not yet verified teachers) */}
+        {teacherAppStatus && user.role !== "teacher" && (
           <section className="p-6 md:p-8 rounded-3xl border bg-white shadow-xs font-ui">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="space-y-2">
@@ -581,8 +595,9 @@ export default function ProfilePage() {
           )}
         </section>
 
-        {/* Section 2: Liked & Saved Teachers */}
-        <section className="pt-4">
+        {/* Section 2: Liked & Saved Teachers (Students & Learners only) */}
+        {user.role !== "teacher" && (
+          <section className="pt-4">
           <div className="flex items-center justify-between pb-4 border-b border-[#E5E1D8] mb-6">
             <div className="flex items-center gap-3">
               <Heart className="h-5 w-5 text-red-500 fill-red-500" />
@@ -687,6 +702,7 @@ export default function ProfilePage() {
             </div>
           )}
         </section>
+        )}
 
         {/* Section 3: Activity History (Swiper Carousel Tabs Section) */}
         <section className="pt-6">
@@ -875,7 +891,7 @@ export default function ProfilePage() {
                   No comments yet
                 </h3>
                 <p className="font-serif-body text-sm text-[#5C5A55] mt-1 max-w-md mx-auto">
-                  Participate in academic discussions by leaving comments or asking questions on faculty insights.
+                  Participate in learning discussions by leaving comments or asking questions on faculty insights.
                 </p>
                 <Link
                   href="/"
