@@ -99,9 +99,12 @@ export default function QuizTakingClient({ id }: { id: string }) {
   const [secondsRemaining, setSecondsRemaining] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<AttemptResult | null>(null);
+  const [showSubmitWarning, setShowSubmitWarning] = useState(false);
 
   const startTimeRef = useRef<number>(Date.now());
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Ref to always hold the latest handleSubmit — avoids stale closure in timer interval
+  const handleSubmitRef = useRef<() => void>(() => {});
 
   // Fetch Quiz
   useEffect(() => {
@@ -154,6 +157,7 @@ export default function QuizTakingClient({ id }: { id: string }) {
     if (!quiz || submitting || result) return;
 
     setSubmitting(true);
+    setShowSubmitWarning(false);
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
 
     const elapsedSeconds = Math.max(1, Math.round((Date.now() - startTimeRef.current) / 1000));
@@ -184,6 +188,22 @@ export default function QuizTakingClient({ id }: { id: string }) {
     }
   }, [quiz, answers, submitting, result]);
 
+  // Keep ref always up-to-date with the latest handleSubmit (fixes stale closure in timer)
+  useEffect(() => {
+    handleSubmitRef.current = handleSubmit;
+  }, [handleSubmit]);
+
+  // Guard: check for unanswered questions before submitting (not called by timer auto-submit)
+  const handleSubmitGuarded = () => {
+    if (!quiz) return;
+    const unanswered = quiz.questions.filter((q) => !(answers[q.id]?.length));
+    if (unanswered.length > 0) {
+      setShowSubmitWarning(true);
+    } else {
+      handleSubmit();
+    }
+  };
+
   // Start Quiz Handler (Transition from Instructions Screen to Active Quiz)
   const handleStartQuiz = () => {
     if (!quiz) return;
@@ -201,13 +221,13 @@ export default function QuizTakingClient({ id }: { id: string }) {
       const totalSecs = quiz.timeLimitMinutes * 60;
       setSecondsRemaining(totalSecs);
 
-      // Start countdown
+      // Start countdown — uses ref to avoid stale closure over handleSubmit
       timerIntervalRef.current = setInterval(() => {
         setSecondsRemaining((prev) => {
           if (prev === null) return null;
           if (prev <= 1) {
             if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-            handleSubmit();
+            handleSubmitRef.current();
             toast.warning("Time is up! Submitting your answers automatically...");
             return 0;
           }
@@ -959,7 +979,7 @@ export default function QuizTakingClient({ id }: { id: string }) {
               <button
                 type="button"
                 disabled={submitting}
-                onClick={handleSubmit}
+                onClick={handleSubmitGuarded}
                 className="lumen-button-primary px-6 py-2.5 text-xs font-semibold shadow-xs inline-flex items-center gap-2 cursor-pointer"
               >
                 {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -976,6 +996,71 @@ export default function QuizTakingClient({ id }: { id: string }) {
                 <ChevronRight className="h-4 w-4" />
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Unanswered Questions Warning Modal ─── */}
+      {showSubmitWarning && quiz && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-md w-full border border-[#E5E1D8] shadow-2xl p-6 sm:p-8 space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-start gap-4">
+              <div className="w-11 h-11 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
+                <HelpCircle className="h-6 w-6 text-amber-600" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-serif-display text-lg font-bold text-[#1A1A1A]">
+                  Unanswered Questions
+                </h3>
+                <p className="font-serif-body text-xs text-[#5C5A55] leading-relaxed">
+                  You have{" "}
+                  <span className="font-bold text-amber-700">
+                    {quiz.questions.filter((q) => !(answers[q.id]?.length)).length} unanswered
+                    {quiz.questions.filter((q) => !(answers[q.id]?.length)).length === 1 ? " question" : " questions"}
+                  </span>
+                  . Unanswered questions will be marked as incorrect.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200 flex flex-wrap gap-2">
+              {quiz.questions
+                .map((q, idx) => ({ q, idx }))
+                .filter(({ q }) => !(answers[q.id]?.length))
+                .map(({ idx }) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      setCurrentIndex(idx);
+                      setShowSubmitWarning(false);
+                    }}
+                    className="w-8 h-8 rounded-xl bg-amber-100 border border-amber-300 text-amber-800 font-bold text-xs flex items-center justify-center hover:bg-amber-200 transition-colors cursor-pointer"
+                  >
+                    {idx + 1}
+                  </button>
+                ))}
+            </div>
+
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowSubmitWarning(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-[#E5E1D8] text-xs font-semibold text-[#5C5A55] hover:bg-[#FAF8F5] transition-colors cursor-pointer"
+              >
+                Go Back & Answer
+              </button>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={handleSubmit}
+                className="flex-1 lumen-button-primary px-4 py-2.5 text-xs font-semibold shadow-xs inline-flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                <Send className="h-3.5 w-3.5" />
+                <span>Submit Anyway</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

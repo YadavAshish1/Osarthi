@@ -75,21 +75,24 @@ export default function QuizCreateModal({
   const [collections, setCollections] = useState<Array<{ _id: string; title: string }>>([]);
 
   // Questions
-  const [questions, setQuestions] = useState<QuestionForm[]>([
-    {
-      id: "q-1",
-      text: "",
-      type: "single",
-      options: [
-        { id: "opt-1", text: "" },
-        { id: "opt-2", text: "" },
-        { id: "opt-3", text: "" },
-        { id: "opt-4", text: "" },
-      ],
-      correctOptionIds: ["opt-1"],
-      explanation: "",
-    },
-  ]);
+  const [questions, setQuestions] = useState<QuestionForm[]>(() => {
+    const opt1 = crypto.randomUUID();
+    return [
+      {
+        id: crypto.randomUUID(),
+        text: "",
+        type: "single",
+        options: [
+          { id: opt1, text: "" },
+          { id: crypto.randomUUID(), text: "" },
+          { id: crypto.randomUUID(), text: "" },
+          { id: crypto.randomUUID(), text: "" },
+        ],
+        correctOptionIds: [opt1],
+        explanation: "",
+      },
+    ];
+  });
 
   // Load taxonomy on modal open
   useEffect(() => {
@@ -195,18 +198,19 @@ export default function QuizCreateModal({
       setHasExpiry(false);
       setExpiryDate("");
       setExpiryTime("23:59");
+      const resetOpt1 = crypto.randomUUID();
       setQuestions([
         {
-          id: "q-1",
+          id: crypto.randomUUID(),
           text: "",
           type: "single",
           options: [
-            { id: "opt-1", text: "" },
-            { id: "opt-2", text: "" },
-            { id: "opt-3", text: "" },
-            { id: "opt-4", text: "" },
+            { id: resetOpt1, text: "" },
+            { id: crypto.randomUUID(), text: "" },
+            { id: crypto.randomUUID(), text: "" },
+            { id: crypto.randomUUID(), text: "" },
           ],
-          correctOptionIds: ["opt-1"],
+          correctOptionIds: [resetOpt1],
           explanation: "",
         },
       ]);
@@ -256,20 +260,20 @@ export default function QuizCreateModal({
   if (!isOpen) return null;
 
   const handleAddQuestion = () => {
-    const qIndex = questions.length + 1;
+    const opt1 = crypto.randomUUID();
     setQuestions((prev) => [
       ...prev,
       {
-        id: `q-${Date.now()}-${qIndex}`,
+        id: crypto.randomUUID(),
         text: "",
         type: "single",
         options: [
-          { id: `opt-${Date.now()}-1`, text: "" },
-          { id: `opt-${Date.now()}-2`, text: "" },
-          { id: `opt-${Date.now()}-3`, text: "" },
-          { id: `opt-${Date.now()}-4`, text: "" },
+          { id: opt1, text: "" },
+          { id: crypto.randomUUID(), text: "" },
+          { id: crypto.randomUUID(), text: "" },
+          { id: crypto.randomUUID(), text: "" },
         ],
-        correctOptionIds: [`opt-${Date.now()}-1`],
+        correctOptionIds: [opt1],
         explanation: "",
       },
     ]);
@@ -348,10 +352,9 @@ export default function QuizCreateModal({
           toast.info("Maximum 6 options allowed per question");
           return q;
         }
-        const newOptId = `opt-${Date.now()}-${q.options.length + 1}`;
         return {
           ...q,
-          options: [...q.options, { id: newOptId, text: "" }],
+          options: [...q.options, { id: crypto.randomUUID(), text: "" }],
         };
       })
     );

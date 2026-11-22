@@ -120,30 +120,9 @@ export default function AuthModal() {
   };
 
   const handleGoogleSignIn = () => {
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    if (!clientId) {
-      if (process.env.NODE_ENV === "development") {
-        console.warn("[Google Auth] NEXT_PUBLIC_GOOGLE_CLIENT_ID is not configured in environment variables.");
-      }
-      toast.error("Google Sign-In is temporarily unavailable. Please continue with your email and password.");
-      return;
-    }
-
-    const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
-    const redirectUri = `${origin}/api/auth/callback/google`;
     const returnTo = typeof window !== "undefined" ? (window.location.pathname + window.location.search) : "/";
-    const state = btoa(JSON.stringify({ returnTo, mode }));
-
-    const googleAuthUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-    googleAuthUrl.searchParams.set("client_id", clientId);
-    googleAuthUrl.searchParams.set("redirect_uri", redirectUri);
-    googleAuthUrl.searchParams.set("response_type", "code");
-    googleAuthUrl.searchParams.set("scope", "openid email profile");
-    googleAuthUrl.searchParams.set("access_type", "offline");
-    googleAuthUrl.searchParams.set("prompt", "select_account");
-    googleAuthUrl.searchParams.set("state", state);
-
-    window.location.href = googleAuthUrl.toString();
+    const googleEndpoint = `/api/auth/google?returnTo=${encodeURIComponent(returnTo)}&mode=${mode}`;
+    window.location.href = googleEndpoint;
   };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {

@@ -437,7 +437,7 @@ router.post('/', requireRole('teacher'), async (req, res, next) => {
 
 // ─── STUDENT & ATTEMPT ROUTES (PLACED BEFORE /:id TO PREVENT PARAMETER COLLISIONS) ───
 
-// Live quizzes
+// Live quizzes (open to all students without class/subject restrictions)
 router.get('/student/live', async (req, res, next) => {
   try {
     const now = new Date();
@@ -445,8 +445,11 @@ router.get('/student/live', async (req, res, next) => {
       published: true,
       $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
     };
-    if (req.user.role === 'student' && req.user.classRef) {
-      filter.classRef = req.user.classRef;
+    if (req.query.classRef) {
+      filter.classRef = req.query.classRef;
+    }
+    if (req.query.subjectRef) {
+      filter.subjectRef = req.query.subjectRef;
     }
     const quizzes = await Quiz.find(filter)
       .populate('subjectRef', 'name')
@@ -480,15 +483,15 @@ router.get('/student/attempts', async (req, res, next) => {
   }
 });
 
-// Quizzes by subject
+// Quizzes by subject (open to all students without class restrictions)
 router.get('/student/by-subject/:subjectId', async (req, res, next) => {
   try {
     const filter = {
       subjectRef: req.params.subjectId,
       published: true,
     };
-    if (req.user.role === 'student' && req.user.classRef) {
-      filter.classRef = req.user.classRef;
+    if (req.query.classRef) {
+      filter.classRef = req.query.classRef;
     }
     const quizzes = await Quiz.find(filter)
       .populate('subjectRef', 'name')
@@ -598,9 +601,6 @@ router.get('/:id/take', async (req, res, next) => {
     if (!quiz || !quiz.published) return res.status(404).json({ message: 'Quiz not found' });
 
     if (req.user.role === 'student') {
-      if (quiz.classRef && req.user.classRef && quiz.classRef.toString() !== req.user.classRef?.toString()) {
-        return res.status(403).json({ message: 'Forbidden: This quiz is for a different class' });
-      }
       if (quiz.isClosed) {
         return res.status(410).json({
           message: 'This quiz is closed by the educator and is no longer accepting submissions.',
@@ -638,9 +638,6 @@ router.post('/:id/submit', async (req, res, next) => {
   try {
     const quiz = await Quiz.findById(req.params.id);
     if (!quiz || !quiz.published) return res.status(404).json({ message: 'Quiz not found' });
-    if (req.user.role === 'student' && quiz.classRef && req.user.classRef && quiz.classRef.toString() !== req.user.classRef?.toString()) {
-      return res.status(403).json({ message: 'Forbidden' });
-    }
     if (quiz.isClosed) {
       return res.status(410).json({ message: 'This quiz is closed by the educator and is no longer accepting submissions.' });
     }
