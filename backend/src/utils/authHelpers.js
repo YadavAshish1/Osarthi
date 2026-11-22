@@ -69,7 +69,7 @@ export async function issueTokens(user, res, portal = null) {
   setAccessCookie(res, accessToken, userPortal);
   setRefreshCookie(res, refreshToken, userPortal);
   const safeUser = await User.findById(user._id).select('-passwordHash -refreshTokenHash -previousRefreshTokenHash');
-  return { user: safeUser, accessToken };
+  return { user: safeUser, accessToken, refreshToken };
 }
 
 export function clearAuthCookies(res, portal = null) {

@@ -52,7 +52,9 @@ const allowedOrigins = [
   'http://localhost:5175',
   'http://localhost:3000',
   'http://localhost:3001',
-  'https://osarthi.onrender.com'
+  'https://osarthi.onrender.com',
+  'https://medhashine.in',
+  'https://www.medhashine.in',
 ];
 
 const envUrlVars = [

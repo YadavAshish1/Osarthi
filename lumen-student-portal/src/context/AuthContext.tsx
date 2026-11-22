@@ -65,13 +65,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       if (typeof window !== "undefined") {
         const url = new URL(window.location.href);
-        const authSuccess = url.searchParams.get("authSuccess");
+        const googleCode = url.searchParams.get("googleCode");
         const authError = url.searchParams.get("authError");
 
-        if (authSuccess === "google") {
-          toast.success("Signed in with Google successfully!");
-          url.searchParams.delete("authSuccess");
+        if (googleCode) {
+          // Immediately scrub code from URL so the address bar stays clean
+          url.searchParams.delete("googleCode");
           window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+
+          const protocol = window.location.protocol;
+          const host = window.location.host;
+          const redirectUri = `${protocol}//${host}/api/auth/callback/google`;
+
+          try {
+            // Direct browser-to-backend call with credentials — sets HTTP-only cookies on backend domain
+            const { data } = await api.post("/auth/google/callback", {
+              code: googleCode,
+              redirectUri,
+            });
+
+            const u = data?.user;
+            if (u && u._id) {
+              setUser({
+                id: u._id,
+                name: u.name,
+                email: u.email,
+                role: u.role,
+                avatar: u.avatar,
+                bio: u.bio || "",
+                classRef: u.classRef || null,
+                education: Array.isArray(u.education) ? u.education : [],
+                experience: Array.isArray(u.experience) ? u.experience : [],
+                savedTeachers: Array.isArray(u.savedTeachers) ? u.savedTeachers.map((id: any) => id.toString()) : [],
+              });
+              toast.success("Signed in with Google successfully!");
+              setReady(true);
+              return;
+            } else {
+              toast.error("Google sign-in failed. Please try again.");
+            }
+          } catch (err: any) {
+            toast.error(err?.response?.data?.message || "Google sign-in failed. Please try again.");
+          }
         } else if (authError) {
           if (authError === "google_cancelled") {
             toast.info("Google sign-in was cancelled");

@@ -7,7 +7,7 @@ export const BACKEND_URL =
   "http://localhost:5000";
 export const API = `${BACKEND_URL}/api`;
 
-// axios instance — attaches JWT token from localStorage automatically
+// axios instance — pure cookie-based authentication
 export const api = axios.create({
   baseURL: API,
   withCredentials: true,

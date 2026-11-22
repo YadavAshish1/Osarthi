@@ -44,12 +44,15 @@ export async function authenticate(req, res, next) {
       }
     }
 
-    // Fallback: Check if valid refresh token cookie exists to automatically refresh
-    const refreshToken = portal === 'admin'
-      ? (req.cookies?.adminRefreshToken || req.cookies?.refreshToken)
-      : portal === 'student'
-      ? (req.cookies?.studentRefreshToken || req.cookies?.refreshToken)
-      : (req.cookies?.adminRefreshToken || req.cookies?.studentRefreshToken || req.cookies?.refreshToken);
+    // Fallback: Check if valid refresh token exists to automatically refresh
+    const refreshToken =
+      req.headers['x-refresh-token'] ||
+      req.body?.refreshToken ||
+      (portal === 'admin'
+        ? (req.cookies?.adminRefreshToken || req.cookies?.refreshToken)
+        : portal === 'student'
+        ? (req.cookies?.studentRefreshToken || req.cookies?.refreshToken)
+        : (req.cookies?.adminRefreshToken || req.cookies?.studentRefreshToken || req.cookies?.refreshToken));
 
     if (refreshToken) {
       try {

@@ -81,6 +81,10 @@ function getAccessTokenFromReq(req) {
 }
 
 function getRefreshTokenFromReq(req) {
+  const customHeader = req.headers['x-refresh-token'];
+  if (customHeader) return customHeader;
+  const bodyToken = req.body?.refreshToken;
+  if (bodyToken) return bodyToken;
   const portal = req.headers['x-auth-portal'];
   if (portal === 'admin') {
     return req.cookies?.adminRefreshToken || req.cookies?.refreshToken;
@@ -346,7 +350,7 @@ router.post('/refresh', async (req, res, next) => {
     }
 
     const tokens = await issueTokens(user, res, portal);
-    res.json({ user: tokens.user });
+    res.json({ user: tokens.user, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken });
   } catch (err) {
     next(err);
   }
@@ -538,6 +542,8 @@ router.post('/google/callback', async (req, res, next) => {
       success: true,
       user: tokens.user,
       token: tokens.accessToken,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
     });
   } catch (err) {
     next(err);
