@@ -11,17 +11,62 @@ router.use(authenticate);
 router.get('/', async (req, res, next) => {
   try {
     const isHidden = req.query.hidden === 'true';
-    const notifications = await Notification.find({
+    const isUnread = req.query.unread === 'true';
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit) || 20));
+    const skip = (page - 1) * limit;
+
+    const query = {
       userRef: req.user._id,
       hidden: isHidden ? true : { $ne: true },
-    })
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .populate('quizRef', 'title')
-      .populate('contentRef', 'title')
-      .populate('teacherRef', 'name avatar')
-      .populate('subscriberRef', 'name avatar');
-    res.json(notifications);
+    };
+
+    if (isUnread) {
+      query.read = false;
+    }
+
+    const [notifications, total] = await Promise.all([
+      Notification.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('quizRef', 'title')
+        .populate('contentRef', 'title')
+        .populate('teacherRef', 'name avatar')
+        .populate('subscriberRef', 'name avatar'),
+      Notification.countDocuments(query),
+    ]);
+
+    res.json({
+      notifications,
+      total,
+      page,
+      limit,
+      hasMore: skip + notifications.length < total,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/counts', async (req, res, next) => {
+  try {
+    const [unread, hidden, totalActive] = await Promise.all([
+      Notification.countDocuments({
+        userRef: req.user._id,
+        read: false,
+        hidden: { $ne: true },
+      }),
+      Notification.countDocuments({
+        userRef: req.user._id,
+        hidden: true,
+      }),
+      Notification.countDocuments({
+        userRef: req.user._id,
+        hidden: { $ne: true },
+      }),
+    ]);
+    res.json({ unread, hidden, totalActive });
   } catch (err) {
     next(err);
   }

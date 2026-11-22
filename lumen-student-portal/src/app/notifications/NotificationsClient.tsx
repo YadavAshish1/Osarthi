@@ -48,9 +48,12 @@ export default function NotificationsClient() {
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [counts, setCounts] = useState({ unread: 0, hidden: 0, totalActive: 0 });
+
   const [filter, setFilter] = useState<"all" | "unread" | "hidden">("all");
-  const [hiddenNotifications, setHiddenNotifications] = useState<NotificationItem[]>([]);
-  const [hiddenCount, setHiddenCount] = useState<number>(0);
   const [markingAll, setMarkingAll] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [mutedTeachers, setMutedTeachers] = useState<any[]>([]);
@@ -59,6 +62,8 @@ export default function NotificationsClient() {
   const [mutedFeedbackCards, setMutedFeedbackCards] = useState<
     Record<string, { teacherId: string; teacherName: string; firstName: string }>
   >({});
+
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // Close three-dot menu on outside click
   useEffect(() => {
@@ -80,42 +85,103 @@ export default function NotificationsClient() {
     }
   }, [router]);
 
-  // Fetch active notifications
-  const fetchNotifications = useCallback(async () => {
-    setLoading(true);
+  // Fetch counts for filter pills & badges
+  const fetchCounts = useCallback(async () => {
     try {
-      const { data } = await api.get("/notifications");
-      setNotifications(Array.isArray(data) ? data : []);
+      const { data } = await api.get("/notifications/counts");
+      if (data) {
+        setCounts({
+          unread: data.unread || 0,
+          hidden: data.hidden || 0,
+          totalActive: data.totalActive || 0,
+        });
+      }
     } catch {
-      setNotifications([]);
-    } finally {
-      setLoading(false);
+      // Silently fail
     }
   }, []);
 
-  // Fetch hidden notifications
-  const fetchHiddenNotifications = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data } = await api.get("/notifications?hidden=true");
-      setHiddenNotifications(Array.isArray(data) ? data : []);
-      setHiddenCount(Array.isArray(data) ? data.length : 0);
-    } catch {
-      setHiddenNotifications([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Fetch initial page 1 (20 items) for active filter
+  const fetchNotifications = useCallback(
+    async (currentFilter: "all" | "unread" | "hidden") => {
+      setLoading(true);
+      setPage(1);
+      try {
+        const isHidden = currentFilter === "hidden";
+        const isUnread = currentFilter === "unread";
+        const { data } = await api.get("/notifications", {
+          params: {
+            page: 1,
+            limit: 20,
+            hidden: isHidden ? true : undefined,
+            unread: isUnread ? true : undefined,
+          },
+        });
 
-  // Fetch hidden count
-  const fetchHiddenCount = useCallback(async () => {
+        const list = Array.isArray(data) ? data : data?.notifications || [];
+        setNotifications(list);
+        setHasMore(data?.hasMore ?? (list.length === 20));
+      } catch {
+        setNotifications([]);
+        setHasMore(false);
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+
+  // Load next 20 items and append (Infinite Scroll)
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const nextPage = page + 1;
     try {
-      const { data } = await api.get("/notifications/hidden-count");
-      setHiddenCount(data?.count || 0);
+      const isHidden = filter === "hidden";
+      const isUnread = filter === "unread";
+      const { data } = await api.get("/notifications", {
+        params: {
+          page: nextPage,
+          limit: 20,
+          hidden: isHidden ? true : undefined,
+          unread: isUnread ? true : undefined,
+        },
+      });
+
+      const list = Array.isArray(data) ? data : data?.notifications || [];
+      setNotifications((prev) => {
+        const existingIds = new Set(prev.map((n) => n._id));
+        const unique = list.filter((n: NotificationItem) => !existingIds.has(n._id));
+        return [...prev, ...unique];
+      });
+      setPage(nextPage);
+      setHasMore(data?.hasMore ?? (list.length === 20));
     } catch {
-      setHiddenCount(0);
+      setHasMore(false);
+    } finally {
+      setLoadingMore(false);
     }
-  }, []);
+  }, [loadingMore, hasMore, page, filter]);
+
+  // Infinite Scroll IntersectionObserver
+  useEffect(() => {
+    if (!hasMore || loading || loadingMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          loadMore();
+        }
+      },
+      { threshold: 0.1, rootMargin: "250px" }
+    );
+
+    const current = sentinelRef.current;
+    if (current) observer.observe(current);
+
+    return () => {
+      if (current) observer.unobserve(current);
+    };
+  }, [hasMore, loading, loadingMore, loadMore]);
 
   // Fetch muted teachers list
   const fetchMutedTeachers = useCallback(async () => {
@@ -129,25 +195,13 @@ export default function NotificationsClient() {
 
   useEffect(() => {
     if (ready && user) {
-      if (filter === "hidden") {
-        fetchHiddenNotifications();
-      } else {
-        fetchNotifications();
-      }
+      fetchNotifications(filter);
+      fetchCounts();
       fetchMutedTeachers();
-      fetchHiddenCount();
     } else if (ready && !user) {
       setLoading(false);
     }
-  }, [
-    ready,
-    user,
-    filter,
-    fetchNotifications,
-    fetchHiddenNotifications,
-    fetchMutedTeachers,
-    fetchHiddenCount,
-  ]);
+  }, [ready, user, filter, fetchNotifications, fetchCounts, fetchMutedTeachers]);
 
   // Mark single as read
   const handleMarkRead = async (id: string, e?: React.MouseEvent) => {
@@ -157,6 +211,7 @@ export default function NotificationsClient() {
       setNotifications((prev) =>
         prev.map((n) => (n._id === id ? { ...n, read: true } : n))
       );
+      setCounts((prev) => ({ ...prev, unread: Math.max(0, prev.unread - 1) }));
     } catch {
       // Silently fail
     }
@@ -169,6 +224,7 @@ export default function NotificationsClient() {
     try {
       await api.patch("/notifications/read-all");
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      setCounts((prev) => ({ ...prev, unread: 0 }));
       toast.success("All notifications marked as read");
     } catch {
       toast.error("Failed to mark all as read");
@@ -182,7 +238,11 @@ export default function NotificationsClient() {
     e.stopPropagation();
     setActiveMenuId(null);
     setNotifications((prev) => prev.filter((n) => n._id !== id));
-    setHiddenCount((prev) => prev + 1);
+    setCounts((prev) => ({
+      ...prev,
+      hidden: prev.hidden + 1,
+      totalActive: Math.max(0, prev.totalActive - 1),
+    }));
     try {
       await api.patch(`/notifications/${id}/hide`);
       toast.success("Notification hidden", {
@@ -191,7 +251,7 @@ export default function NotificationsClient() {
           onClick: () => handleUnhideNotification(id),
         },
       });
-      fetchHiddenCount();
+      fetchCounts();
     } catch {
       toast.error("Failed to hide notification");
     }
@@ -200,12 +260,16 @@ export default function NotificationsClient() {
   // Unhide single notification
   const handleUnhideNotification = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    setHiddenNotifications((prev) => prev.filter((n) => n._id !== id));
-    setHiddenCount((prev) => Math.max(0, prev - 1));
+    setNotifications((prev) => prev.filter((n) => n._id !== id));
+    setCounts((prev) => ({
+      ...prev,
+      hidden: Math.max(0, prev.hidden - 1),
+      totalActive: prev.totalActive + 1,
+    }));
     try {
       await api.patch(`/notifications/${id}/unhide`);
       toast.success("Notification unhidden");
-      await Promise.all([fetchNotifications(), fetchHiddenCount()]);
+      fetchCounts();
     } catch {
       toast.error("Failed to unhide notification");
     }
@@ -215,10 +279,14 @@ export default function NotificationsClient() {
   const handleUnhideAll = async () => {
     try {
       await api.patch("/notifications/unhide-all");
-      setHiddenNotifications([]);
-      setHiddenCount(0);
+      setNotifications([]);
+      setCounts((prev) => ({
+        ...prev,
+        hidden: 0,
+        totalActive: prev.totalActive + prev.hidden,
+      }));
       toast.success("All hidden notifications unhidden");
-      await fetchNotifications();
+      fetchCounts();
     } catch {
       toast.error("Failed to unhide all notifications");
     }
@@ -325,21 +393,10 @@ export default function NotificationsClient() {
   };
 
   // Unread count
-  const unreadCount = useMemo(
-    () => notifications.filter((n) => !n.read).length,
-    [notifications]
-  );
+  const unreadCount = counts.unread;
 
-  // Filtered notifications
-  const filteredNotifications = useMemo(() => {
-    if (filter === "hidden") {
-      return hiddenNotifications;
-    }
-    if (filter === "unread") {
-      return notifications.filter((n) => !n.read);
-    }
-    return notifications;
-  }, [notifications, hiddenNotifications, filter]);
+  // Filtered notifications (current loaded page items)
+  const filteredNotifications = notifications;
 
   // Group notifications into Today, Yesterday, Earlier
   const groupedNotifications = useMemo(() => {
@@ -356,7 +413,7 @@ export default function NotificationsClient() {
     yesterday.setDate(now.getDate() - 1);
     const yesterdayStr = yesterday.toDateString();
 
-    filteredNotifications.forEach((item) => {
+    notifications.forEach((item) => {
       const itemDate = new Date(item.createdAt);
       const itemDateStr = itemDate.toDateString();
 
@@ -370,7 +427,7 @@ export default function NotificationsClient() {
     });
 
     return groups;
-  }, [filteredNotifications]);
+  }, [notifications]);
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -441,7 +498,7 @@ export default function NotificationsClient() {
 
   if (!ready || loading) {
     return (
-      <div className="min-h-screen bg-[#FAF8F5] font-ui">
+      <div className="w-full bg-[#FAF8F5] font-ui">
         {/* Top Header Bar */}
         <div className="sticky top-0 z-30 bg-[#FAF8F5]/90 backdrop-blur-md border-b border-[#E5E1D8] px-4 py-3.5 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -472,7 +529,7 @@ export default function NotificationsClient() {
   // Not signed in state
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#FAF8F5] font-ui">
+      <div className="w-full bg-[#FAF8F5] font-ui">
         <div className="sticky top-0 z-30 bg-[#FAF8F5]/90 backdrop-blur-md border-b border-[#E5E1D8] px-4 py-3.5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
@@ -514,7 +571,7 @@ export default function NotificationsClient() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] font-ui pb-16">
+    <div className="w-full bg-[#FAF8F5] font-ui pb-6">
       {/* ─── STICKY HEADER WITH BACK BUTTON ─────────────────────────────────── */}
       <header className="sticky top-0 z-30 bg-[#FAF8F5]/95 backdrop-blur-md border-b border-[#E5E1D8] px-4 sm:px-6 py-3.5 shadow-2xs">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
@@ -561,7 +618,7 @@ export default function NotificationsClient() {
 
             {/* If on Hidden tab, show Unhide All button; otherwise show Mark all read */}
             {filter === "hidden" ? (
-              hiddenNotifications.length > 0 && (
+              notifications.length > 0 && (
                 <button
                   type="button"
                   onClick={handleUnhideAll}
@@ -573,7 +630,7 @@ export default function NotificationsClient() {
                 </button>
               )
             ) : (
-              unreadCount > 0 && (
+              counts.unread > 0 && (
                 <button
                   type="button"
                   onClick={handleMarkAllRead}
@@ -591,10 +648,10 @@ export default function NotificationsClient() {
       </header>
 
       {/* ─── MAIN CONTENT ─────────────────────────────────────────────────── */}
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 pt-4 space-y-5">
+      <main className="max-w-2xl mx-auto px-0 sm:px-6 pt-4 space-y-5">
         {/* Filter Pills */}
-        {(notifications.length > 0 || hiddenCount > 0) && (
-          <div className="flex items-center gap-2 flex-wrap">
+        {(counts.totalActive > 0 || counts.hidden > 0 || notifications.length > 0) && (
+          <div className="flex items-center gap-2 flex-wrap px-4 sm:px-0">
             <button
               type="button"
               onClick={() => setFilter("all")}
@@ -604,7 +661,7 @@ export default function NotificationsClient() {
                   : "bg-white border border-[#E5E1D8] text-[#5C5A55] hover:border-[#A84C32]"
               }`}
             >
-              All ({notifications.length})
+              All ({counts.totalActive || (filter === "all" ? notifications.length : 0)})
             </button>
             <button
               type="button"
@@ -616,13 +673,13 @@ export default function NotificationsClient() {
               }`}
             >
               <span>Unread</span>
-              {unreadCount > 0 && (
+              {counts.unread > 0 && (
                 <span
                   className={`w-4 h-4 rounded-full text-[10px] flex items-center justify-center font-bold ${
                     filter === "unread" ? "bg-white text-[#A84C32]" : "bg-[#A84C32] text-white"
                   }`}
                 >
-                  {unreadCount}
+                  {counts.unread}
                 </span>
               )}
             </button>
@@ -637,13 +694,13 @@ export default function NotificationsClient() {
             >
               <EyeOff className="h-3.5 w-3.5" />
               <span>Hidden</span>
-              {hiddenCount > 0 && (
+              {counts.hidden > 0 && (
                 <span
                   className={`w-4 h-4 rounded-full text-[10px] flex items-center justify-center font-bold ${
                     filter === "hidden" ? "bg-white text-[#1A1A1A]" : "bg-[#E5E1D8] text-[#5C5A55]"
                   }`}
                 >
-                  {hiddenCount}
+                  {counts.hidden}
                 </span>
               )}
             </button>
@@ -652,7 +709,7 @@ export default function NotificationsClient() {
 
         {/* Empty State */}
         {filteredNotifications.length === 0 ? (
-          <div className="py-16 px-4 text-center space-y-4 rounded-3xl bg-white border border-[#E5E1D8] shadow-xs">
+          <div className="mx-4 sm:mx-0 py-16 px-4 text-center space-y-4 rounded-3xl bg-white border border-[#E5E1D8] shadow-xs">
             <div className="w-16 h-16 mx-auto rounded-3xl bg-[#FAF8F5] border border-[#E5E1D8] flex items-center justify-center text-[#5C5A55]">
               {filter === "hidden" ? (
                 <EyeOff className="h-8 w-8 text-[#8C8983]" />
@@ -705,7 +762,7 @@ export default function NotificationsClient() {
             return (
               <div key={groupName} className="space-y-2.5">
                 {/* Section Header */}
-                <div className="flex items-center gap-2 px-1">
+                <div className="flex items-center gap-2 px-4 sm:px-1">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[#8C8983]">
                     {groupName}
                   </span>
@@ -713,7 +770,7 @@ export default function NotificationsClient() {
                 </div>
 
                 {/* Cards Container */}
-                <div className="bg-white border border-[#E5E1D8] rounded-2xl sm:rounded-3xl shadow-xs divide-y divide-[#E5E1D8]/60">
+                <div className="bg-white border-y border-x-0 sm:border border-[#E5E1D8] rounded-none sm:rounded-3xl shadow-xs divide-y divide-[#E5E1D8]/60">
                   {list.map((notif) => {
                     const avatarUrl =
                       notif.type === "new_subscriber"
@@ -740,7 +797,7 @@ export default function NotificationsClient() {
                       return (
                         <div
                           key={notif._id}
-                          className="p-4 sm:p-4.5 flex items-center justify-between gap-3 bg-[#FAF8F5] first:rounded-t-2xl sm:first:rounded-t-3xl last:rounded-b-2xl sm:last:rounded-b-3xl"
+                          className="p-4 sm:p-4.5 flex items-center justify-between gap-3 bg-[#FAF8F5] sm:first:rounded-t-3xl sm:last:rounded-b-3xl"
                         >
                           <div className="flex items-start gap-3 min-w-0">
                             <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200/80 flex items-center justify-center shrink-0 text-amber-700 mt-0.5">
@@ -785,15 +842,12 @@ export default function NotificationsClient() {
                       <div
                         key={notif._id}
                         onClick={() => handleNotificationClick(notif)}
-                        className={`p-4 sm:p-4.5 flex items-start gap-3.5 transition-colors cursor-pointer group hover:bg-[#FAF8F5] relative first:rounded-t-2xl sm:first:rounded-t-3xl last:rounded-b-2xl sm:last:rounded-b-3xl ${
-                          !notif.read ? "bg-[#FBF4F2]/50" : "bg-white"
+                        className={`p-4 sm:p-4.5 flex items-start gap-3.5 transition-colors cursor-pointer group relative sm:first:rounded-t-3xl sm:last:rounded-b-3xl ${
+                          !notif.read
+                            ? "bg-[#EDF3F8] hover:bg-[#E2EEF8]"
+                            : "bg-white hover:bg-[#FAF8F5]"
                         }`}
                       >
-                        {/* Unread Left Border Highlight */}
-                        {!notif.read && (
-                          <div className="absolute left-0 top-3 bottom-3 w-1 rounded-r-full bg-[#A84C32]" />
-                        )}
-
                         {/* Icon / Avatar */}
                         <div
                           className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 overflow-hidden shadow-2xs ${
@@ -858,7 +912,16 @@ export default function NotificationsClient() {
                         </div>
 
                         {/* Right: Actions (Consistent on All Tabs including Hidden) */}
-                        <div className="flex items-center gap-1 shrink-0 relative">
+                        <div className="flex items-center gap-1.5 shrink-0 relative">
+                          {/* LinkedIn Unread Blue Dot */}
+                          {!notif.read && (
+                            <span
+                              className="w-2.5 h-2.5 rounded-full bg-[#0A66C2] shrink-0 mr-0.5"
+                              title="Unread"
+                              aria-label="Unread notification"
+                            />
+                          )}
+
                           {/* Mark read button on active tabs if unread */}
                           {filter !== "hidden" && !notif.read && (
                             <button
@@ -895,7 +958,7 @@ export default function NotificationsClient() {
                             {isMenuOpen && (
                               <div
                                 onClick={(e) => e.stopPropagation()}
-                                className="absolute right-0 top-full mt-1 w-64 rounded-2xl bg-white border border-[#E5E1D8] shadow-xl py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 font-ui text-left"
+                                className="absolute right-0 top-full mt-1 w-60 sm:w-64 rounded-2xl bg-white border border-[#E5E1D8] shadow-xl py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 font-ui text-left"
                               >
                                 {/* 1. Unhide or Hide this notification */}
                                 {filter === "hidden" || notif.hidden ? (
@@ -974,6 +1037,20 @@ export default function NotificationsClient() {
             );
           })
         )}
+        {/* Infinite Scroll Sentinel & Loading Indicator */}
+        <div ref={sentinelRef} className="py-2 px-4 flex flex-col items-center justify-center">
+          {loadingMore && (
+            <div className="flex items-center gap-2 text-xs text-[#5C5A55] font-ui py-2">
+              <Loader2 className="h-4 w-4 animate-spin text-[#A84C32]" />
+              <span>Loading more notifications…</span>
+            </div>
+          )}
+          {!hasMore && notifications.length >= 20 && (
+            <p className="text-[11px] text-[#8C8983] font-ui py-2 text-center">
+              You&apos;re all caught up!
+            </p>
+          )}
+        </div>
       </main>
 
       {/* ─── MUTED EDUCATORS MODAL ─────────────────────────────────────── */}
