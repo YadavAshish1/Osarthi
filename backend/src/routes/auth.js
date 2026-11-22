@@ -167,7 +167,14 @@ router.post(
       const cleanEmail = email.toLowerCase();
 
       const existing = await User.findOne({ email: cleanEmail });
-      if (existing) return res.status(409).json({ message: 'Email already registered' });
+      if (existing) {
+        return res.status(409).json({
+          message: 'Email already registered',
+          code: 'EMAIL_EXISTS',
+          role: existing.role,
+          name: existing.name,
+        });
+      }
 
       let resolvedClassId = classId;
       if (role === 'student') {
@@ -220,7 +227,14 @@ router.post(
       const portal = req.headers['x-auth-portal'];
 
       const existing = await User.findOne({ email: cleanEmail });
-      if (existing) return res.status(409).json({ message: 'Email already registered' });
+      if (existing) {
+        return res.status(409).json({
+          message: 'Email already registered',
+          code: 'EMAIL_EXISTS',
+          role: existing.role,
+          name: existing.name,
+        });
+      }
 
       // Verify OTP
       const otpRecord = await OtpVerification.findOne({ email: cleanEmail, otp });
@@ -402,6 +416,132 @@ router.get('/google/callback', (req, res, next) => {
       res.redirect(`${process.env.CLIENT_URL}/login?error=oauth`);
     }
   })(req, res, next);
+});
+
+/**
+ * POST /api/auth/google/callback
+ * Accepts { code, redirectUri } from Next.js route handler
+ * Exchanges authorization code with Google, retrieves user profile,
+ * finds or registers user, issues JWT cookies, and returns user & tokens.
+ */
+router.post('/google/callback', async (req, res, next) => {
+  try {
+    const { code, redirectUri } = req.body;
+    if (!code) {
+      return res.status(400).json({ message: 'Authorization code is required' });
+    }
+
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+      return res.status(503).json({ message: 'Google OAuth credentials not configured on server' });
+    }
+
+    // 1. Exchange authorization code with Google for tokens
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri || process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3000/api/auth/callback/google',
+        grant_type: 'authorization_code',
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      const errData = await tokenResponse.json().catch(() => ({}));
+      console.error('[Google OAuth Token Error]', errData);
+      return res.status(400).json({
+        message: errData.error_description || errData.error || 'Failed to exchange authorization code with Google',
+      });
+    }
+
+    const tokenData = await tokenResponse.json();
+    const idToken = tokenData.id_token;
+    const accessToken = tokenData.access_token;
+
+    // 2. Fetch user profile from Google UserInfo endpoint
+    let profile = null;
+    if (accessToken) {
+      try {
+        const userinfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (userinfoRes.ok) {
+          profile = await userinfoRes.json();
+        }
+      } catch (e) {
+        console.warn('[Google OAuth UserInfo Warning]', e);
+      }
+    }
+
+    // Fallback: decode id_token JWT payload if userinfo didn't resolve
+    if (!profile && idToken) {
+      try {
+        const payloadBase64 = idToken.split('.')[1];
+        profile = JSON.parse(Buffer.from(payloadBase64, 'base64').toString('utf-8'));
+      } catch (e) {
+        console.warn('[Google OAuth IDToken Decode Warning]', e);
+      }
+    }
+
+    if (!profile || !profile.email) {
+      return res.status(400).json({ message: 'Could not retrieve verified email from Google account' });
+    }
+
+    const email = profile.email.toLowerCase().trim();
+    const name = profile.name || profile.given_name || email.split('@')[0];
+    const googleId = profile.sub || profile.id;
+    const avatar = profile.picture;
+
+    // 3. Find or Create User in MongoDB
+    let user = await User.findOne({ email });
+
+    if (user) {
+      if (user.isActive === false) {
+        return res.status(403).json({ message: 'This account has been deactivated. Please contact support.' });
+      }
+
+      // Link googleId and avatar if not present
+      let changed = false;
+      if (!user.googleId && googleId) {
+        user.googleId = googleId;
+        changed = true;
+      }
+      if (!user.avatar && avatar) {
+        user.avatar = avatar;
+        changed = true;
+      }
+      if (changed) {
+        await user.save();
+      }
+    } else {
+      // Create new student user
+      user = await User.create({
+        name,
+        email,
+        role: 'student',
+        googleId,
+        avatar,
+        isActive: true,
+      });
+    }
+
+    // 4. Issue standard tokens and HTTP-only cookies
+    const portal = ['admin', 'super_admin'].includes(user.role) ? 'admin' : 'student';
+    const tokens = await issueTokens(user, res, portal);
+
+    return res.json({
+      success: true,
+      user: tokens.user,
+      token: tokens.accessToken,
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.post('/oauth-register', async (req, res, next) => {

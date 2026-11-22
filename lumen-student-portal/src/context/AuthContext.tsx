@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { api, formatApiErrorDetail } from "@/lib/api";
+import { toast } from "sonner";
 
 export interface User {
   id: string;
@@ -27,7 +28,7 @@ interface AuthContextType {
   ready: boolean;
   authModal: AuthModalState;
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string; user?: any }>;
-  sendOtp: (name: string, email: string, password: string, role: string) => Promise<{ ok: boolean; error?: string }>;
+  sendOtp: (name: string, email: string, password: string, role: string) => Promise<{ ok: boolean; error?: string; code?: string; role?: string; name?: string }>;
   register: (name: string, email: string, password: string, role: string, otp: string) => Promise<{ ok: boolean; error?: string; user?: any }>;
   forgotPassword: (email: string) => Promise<{ ok: boolean; error?: string }>;
   resetPassword: (email: string, otp: string, newPassword: string) => Promise<{ ok: boolean; error?: string }>;
@@ -59,9 +60,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("auth:logout", handleLogout);
   }, []);
 
-  // On mount: try /api/auth/me
+  // On mount: try /api/auth/me and handle OAuth redirect params
   useEffect(() => {
     (async () => {
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        const authSuccess = url.searchParams.get("authSuccess");
+        const authError = url.searchParams.get("authError");
+
+        if (authSuccess === "google") {
+          toast.success("Signed in with Google successfully!");
+          url.searchParams.delete("authSuccess");
+          window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+        } else if (authError) {
+          if (authError === "google_cancelled") {
+            toast.info("Google sign-in was cancelled");
+          } else {
+            toast.error(decodeURIComponent(authError));
+          }
+          url.searchParams.delete("authError");
+          window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+        }
+      }
+
       try {
         const { data } = await api.get("/auth/me");
         const u = data?.user;
@@ -132,6 +153,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (e: any) {
         return {
           ok: false,
+          code: e?.response?.data?.code,
+          role: e?.response?.data?.role,
+          name: e?.response?.data?.name,
           error:
             formatApiErrorDetail(e?.response?.data?.message) ||
             formatApiErrorDetail(e?.response?.data?.detail) ||

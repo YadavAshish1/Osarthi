@@ -35,7 +35,7 @@ router.post('/', applicationLimiter, async (req, res, next) => {
 
     // Link to authenticated or existing user account
     let applicantRef = null;
-    let token = req.cookies?.accessToken;
+    let token = req.cookies?.studentAccessToken || req.cookies?.accessToken;
     if (!token) {
       const header = req.headers.authorization;
       if (header?.startsWith('Bearer ')) {
@@ -72,6 +72,8 @@ router.post('/', applicationLimiter, async (req, res, next) => {
       if (bio?.trim()) application.bio = sanitizeString(bio.trim());
       if (motivation?.trim()) application.motivation = sanitizeString(motivation.trim());
       if (applicantRef) application.applicantRef = applicantRef;
+      application.status = 'pending';
+      application.rejectionReason = '';
       await application.save();
     } else {
       application = await TeacherApplication.create({
@@ -121,7 +123,7 @@ router.post('/', applicationLimiter, async (req, res, next) => {
 // ─── GET /api/teacher-applications/my-status — Current user's application status
 router.get('/my-status', async (req, res, next) => {
   try {
-    let token = req.cookies?.accessToken;
+    let token = req.cookies?.studentAccessToken || req.cookies?.accessToken;
     if (!token) {
       const header = req.headers.authorization;
       if (header?.startsWith('Bearer ')) {
@@ -138,13 +140,14 @@ router.get('/my-status', async (req, res, next) => {
       } catch {}
     }
 
-    if (!userId && req.cookies?.refreshToken) {
+    const refreshToken = req.cookies?.studentRefreshToken || req.cookies?.refreshToken;
+    if (!userId && refreshToken) {
       try {
         const { verifyRefreshToken } = await import('../utils/tokens.js');
         const { hashToken } = await import('../utils/authHelpers.js');
-        const decoded = verifyRefreshToken(req.cookies.refreshToken);
+        const decoded = verifyRefreshToken(refreshToken);
         const u = await User.findById(decoded.userId);
-        if (u && u.refreshTokenHash === hashToken(req.cookies.refreshToken)) {
+        if (u && (u.refreshTokenHash === hashToken(refreshToken) || u.previousRefreshTokenHash === hashToken(refreshToken))) {
           userId = u._id;
         }
       } catch {}

@@ -42,14 +42,40 @@ interface ExperienceEntry {
   duration: string;
 }
 
+function GoogleIcon({ className = "w-5 h-5" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+      />
+    </svg>
+  );
+}
+
 export default function BecomeTeacherClient() {
   const router = useRouter();
-  const { user, openAuth, sendOtp, register } = useAuth();
+  const { user, openAuth, login, sendOtp, register, ready } = useAuth();
 
   const [view, setView] = useState<"overview" | "form" | "submitted">("overview");
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [existingStatus, setExistingStatus] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState<string>("");
+  const [statusChecked, setStatusChecked] = useState<boolean>(false);
+  const [reapplyAllowed, setReapplyAllowed] = useState<boolean>(false);
 
   // Form State
   const [name, setName] = useState<string>("");
@@ -64,6 +90,57 @@ export default function BecomeTeacherClient() {
   const [otpSent, setOtpSent] = useState<boolean>(false);
   const [sendingOtp, setSendingOtp] = useState<boolean>(false);
   const [verifyingOtp, setVerifyingOtp] = useState<boolean>(false);
+
+  // Existing account detection & confirmation state
+  const [existingAccount, setExistingAccount] = useState<{
+    email: string;
+    name: string;
+    role: string;
+  } | null>(null);
+  const [verifyingExisting, setVerifyingExisting] = useState<boolean>(false);
+
+  const handleStartApplication = () => {
+    if (user) {
+      if (user.role === "teacher" || existingStatus === "approved") {
+        toast.info("You are already an approved Educator on Medhashine!");
+        router.push("/teacher/dashboard");
+        return;
+      }
+      if (existingStatus === "pending") {
+        toast.info("Your application is currently under review by our academic team.");
+        return;
+      }
+      if (existingStatus === "rejected" && !reapplyAllowed) {
+        toast.info("Your previous application was not approved. Review editorial notes below or contact support.");
+        return;
+      }
+    }
+    setView("form");
+  };
+
+  const handleGoogleSignIn = () => {
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      toast.error("Google Client ID is not configured yet. Please add NEXT_PUBLIC_GOOGLE_CLIENT_ID to .env.local.");
+      return;
+    }
+
+    const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+    const redirectUri = `${origin}/api/auth/callback/google`;
+    const returnTo = "/become-a-teacher?apply=true";
+    const state = btoa(JSON.stringify({ returnTo, mode: "login" }));
+
+    const googleAuthUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+    googleAuthUrl.searchParams.set("client_id", clientId);
+    googleAuthUrl.searchParams.set("redirect_uri", redirectUri);
+    googleAuthUrl.searchParams.set("response_type", "code");
+    googleAuthUrl.searchParams.set("scope", "openid email profile");
+    googleAuthUrl.searchParams.set("access_type", "offline");
+    googleAuthUrl.searchParams.set("prompt", "select_account");
+    googleAuthUrl.searchParams.set("state", state);
+
+    window.location.href = googleAuthUrl.toString();
+  };
 
   const handleSendOtpCode = async () => {
     if (!name.trim()) {
@@ -80,11 +157,23 @@ export default function BecomeTeacherClient() {
     }
 
     setSendingOtp(true);
+    setExistingAccount(null);
     try {
       const res = await sendOtp(name.trim(), email.toLowerCase().trim(), password, "student");
       if (res.ok) {
         setOtpSent(true);
         toast.success("Verification code sent to " + email);
+      } else if (res.code === "EMAIL_EXISTS") {
+        setExistingAccount({
+          email: email.toLowerCase().trim(),
+          name: res.name || name.trim(),
+          role: res.role || "student",
+        });
+        if (res.role === "teacher") {
+          toast.info("This email is already an approved Educator profile.");
+        } else {
+          toast.info("Existing student account found. Please confirm to link it.");
+        }
       } else {
         toast.error(res.error || "Failed to send verification code");
       }
@@ -92,6 +181,28 @@ export default function BecomeTeacherClient() {
       toast.error("Failed to send verification code");
     } finally {
       setSendingOtp(false);
+    }
+  };
+
+  const handleConfirmExistingAccount = async () => {
+    if (!password) {
+      toast.error("Please enter your account password to verify your identity");
+      return;
+    }
+
+    setVerifyingExisting(true);
+    try {
+      const res = await login(email.toLowerCase().trim(), password);
+      if (res.ok) {
+        toast.success("Account verified! Proceeding with your Educator application.");
+        setExistingAccount(null);
+      } else {
+        toast.error(res.error || "Incorrect password. Please verify your password or reset it.");
+      }
+    } catch {
+      toast.error("Verification failed. Please check your password.");
+    } finally {
+      setVerifyingExisting(false);
     }
   };
 
@@ -154,17 +265,53 @@ export default function BecomeTeacherClient() {
         }
       } catch {}
 
-      try {
-        const { data: statusData } = await api.get("/teacher-applications/my-status");
-        if (statusData?.application) {
-          setExistingStatus(statusData.application.status);
-          if (statusData.application.phone) {
-            setPhone((prev) => prev || statusData.application.phone);
+      if (user) {
+        try {
+          const { data: statusData } = await api.get("/teacher-applications/my-status");
+          if (statusData?.application) {
+            const st = statusData.application.status;
+            setExistingStatus(st);
+            if (statusData.application.rejectionReason) {
+              setRejectionReason(statusData.application.rejectionReason);
+            }
+            if (statusData.application.phone) {
+              setPhone((prev) => prev || statusData.application.phone);
+            }
           }
+        } catch {} finally {
+          setStatusChecked(true);
         }
-      } catch {}
+      } else {
+        setStatusChecked(true);
+      }
     })();
-  }, []);
+  }, [user]);
+
+  // View routing based on status & user
+  useEffect(() => {
+    if (!statusChecked) return;
+
+    // If an existing status exists and reapply is not allowed, never open form
+    if (existingStatus && !reapplyAllowed) {
+      return;
+    }
+
+    if (user && user.role === "teacher") {
+      return;
+    }
+
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("apply") === "true") {
+        setView("form");
+        return;
+      }
+    }
+
+    if (user && user.role === "student" && !existingStatus) {
+      setView("form");
+    }
+  }, [user, existingStatus, statusChecked, reapplyAllowed]);
 
   const handleAddEducation = () => {
     setEducationList((prev) => [...prev, { degree: "", institution: "", year: "" }]);
@@ -250,7 +397,11 @@ export default function BecomeTeacherClient() {
   const validateStep = (step: number): boolean => {
     if (step === 1) {
       if (!user) {
-        toast.error("Please complete Email OTP Verification & Sign Up to proceed");
+        toast.error("Please sign in or complete email OTP verification to proceed");
+        return false;
+      }
+      if (user.role === "teacher") {
+        toast.info("You are already an approved Educator on Medhashine.");
         return false;
       }
       if (!name.trim()) {
@@ -351,6 +502,14 @@ export default function BecomeTeacherClient() {
     }
   };
 
+  if (!ready) {
+    return (
+      <div className="min-h-screen bg-[#FAF8F5] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#A84C32]" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-[#1A1A1A]">
       {/* ── Top Header Hero ── */}
@@ -369,10 +528,10 @@ export default function BecomeTeacherClient() {
           </p>
 
           {existingStatus && (
-            <div className="mt-8 inline-flex items-center gap-3 px-6 py-3 rounded-2xl bg-white/10 border border-white/20 backdrop-blur-md">
-              <span className="text-sm text-white/80 font-medium">Your Application Status:</span>
+            <div className="mt-8 inline-flex flex-wrap items-center justify-center gap-2.5 px-4 sm:px-6 py-2.5 rounded-2xl bg-white/10 border border-white/20 backdrop-blur-md max-w-full">
+              <span className="text-xs sm:text-sm text-white/80 font-medium">Your Application Status:</span>
               <span
-                className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                className={`px-3 py-1 rounded-full text-[11px] sm:text-xs font-bold uppercase tracking-wider ${
                   existingStatus === "approved"
                     ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
                     : existingStatus === "rejected"
@@ -380,11 +539,11 @@ export default function BecomeTeacherClient() {
                     : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
                 }`}
               >
-                {existingStatus}
+                {existingStatus === "rejected" ? "Not Approved" : existingStatus}
               </span>
               <Link
                 href="/profile"
-                className="text-xs text-[#E8A88A] hover:underline font-semibold ml-2"
+                className="text-xs text-[#E8A88A] hover:underline font-semibold ml-1 whitespace-nowrap"
               >
                 View in Profile →
               </Link>
@@ -395,7 +554,186 @@ export default function BecomeTeacherClient() {
 
       {/* ── MAIN CONTENT AREA ── */}
       <section className="max-w-screen-xl mx-auto px-6 md:px-12 py-16">
-        {view === "overview" && (
+        {/* ── CASE 1: REJECTED APPLICATION VIEW ── */}
+        {existingStatus === "rejected" && !reapplyAllowed && view !== "submitted" && (
+          <div className="max-w-2xl mx-auto bg-white p-8 sm:p-12 md:p-14 rounded-3xl border border-[#E5E1D8] shadow-sm text-center space-y-6 animate-fadeIn">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-rose-50 text-rose-600 mx-auto flex items-center justify-center border border-rose-200">
+              <AlertCircle className="h-8 w-8 sm:h-10 sm:w-10" />
+            </div>
+
+            <div>
+              <span className="inline-block px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-rose-100 text-rose-800 border border-rose-200 mb-3">
+                Application Not Approved
+              </span>
+              <h2 className="font-serif-display text-2xl sm:text-3xl font-medium text-[#1A1A1A]">
+                Application Review Update
+              </h2>
+              <p className="font-ui text-xs sm:text-sm text-[#5C5A55] leading-relaxed mt-2 max-w-lg mx-auto">
+                Thank you for your interest in joining Medhashine as an educator. Our academic editorial team has completed evaluating your profile against our curriculum and content publication standards.
+              </p>
+            </div>
+
+            {/* Editorial Review Feedback Callout */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-[#FAF8F5] border border-[#E5E1D8] text-xs sm:text-sm text-left space-y-2">
+              <div className="flex items-center gap-2 text-[#A84C32] font-semibold text-xs uppercase tracking-wider">
+                <FileText className="h-4 w-4 shrink-0" />
+                <span>Editorial Review Feedback:</span>
+              </div>
+              <p className="text-[#5C5A55] leading-relaxed italic bg-white p-3 rounded-xl border border-[#E5E1D8]/60">
+                "{rejectionReason && rejectionReason.trim()
+                  ? rejectionReason
+                  : "We are unable to approve your educator profile at this time based on our current subject domain coverage and qualification criteria."}"
+              </p>
+            </div>
+
+            {/* Student Account Active Reassurance */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-emerald-50 border border-emerald-200 text-left space-y-1.5 text-xs">
+              <div className="flex items-center gap-2 text-emerald-900 font-semibold">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                <span>Your Student Account is Active & Fully Functional</span>
+              </div>
+              <p className="text-emerald-800/90 leading-relaxed text-[11px] sm:text-xs pl-6">
+                You retain complete, uninterrupted access to read all conceptual insights, take interactive quizzes, save bookmarks, and participate in discussions on Medhashine.
+              </p>
+            </div>
+
+            {/* Contact Team & Action Paths */}
+            <div className="pt-2 border-t border-[#E5E1D8]/80 space-y-4">
+              <p className="text-xs text-[#5C5A55] max-w-md mx-auto leading-relaxed">
+                Facing an issue or believe this decision was made in error? If you have questions, updated credentials, or need clarification, our editorial team is available to assist you.
+              </p>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <Link
+                  href="/contact"
+                  className="w-full sm:w-auto px-6 py-3 rounded-full bg-[#A84C32] text-white text-xs font-semibold hover:bg-[#8B3A25] transition-all inline-flex items-center justify-center gap-2 shadow-xs active:scale-[0.99]"
+                >
+                  <Mail className="h-4 w-4" /> Reach Out to Editorial Team
+                </Link>
+                <Link
+                  href="/"
+                  className="w-full sm:w-auto px-6 py-3 rounded-full border border-[#E5E1D8] bg-white text-xs font-medium text-[#1A1A1A] hover:bg-[#FAF8F5] transition-colors text-center"
+                >
+                  Explore Platform Insights
+                </Link>
+                <Link
+                  href="/profile"
+                  className="w-full sm:w-auto px-5 py-3 rounded-full border border-[#E5E1D8] bg-white text-xs font-medium text-[#5C5A55] hover:text-[#1A1A1A] transition-colors text-center"
+                >
+                  View in Profile →
+                </Link>
+              </div>
+
+              {/* Best Practice Re-application Option */}
+              <div className="pt-4 border-t border-[#E5E1D8]/60 text-center">
+                <p className="text-[11px] text-[#8C8983] mb-2">
+                  Have your academic qualifications, degree, or publications updated?
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReapplyAllowed(true);
+                    setView("form");
+                    setCurrentStep(1);
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs text-[#A84C32] hover:underline font-semibold cursor-pointer"
+                >
+                  Re-apply with Updated Credentials →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── CASE 2: PENDING APPLICATION VIEW ── */}
+        {existingStatus === "pending" && !reapplyAllowed && view !== "submitted" && (
+          <div className="max-w-2xl mx-auto bg-white p-8 sm:p-12 md:p-14 rounded-3xl border border-[#E5E1D8] shadow-sm text-center space-y-6 animate-fadeIn">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-amber-50 text-amber-600 mx-auto flex items-center justify-center border border-amber-200">
+              <Sparkles className="h-8 w-8 sm:h-10 sm:w-10" />
+            </div>
+
+            <div>
+              <span className="inline-block px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200 mb-3">
+                Application Under Review
+              </span>
+              <h2 className="font-serif-display text-2xl sm:text-3xl font-medium text-[#1A1A1A]">
+                Your Educator Application is Under Review
+              </h2>
+              <p className="font-ui text-xs sm:text-sm text-[#5C5A55] leading-relaxed mt-2 max-w-lg mx-auto">
+                Thank you for applying to teach on Medhashine! Our academic review team is currently evaluating your qualifications and subject expertise.
+              </p>
+            </div>
+
+            <div className="p-4 sm:p-5 rounded-2xl bg-emerald-50 border border-emerald-200 text-left space-y-1.5 text-xs">
+              <div className="flex items-center gap-2 text-emerald-900 font-semibold">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                <span>Your Student Account Remains Active</span>
+              </div>
+              <p className="text-emerald-800/90 leading-relaxed text-[11px] sm:text-xs pl-6">
+                While your application is being evaluated, you can continue to enjoy full student features (reading essays, attempting quizzes, bookmarking). Once approved, your account will automatically upgrade to a Verified Educator.
+              </p>
+            </div>
+
+            <div className="pt-2 border-t border-[#E5E1D8]/80 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Link
+                href="/profile"
+                className="w-full sm:w-auto px-6 py-3 rounded-full bg-[#1A1A1A] text-white text-xs font-semibold hover:bg-[#A84C32] transition-colors"
+              >
+                Track Status in Profile
+              </Link>
+              <Link
+                href="/contact"
+                className="w-full sm:w-auto px-6 py-3 rounded-full border border-[#E5E1D8] bg-white text-xs font-medium text-[#5C5A55] hover:text-[#1A1A1A] transition-colors text-center"
+              >
+                Need Help? Contact Us
+              </Link>
+              <Link
+                href="/"
+                className="w-full sm:w-auto px-6 py-3 rounded-full border border-[#E5E1D8] bg-white text-xs font-medium text-[#1A1A1A] hover:bg-[#FAF8F5] transition-colors text-center"
+              >
+                Explore Insights
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* ── CASE 3: APPROVED EDUCATOR VIEW ── */}
+        {(existingStatus === "approved" || (user && user.role === "teacher")) && !reapplyAllowed && view !== "submitted" && (
+          <div className="max-w-2xl mx-auto bg-white p-8 sm:p-12 md:p-14 rounded-3xl border border-[#E5E1D8] shadow-sm text-center space-y-6 animate-fadeIn">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center border border-emerald-200">
+              <CheckCircle2 className="h-8 w-8 sm:h-10 sm:w-10" />
+            </div>
+
+            <div>
+              <span className="inline-block px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200 mb-3">
+                Approved Educator
+              </span>
+              <h2 className="font-serif-display text-2xl sm:text-3xl font-medium text-[#1A1A1A]">
+                You are a Verified Medhashine Educator
+              </h2>
+              <p className="font-ui text-xs sm:text-sm text-[#5C5A55] leading-relaxed mt-2 max-w-lg mx-auto">
+                Your educator profile is active! You can write and publish conceptual insights, create interactive quizzes, and reach learners across the platform.
+              </p>
+            </div>
+
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Link
+                href="/teacher/dashboard"
+                className="w-full sm:w-auto px-8 py-3 rounded-full bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors inline-flex items-center justify-center gap-2"
+              >
+                Go to Educator Studio <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                href="/profile"
+                className="w-full sm:w-auto px-6 py-3 rounded-full border border-[#E5E1D8] bg-white text-xs font-medium text-[#5C5A55] hover:text-[#1A1A1A] transition-colors text-center"
+              >
+                View Profile
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* ── CASE 4: OVERVIEW LANDING PAGE ── */}
+        {view === "overview" && (!existingStatus || reapplyAllowed) && (
           <div className="space-y-20">
             {/* ── 3-Step Process Cards ── */}
             <div>
@@ -461,7 +799,7 @@ export default function BecomeTeacherClient() {
               {/* Call to Action Button */}
               <div className="mt-14 text-center">
                 <button
-                  onClick={() => setView("form")}
+                  onClick={handleStartApplication}
                   className="group inline-flex items-center gap-3 px-10 py-4 rounded-full font-ui text-base font-semibold text-white bg-gradient-to-r from-[#A84C32] to-[#8B3A25] shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
                 >
                   Create a Profile Now
@@ -511,7 +849,7 @@ export default function BecomeTeacherClient() {
         )}
 
         {/* ── MULTI-STEP APPLICATION FORM ── */}
-        {view === "form" && (
+        {view === "form" && (!existingStatus || reapplyAllowed) && (
           <div className="max-w-3xl mx-auto bg-white rounded-3xl border border-[#E5E1D8] shadow-sm overflow-hidden">
             {/* Form Progress Header */}
             <div className="bg-[#FAF8F5] px-4 sm:px-8 py-4 sm:py-6 border-b border-[#E5E1D8]">
@@ -569,31 +907,148 @@ export default function BecomeTeacherClient() {
                   </div>
 
                   {user ? (
-                    <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                        <span>
-                          Account verified as <strong>{user.name}</strong> ({user.email})
-                        </span>
-                      </div>
-                      <span className="text-[11px] font-semibold bg-emerald-600 text-white px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                        Verified
-                      </span>
+                    <div className="space-y-4">
+                      {user.role === "teacher" && (
+                        <div className="p-4 sm:p-5 rounded-2xl bg-blue-50 border border-blue-200 text-[#1A1A1A] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                          <div className="flex items-center gap-2.5">
+                            <CheckCircle2 className="h-5 w-5 text-blue-600 shrink-0" />
+                            <div>
+                              <p className="text-xs font-semibold text-blue-900">
+                                You are already an approved Educator on Medhashine!
+                              </p>
+                              <p className="text-[11px] text-blue-700 mt-0.5">
+                                Logged in as {user.name} ({user.email}). You can publish insights and quizzes directly.
+                              </p>
+                            </div>
+                          </div>
+                          <Link
+                            href="/teacher/dashboard"
+                            className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors shrink-0 inline-flex items-center gap-1.5"
+                          >
+                            Educator Studio <ArrowRight className="h-3.5 w-3.5" />
+                          </Link>
+                        </div>
+                      )}
+
+                      {user.role === "student" && (
+                        /* ── CONNECTED STUDENT ACCOUNT CARD ── */
+                        <div className="p-4 sm:p-5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs space-y-2">
+                          <div className="flex items-start sm:items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5 sm:mt-0" />
+                            <div className="break-all sm:break-normal leading-snug">
+                              <span>Connected Account: </span>
+                              <strong className="font-semibold text-emerald-950">{user.name}</strong>{" "}
+                              <span className="text-emerald-800">({user.email})</span>
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-emerald-800 leading-relaxed border-t border-emerald-200/60 pt-2">
+                            ✓ <strong>Teacher Registration In Progress:</strong> Your account remains fully active as a student while under review and will automatically unlock Educator tools once approved by the editorial team.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="p-4 sm:p-6 rounded-2xl bg-[#FAF8F5] border border-[#E5E1D8] space-y-4">
-                      <div className="flex items-center justify-between pb-3 border-b border-[#E5E1D8]">
+                      {/* ── 1-CLICK GOOGLE FAST TRACK ── */}
+                      <button
+                        type="button"
+                        onClick={handleGoogleSignIn}
+                        className="w-full h-11 px-4 border border-[#E5E1D8] rounded-xl bg-white text-[#1A1A1A] font-medium text-sm flex items-center justify-center gap-3 hover:bg-[#FAF8F5] hover:border-[#A84C32]/40 transition-all cursor-pointer shadow-2xs active:scale-[0.99]"
+                      >
+                        <GoogleIcon className="w-5 h-5 shrink-0" />
+                        <span>Continue with Google</span>
+                      </button>
+
+                      {/* ── DIVIDER ── */}
+                      <div className="relative flex items-center justify-center my-1 sm:my-2">
+                        <div className="border-t border-[#E5E1D8] w-full" />
+                        <span className="bg-[#FAF8F5] px-3 text-[11px] uppercase tracking-wider text-[#8C8983] shrink-0 font-medium">
+                          or continue with email
+                        </span>
+                        <div className="border-t border-[#E5E1D8] w-full" />
+                      </div>
+
+                      <div className="flex items-center justify-between pb-1 border-b border-[#E5E1D8]">
                         <span className="text-xs font-bold text-[#A84C32] uppercase tracking-wider">
                           Email OTP Signup
                         </span>
                         <button
                           type="button"
                           onClick={() => openAuth("login")}
-                          className="text-xs text-[#A84C32] hover:underline font-semibold"
+                          className="text-xs text-[#A84C32] hover:underline font-semibold cursor-pointer"
                         >
                           Already registered? Sign In →
                         </button>
                       </div>
+
+                      {/* ── EXISTING STUDENT ACCOUNT CONFIRMATION CARD ── */}
+                      {existingAccount && (
+                        <div className="p-4 rounded-xl bg-amber-50/90 border border-amber-200 text-[#1A1A1A] space-y-3 animate-in fade-in">
+                          <div className="flex items-start gap-2.5">
+                            <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                            <div className="flex-1 text-xs">
+                              <p className="font-semibold text-amber-900">
+                                {existingAccount.role === "teacher"
+                                  ? "Active Educator Profile Detected"
+                                  : "Existing Student Account Found"}
+                              </p>
+                              <p className="text-amber-800/90 mt-1 leading-relaxed">
+                                {existingAccount.role === "teacher"
+                                  ? `An educator profile already exists for ${existingAccount.email}. You do not need to submit another application.`
+                                  : `We found a registered student account for ${existingAccount.email}${existingAccount.name ? ` (${existingAccount.name})` : ""}. Confirm your password below to use this account for your teacher application.`}
+                              </p>
+                            </div>
+                          </div>
+
+                          {existingAccount.role === "teacher" ? (
+                            <div className="pt-1 flex items-center gap-2">
+                              <Link
+                                href="/teacher/dashboard"
+                                className="px-4 py-2 rounded-xl bg-[#1A1A1A] text-white text-xs font-semibold hover:bg-[#A84C32] transition-colors inline-flex items-center gap-1.5"
+                              >
+                                Go to Educator Studio <ArrowRight className="w-3.5 h-3.5" />
+                              </Link>
+                            </div>
+                          ) : (
+                            <div className="pt-1 flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={handleConfirmExistingAccount}
+                                disabled={verifyingExisting}
+                                className="px-4 py-2 rounded-xl bg-[#A84C32] text-white text-xs font-semibold hover:bg-[#8B3A25] transition-all cursor-pointer flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+                              >
+                                {verifyingExisting ? (
+                                  <>
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Verifying...
+                                  </>
+                                ) : (
+                                  <>
+                                    Confirm & Use This Account <Check className="w-3.5 h-3.5" />
+                                  </>
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setExistingAccount(null);
+                                  setEmail("");
+                                  setPassword("");
+                                }}
+                                className="px-3 py-2 rounded-xl border border-[#E5E1D8] bg-white text-[#5C5A55] hover:text-[#1A1A1A] text-xs font-medium cursor-pointer"
+                              >
+                                Use Different Email
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openAuth("forgot")}
+                                className="text-xs text-[#A84C32] hover:underline font-semibold ml-auto cursor-pointer"
+                              >
+                                Forgot Password?
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       <div>
                         <label className="block text-xs font-semibold text-[#1A1A1A] uppercase tracking-wider mb-1.5">
@@ -716,58 +1171,58 @@ export default function BecomeTeacherClient() {
 
                   <div className="space-y-4 pt-2">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-semibold text-[#1A1A1A] uppercase tracking-wider mb-2">
-                          Mobile Number *
-                        </label>
-                        <div className="relative">
-                          <Phone className="absolute left-3.5 top-3 h-4 w-4 text-[#5C5A55]" />
-                          <input
-                            type="tel"
-                            required
-                            value={phone}
-                            onChange={(e) => setPhone(e.target.value)}
-                            placeholder="e.g. +91 98765 43210"
-                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#E5E1D8] text-sm focus:outline-none focus:border-[#A84C32]"
-                          />
+                        <div>
+                          <label className="block text-xs font-semibold text-[#1A1A1A] uppercase tracking-wider mb-2">
+                            Mobile Number *
+                          </label>
+                          <div className="relative">
+                            <Phone className="absolute left-3.5 top-3 h-4 w-4 text-[#5C5A55]" />
+                            <input
+                              type="tel"
+                              required
+                              value={phone}
+                              onChange={(e) => setPhone(e.target.value)}
+                              placeholder="e.g. +91 98765 43210"
+                              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#E5E1D8] text-sm focus:outline-none focus:border-[#A84C32]"
+                            />
+                          </div>
                         </div>
-                      </div>
 
-                      <div>
-                        <label className="block text-xs font-semibold text-[#1A1A1A] uppercase tracking-wider mb-2">
-                          Date of Birth *
-                        </label>
-                        <div className="relative">
-                          <Calendar className="absolute left-3.5 top-3 h-4 w-4 text-[#5C5A55]" />
-                          <input
-                            type="date"
-                            value={dateOfBirth}
-                            onChange={(e) => setDateOfBirth(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#E5E1D8] text-sm focus:outline-none focus:border-[#A84C32]"
-                          />
-                        </div>
-                        {dateOfBirth && (() => {
-                          const age = calculateAge(dateOfBirth);
-                          if (age === null) return null;
-                          if (age <= 18) {
-                            return (
-                              <div className="mt-2 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2 animate-fadeIn">
-                                <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
-                                <div>
-                                  <strong>Age: {age} years.</strong> Applicants must be over 18 years old to apply as a teacher on Medhashine.
+                        <div>
+                          <label className="block text-xs font-semibold text-[#1A1A1A] uppercase tracking-wider mb-2">
+                            Date of Birth *
+                          </label>
+                          <div className="relative">
+                            <Calendar className="absolute left-3.5 top-3 h-4 w-4 text-[#5C5A55]" />
+                            <input
+                              type="date"
+                              value={dateOfBirth}
+                              onChange={(e) => setDateOfBirth(e.target.value)}
+                              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#E5E1D8] text-sm focus:outline-none focus:border-[#A84C32]"
+                            />
+                          </div>
+                          {dateOfBirth && (() => {
+                            const age = calculateAge(dateOfBirth);
+                            if (age === null) return null;
+                            if (age <= 18) {
+                              return (
+                                <div className="mt-2 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2 animate-fadeIn">
+                                  <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                                  <div>
+                                    <strong>Age: {age} years.</strong> Applicants must be over 18 years old to apply as a teacher on Medhashine.
+                                  </div>
                                 </div>
-                              </div>
+                              );
+                            }
+                            return (
+                              <p className="mt-1.5 text-xs text-emerald-600 font-semibold flex items-center gap-1 animate-fadeIn">
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Age: {age} years (Eligible)
+                              </p>
                             );
-                          }
-                          return (
-                            <p className="mt-1.5 text-xs text-emerald-600 font-semibold flex items-center gap-1 animate-fadeIn">
-                              <CheckCircle2 className="h-3.5 w-3.5" /> Age: {age} years (Eligible)
-                            </p>
-                          );
-                        })()}
+                          })()}
+                        </div>
                       </div>
                     </div>
-                  </div>
                 </div>
               )}
 
@@ -1148,7 +1603,7 @@ export default function BecomeTeacherClient() {
               Application Received!
             </h2>
             <p className="font-ui text-sm text-[#5C5A55] leading-relaxed">
-              Thank you for submitting your application to join Medhashine as a verified teacher. Our admin team will review your profile and send an email notification as soon as your status is updated.
+              Thank you for submitting your application to join Medhashine as a verified educator! While our academic team reviews your profile, your account continues to function normally as a student (you can read insights and take quizzes). Once approved, your profile will automatically upgrade to a verified Educator with full Educator Studio access.
             </p>
             <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
               <Link
