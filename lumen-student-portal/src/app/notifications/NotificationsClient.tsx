@@ -590,11 +590,6 @@ export default function NotificationsClient() {
               <h1 className="font-serif-display text-lg sm:text-xl font-bold text-[#1A1A1A] truncate">
                 Notifications
               </h1>
-              {unreadCount > 0 && (
-                <span className="px-2 py-0.5 rounded-full bg-[#A84C32] text-white text-[10px] font-bold shrink-0">
-                  {unreadCount} unread
-                </span>
-              )}
             </div>
           </div>
 
@@ -635,7 +630,7 @@ export default function NotificationsClient() {
                   type="button"
                   onClick={handleMarkAllRead}
                   disabled={markingAll}
-                  className="px-3.5 py-1.5 rounded-full bg-white border border-[#E5E1D8] text-[11px] font-semibold text-[#A84C32] hover:bg-[#FBF4F2] transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs disabled:opacity-50"
+                  className="hidden sm:flex px-3.5 py-1.5 rounded-full bg-white border border-[#E5E1D8] text-[11px] font-semibold text-[#A84C32] hover:bg-[#FBF4F2] transition-colors items-center gap-1.5 cursor-pointer shadow-2xs disabled:opacity-50"
                   title="Mark all as read"
                 >
                   <CheckCheck className="h-3.5 w-3.5" />
