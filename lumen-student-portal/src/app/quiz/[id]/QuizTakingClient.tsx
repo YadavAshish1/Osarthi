@@ -102,11 +102,41 @@ export default function QuizTakingClient({ id }: { id: string }) {
   const [showSubmitWarning, setShowSubmitWarning] = useState(false);
 
   const startTimeRef = useRef<number>(Date.now());
+  const endTimeRef = useRef<number | null>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   // Ref to always hold the latest handleSubmit — avoids stale closure in timer interval
   const handleSubmitRef = useRef<() => void>(() => {});
+  const answersRef = useRef<Record<string, string[]>>({});
+  const hasRestoredRef = useRef(false);
 
-  // Fetch Quiz
+  // Sync answers to ref for zero-latency retrieval
+  useEffect(() => {
+    answersRef.current = answers;
+  }, [answers]);
+
+  // Wall-clock countdown timer handler
+  const startTimerWithEndTime = useCallback((targetEndTime: number) => {
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    endTimeRef.current = targetEndTime;
+
+    const tick = () => {
+      const left = Math.max(0, Math.round((targetEndTime - Date.now()) / 1000));
+      setSecondsRemaining(left);
+      if (left <= 0) {
+        if (timerIntervalRef.current) {
+          clearInterval(timerIntervalRef.current);
+          timerIntervalRef.current = null;
+        }
+        toast.warning("Time is up! Submitting your answers automatically...");
+        handleSubmitRef.current();
+      }
+    };
+
+    tick();
+    timerIntervalRef.current = setInterval(tick, 1000);
+  }, []);
+
+  // Fetch Quiz & Auto-Restore In-Progress Attempt
   useEffect(() => {
     if (!ready) return;
 
@@ -121,8 +151,67 @@ export default function QuizTakingClient({ id }: { id: string }) {
       try {
         const { data } = await api.get(`/quiz/${id}/take`);
         setQuiz(data);
+
+        // Auto-Restore in-progress attempt from localStorage on page refresh
+        if (typeof window !== "undefined" && !hasRestoredRef.current) {
+          hasRestoredRef.current = true;
+          try {
+            const savedStr = localStorage.getItem(`medhashine_quiz_progress_${id}`);
+            if (savedStr) {
+              const saved = JSON.parse(savedStr);
+              if (saved && saved.quizStarted) {
+                const restoredAnswers = saved.answers || {};
+                setAnswers(restoredAnswers);
+                answersRef.current = restoredAnswers;
+
+                const restoredIndex = Math.min(
+                  Math.max(0, saved.currentIndex || 0),
+                  Math.max(0, (data.questions?.length || 1) - 1)
+                );
+                setCurrentIndex(restoredIndex);
+
+                if (saved.startedAt) {
+                  startTimeRef.current = saved.startedAt;
+                }
+
+                const isTimed = Boolean(
+                  data.hasTimer || (data.timeLimitMinutes && data.timeLimitMinutes > 0)
+                );
+
+                if (isTimed && saved.endTime) {
+                  const left = Math.max(0, Math.round((saved.endTime - Date.now()) / 1000));
+                  if (left <= 0) {
+                    // Time expired while user was away
+                    setQuizStarted(true);
+                    setSecondsRemaining(0);
+                    toast.warning("Time expired while you were away. Submitting your answers automatically...");
+                    setTimeout(() => {
+                      handleSubmitRef.current();
+                    }, 500);
+                    return;
+                  } else {
+                    setQuizStarted(true);
+                    startTimerWithEndTime(saved.endTime);
+                    toast.info("Resumed your quiz in progress. Your previous answers have been restored.");
+                    return;
+                  }
+                } else {
+                  setQuizStarted(true);
+                  setSecondsRemaining(null);
+                  toast.info("Resumed your quiz in progress. Your previous answers have been restored.");
+                  return;
+                }
+              }
+            }
+          } catch (e) {
+            console.warn("Failed to restore quiz attempt", e);
+          }
+        }
       } catch (err: any) {
         if (err?.response?.status === 409 && err.response?.data?.attemptId) {
+          if (typeof window !== "undefined") {
+            localStorage.removeItem(`medhashine_quiz_progress_${id}`);
+          }
           try {
             const attemptId = err.response.data.attemptId;
             const { data: attemptData } = await api.get(`/quiz/attempt/${attemptId}`);
@@ -150,7 +239,7 @@ export default function QuizTakingClient({ id }: { id: string }) {
     };
 
     fetchQuiz();
-  }, [id, ready, user, openAuth]);
+  }, [id, ready, user, openAuth, startTimerWithEndTime]);
 
   // Submit Handler
   const handleSubmit = useCallback(async () => {
@@ -161,9 +250,10 @@ export default function QuizTakingClient({ id }: { id: string }) {
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
 
     const elapsedSeconds = Math.max(1, Math.round((Date.now() - startTimeRef.current) / 1000));
+    const currentAnswers = answersRef.current || answers;
     const answersPayload = (quiz.questions || []).map((q) => ({
       questionId: q.id,
-      selectedOptionIds: answers[q.id] || [],
+      selectedOptionIds: currentAnswers[q.id] || [],
     }));
 
     try {
@@ -180,6 +270,11 @@ export default function QuizTakingClient({ id }: { id: string }) {
         details: data.details,
       });
 
+      // Clear in-progress progress once submitted successfully
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(`medhashine_quiz_progress_${quiz._id}`);
+      }
+
       toast.success("Quiz submitted successfully!");
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to submit quiz");
@@ -193,10 +288,45 @@ export default function QuizTakingClient({ id }: { id: string }) {
     handleSubmitRef.current = handleSubmit;
   }, [handleSubmit]);
 
+  // Auto-Save in-progress quiz progress to localStorage
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (quizStarted && !result && !alreadyAttempted) {
+      try {
+        localStorage.setItem(
+          `medhashine_quiz_progress_${id}`,
+          JSON.stringify({
+            quizStarted: true,
+            answers,
+            currentIndex,
+            startedAt: startTimeRef.current,
+            endTime: endTimeRef.current,
+          })
+        );
+      } catch (e) {
+        console.warn("Failed to auto-save quiz progress", e);
+      }
+    }
+  }, [id, quizStarted, answers, currentIndex, result, alreadyAttempted]);
+
+  // Warn user before refreshing or navigating away during an active quiz
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (quizStarted && !result && !alreadyAttempted) {
+        e.preventDefault();
+        e.returnValue = "You have an active quiz attempt in progress. Your progress will be saved.";
+        return e.returnValue;
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [quizStarted, result, alreadyAttempted]);
+
   // Guard: check for unanswered questions before submitting (not called by timer auto-submit)
   const handleSubmitGuarded = () => {
     if (!quiz) return;
-    const unanswered = quiz.questions.filter((q) => !(answers[q.id]?.length));
+    const currentAnswers = answersRef.current || answers;
+    const unanswered = quiz.questions.filter((q) => !(currentAnswers[q.id]?.length));
     if (unanswered.length > 0) {
       setShowSubmitWarning(true);
     } else {
@@ -213,29 +343,34 @@ export default function QuizTakingClient({ id }: { id: string }) {
       return;
     }
 
-    startTimeRef.current = Date.now();
+    const now = Date.now();
+    startTimeRef.current = now;
     setQuizStarted(true);
 
     const isTimed = Boolean(quiz.hasTimer || (quiz.timeLimitMinutes && quiz.timeLimitMinutes > 0));
+    let targetEndTime: number | null = null;
     if (isTimed && quiz.timeLimitMinutes) {
-      const totalSecs = quiz.timeLimitMinutes * 60;
-      setSecondsRemaining(totalSecs);
-
-      // Start countdown — uses ref to avoid stale closure over handleSubmit
-      timerIntervalRef.current = setInterval(() => {
-        setSecondsRemaining((prev) => {
-          if (prev === null) return null;
-          if (prev <= 1) {
-            if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-            handleSubmitRef.current();
-            toast.warning("Time is up! Submitting your answers automatically...");
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+      targetEndTime = now + quiz.timeLimitMinutes * 60 * 1000;
+      startTimerWithEndTime(targetEndTime);
     } else {
       setSecondsRemaining(null); // Untimed
+    }
+
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(
+          `medhashine_quiz_progress_${id}`,
+          JSON.stringify({
+            quizStarted: true,
+            answers: {},
+            currentIndex: 0,
+            startedAt: now,
+            endTime: targetEndTime,
+          })
+        );
+      } catch (e) {
+        console.warn("Failed to persist initial quiz start", e);
+      }
     }
   };
 
