@@ -13,11 +13,20 @@ router.use(authenticate);
 
 async function notifySubscribersOfInsight(content, teacher) {
   try {
-    const subscriptions = await Subscription.find({ teacherRef: teacher._id }).populate('subscriberRef', 'name email');
+    const subscriptions = await Subscription.find({
+      teacherRef: teacher._id,
+      webNotify: { $ne: false },
+    }).populate('subscriberRef', 'name email mutedTeachers');
     if (!subscriptions || subscriptions.length === 0) return;
 
+    const teacherIdStr = teacher._id.toString();
     const notificationsToInsert = subscriptions
-      .filter((sub) => sub.subscriberRef?._id)
+      .filter((sub) => {
+        if (!sub.subscriberRef?._id) return false;
+        const muted = sub.subscriberRef.mutedTeachers || [];
+        if (muted.some((m) => m.toString() === teacherIdStr)) return false;
+        return true;
+      })
       .map((sub) => ({
         userRef: sub.subscriberRef._id,
         type: 'insight_published',

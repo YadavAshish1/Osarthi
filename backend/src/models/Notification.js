@@ -13,6 +13,7 @@ const notificationSchema = new mongoose.Schema(
     quizRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz' },
     contentRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Content' },
     read: { type: Boolean, default: false },
+    hidden: { type: Boolean, default: false },
     teacherRef: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     subscriberRef: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     collectionRef: { type: mongoose.Schema.Types.ObjectId, ref: 'QuizCollection' },

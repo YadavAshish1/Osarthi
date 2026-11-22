@@ -109,6 +109,27 @@ export default function QuizTakingClient({ id }: { id: string }) {
   const answersRef = useRef<Record<string, string[]>>({});
   const hasRestoredRef = useRef(false);
 
+  // Refs for auto-scrolling question tracker
+  const trackerContainerRef = useRef<HTMLDivElement | null>(null);
+  const activePillRef = useRef<HTMLButtonElement | null>(null);
+
+  // Auto-scroll the progress tracker so the active question pill is always smoothly centered in view
+  useEffect(() => {
+    if (activePillRef.current && trackerContainerRef.current) {
+      const container = trackerContainerRef.current;
+      const pill = activePillRef.current;
+      const pillLeft = pill.offsetLeft;
+      const pillWidth = pill.offsetWidth;
+      const containerWidth = container.clientWidth;
+      const targetScroll = pillLeft - containerWidth / 2 + pillWidth / 2;
+
+      container.scrollTo({
+        left: Math.max(0, targetScroll),
+        behavior: "smooth",
+      });
+    }
+  }, [currentIndex, quizStarted]);
+
   // Sync answers to ref for zero-latency retrieval
   useEffect(() => {
     answersRef.current = answers;
@@ -1010,7 +1031,10 @@ export default function QuizTakingClient({ id }: { id: string }) {
       </div>
 
       {/* Question Tracker Pills */}
-      <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-[#E5E1D8] flex items-center gap-2 overflow-x-auto no-scrollbar">
+      <div
+        ref={trackerContainerRef}
+        className="p-4 rounded-2xl bg-[#FAF8F5] border border-[#E5E1D8] flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth"
+      >
         <span className="text-xs font-semibold text-[#5C5A55] shrink-0 mr-1">Progress:</span>
         {quiz.questions.map((q, idx) => {
           const isAnswered = Boolean(answers[q.id]?.length);
@@ -1018,11 +1042,14 @@ export default function QuizTakingClient({ id }: { id: string }) {
           return (
             <button
               key={q.id}
+              ref={isCurrent ? activePillRef : null}
               type="button"
               onClick={() => setCurrentIndex(idx)}
               className={`w-8 h-8 rounded-xl font-bold text-xs flex items-center justify-center shrink-0 transition-all cursor-pointer ${
                 isCurrent
-                  ? "bg-[#1A1A1A] text-white shadow-xs"
+                  ? isAnswered
+                    ? "bg-[#1A1A1A] text-white ring-2 ring-emerald-500 ring-offset-1 shadow-xs"
+                    : "bg-[#1A1A1A] text-white ring-2 ring-[#A84C32] ring-offset-1 shadow-xs"
                   : isAnswered
                   ? "bg-emerald-600 text-white"
                   : "bg-white border border-[#E5E1D8] text-[#5C5A55] hover:border-[#A84C32]"

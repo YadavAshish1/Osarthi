@@ -148,9 +148,17 @@ router.post('/collections', requireRole('teacher'), async (req, res, next) => {
     });
 
     // Optional notification to subscribers when collection is created
-    const subscribers = await Subscription.find({ teacherRef: req.user._id }).populate('subscriberRef', 'name email');
+    const subscribers = await Subscription.find({
+      teacherRef: req.user._id,
+      webNotify: { $ne: false },
+    }).populate('subscriberRef', 'name email mutedTeachers');
+    const teacherIdStr = req.user._id.toString();
     const webNotifs = subscribers
-      .filter((s) => s.webNotify && s.subscriberRef)
+      .filter((s) => {
+        if (!s.subscriberRef?._id) return false;
+        const muted = s.subscriberRef.mutedTeachers || [];
+        return !muted.some((m) => m.toString() === teacherIdStr);
+      })
       .map((s) => ({
         userRef: s.subscriberRef._id,
         type: 'collection_created',
@@ -344,16 +352,22 @@ router.get('/teacher', requireRole('teacher'), async (req, res, next) => {
 export async function notifySubscribersOfQuiz(quiz, teacher) {
   try {
     const populatedQuiz = await Quiz.findById(quiz._id).populate('subjectRef', 'name');
-    const subscriptions = await Subscription.find({ teacherRef: teacher._id }).populate('subscriberRef', 'name email');
+    const subscriptions = await Subscription.find({
+      teacherRef: teacher._id,
+      webNotify: { $ne: false },
+    }).populate('subscriberRef', 'name email mutedTeachers');
     const classStudents = quiz.classRef
-      ? await User.find({ role: 'student', classRef: quiz.classRef }).select('name email')
+      ? await User.find({ role: 'student', classRef: quiz.classRef }).select('name email mutedTeachers')
       : [];
 
+    const teacherIdStr = teacher._id.toString();
     const notifiedUserIds = new Set();
     const notificationsToInsert = [];
 
     subscriptions.forEach((sub) => {
       if (sub.subscriberRef?._id) {
+        const muted = sub.subscriberRef.mutedTeachers || [];
+        if (muted.some((m) => m.toString() === teacherIdStr)) return;
         const uid = sub.subscriberRef._id.toString();
         notifiedUserIds.add(uid);
         notificationsToInsert.push({
@@ -370,6 +384,8 @@ export async function notifySubscribersOfQuiz(quiz, teacher) {
     });
 
     classStudents.forEach((student) => {
+      const muted = student.mutedTeachers || [];
+      if (muted.some((m) => m.toString() === teacherIdStr)) return;
       const uid = student._id.toString();
       if (!notifiedUserIds.has(uid)) {
         notifiedUserIds.add(uid);

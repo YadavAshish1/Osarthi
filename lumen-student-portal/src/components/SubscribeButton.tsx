@@ -34,6 +34,8 @@ export default function SubscribeButton({
   const [count, setCount] = useState<number | null>(initialCount ?? null);
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [muting, setMuting] = useState(false);
 
   // If user is the teacher themselves, don't show subscribe button
   const isSelf = user?.id === teacherId;
@@ -49,6 +51,7 @@ export default function SubscribeButton({
         const { data } = await api.get(`/subscriptions/check/${teacherId}`);
         if (mounted && data) {
           setSubscribed(!!data.subscribed);
+          setIsMuted(!!data.muted);
         }
       } catch {
         // Silently fail check
@@ -62,6 +65,34 @@ export default function SubscribeButton({
       mounted = false;
     };
   }, [teacherId, user, isSelf]);
+
+  // Toggle notification mute/unmute
+  const handleToggleNotify = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!user) {
+      openAuth("login");
+      return;
+    }
+
+    setMuting(true);
+    try {
+      if (isMuted) {
+        await api.post("/notifications/unmute-teacher", { teacherId, unhidePast: true });
+        setIsMuted(false);
+        toast.success(`Notifications turned back on for ${teacherName}`);
+      } else {
+        await api.post("/notifications/mute-teacher", { teacherId });
+        setIsMuted(true);
+        toast.success(`Notifications turned off from ${teacherName}`);
+      }
+    } catch {
+      toast.error("Failed to update notification preference");
+    } finally {
+      setMuting(false);
+    }
+  };
 
   const handleToggle = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -85,6 +116,7 @@ export default function SubscribeButton({
 
     // Optimistic update
     setSubscribed(nextSubscribed);
+    if (!nextSubscribed) setIsMuted(false);
     if (count !== null) setCount(nextCount);
 
     try {
@@ -113,30 +145,56 @@ export default function SubscribeButton({
 
   if (variant === "menu-item") {
     return (
-      <button
-        type="button"
-        onClick={handleToggle}
-        disabled={loading || checking}
-        title={subscribed ? `Unsubscribe from ${teacherName}` : `Subscribe to ${teacherName} for new quizzes`}
-        className={`w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-[#F5F2EB] text-[#1A1A1A] transition-colors cursor-pointer disabled:opacity-60 font-ui text-xs ${className}`}
-      >
-        {loading ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin text-[#A84C32]" />
-            <span className="font-medium text-[#5C5A55]">Updating...</span>
-          </>
-        ) : subscribed ? (
-          <>
-            <Check className="h-4 w-4 text-emerald-600" />
-            <span className="font-medium text-emerald-700">Subscribed</span>
-          </>
-        ) : (
-          <>
-            <Bell className="h-4 w-4 text-[#A84C32]" />
-            <span className="font-medium text-[#A84C32]">Subscribe</span>
-          </>
+      <div className={`w-full flex items-center justify-between px-4 py-2.5 hover:bg-[#F5F2EB] text-[#1A1A1A] transition-colors font-ui text-xs ${className}`}>
+        <button
+          type="button"
+          onClick={handleToggle}
+          disabled={loading || checking}
+          title={subscribed ? `Unsubscribe from ${teacherName}` : `Subscribe to ${teacherName} for new quizzes`}
+          className="flex items-center gap-3 cursor-pointer disabled:opacity-60 flex-1 text-left"
+        >
+          {loading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin text-[#A84C32]" />
+              <span className="font-medium text-[#5C5A55]">Updating...</span>
+            </>
+          ) : subscribed ? (
+            <>
+              <Check className="h-4 w-4 text-emerald-600" />
+              <span className="font-medium text-emerald-700">Subscribed</span>
+            </>
+          ) : (
+            <>
+              <Bell className="h-4 w-4 text-[#A84C32]" />
+              <span className="font-medium text-[#A84C32]">Subscribe</span>
+            </>
+          )}
+        </button>
+
+        {subscribed && (
+          <button
+            type="button"
+            onClick={handleToggleNotify}
+            disabled={muting}
+            title={
+              isMuted
+                ? `Notifications muted. Click to turn on.`
+                : `Notifications active. Click to mute.`
+            }
+            className={`p-1 rounded-md transition-colors cursor-pointer ${
+              isMuted
+                ? "text-amber-600 bg-amber-50 hover:bg-amber-100"
+                : "text-[#8C8983] hover:text-[#A84C32] hover:bg-black/5"
+            }`}
+          >
+            {isMuted ? (
+              <BellOff className="h-3.5 w-3.5" />
+            ) : (
+              <Bell className="h-3.5 w-3.5 text-emerald-600" />
+            )}
+          </button>
         )}
-      </button>
+      </div>
     );
   }
 
@@ -153,42 +211,73 @@ export default function SubscribeButton({
   }[size];
 
   return (
-    <button
-      type="button"
-      onClick={handleToggle}
-      disabled={loading || checking}
-      title={subscribed ? `Unsubscribe from ${teacherName}` : `Subscribe to ${teacherName} for new quizzes`}
-      className={`inline-flex items-center justify-center font-ui font-semibold rounded-full transition-all duration-200 cursor-pointer shadow-xs select-none disabled:opacity-60 ${
-        subscribed
-          ? "bg-[#FAF8F5] border border-[#E5E1D8] text-[#1A1A1A] hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200"
-          : "bg-[#A84C32] hover:bg-[#8B3A25] text-white hover:shadow-md"
-      } ${sizeClasses} ${className}`}
-    >
-      {loading ? (
-        <Loader2 className={`${iconSizes} animate-spin`} />
-      ) : subscribed ? (
-        <>
-          <Check className={`${iconSizes} text-emerald-600`} />
-          <span>Subscribed</span>
-          <BellOff className={`${iconSizes} opacity-0 group-hover:opacity-100 hidden`} />
-        </>
-      ) : (
-        <>
-          <Bell className={`${iconSizes}`} />
-          <span>Subscribe</span>
-        </>
-      )}
+    <div className="inline-flex items-center gap-1.5">
+      <button
+        type="button"
+        onClick={handleToggle}
+        disabled={loading || checking}
+        title={subscribed ? `Unsubscribe from ${teacherName}` : `Subscribe to ${teacherName} for new quizzes`}
+        className={`inline-flex items-center justify-center font-ui font-semibold rounded-full transition-all duration-200 cursor-pointer shadow-xs select-none disabled:opacity-60 ${
+          subscribed
+            ? "bg-[#FAF8F5] border border-[#E5E1D8] text-[#1A1A1A] hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200"
+            : "bg-[#A84C32] hover:bg-[#8B3A25] text-white hover:shadow-md"
+        } ${sizeClasses} ${className}`}
+      >
+        {loading ? (
+          <Loader2 className={`${iconSizes} animate-spin`} />
+        ) : subscribed ? (
+          <>
+            <Check className={`${iconSizes} text-emerald-600`} />
+            <span>Subscribed</span>
+          </>
+        ) : (
+          <>
+            <Bell className={`${iconSizes}`} />
+            <span>Subscribe</span>
+          </>
+        )}
 
-      {showCount && count !== null && count > 0 && (
-        <span
-          className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-            subscribed ? "bg-[#E5E1D8]/60 text-[#5C5A55]" : "bg-black/20 text-white"
+        {showCount && count !== null && count > 0 && (
+          <span
+            className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+              subscribed ? "bg-[#E5E1D8]/60 text-[#5C5A55]" : "bg-black/20 text-white"
+            }`}
+          >
+            {count.toLocaleString()}
+          </span>
+        )}
+      </button>
+
+      {/* Notification Bell Toggle (YouTube / Substack standard) */}
+      {subscribed && (
+        <button
+          type="button"
+          onClick={handleToggleNotify}
+          disabled={muting || loading}
+          title={
+            isMuted
+              ? `Notifications are muted for ${teacherName}. Click to turn on.`
+              : `Notifications are active for ${teacherName}. Click to turn off.`
+          }
+          className={`rounded-full border transition-all cursor-pointer shadow-2xs flex items-center justify-center ${
+            size === "sm" ? "p-1.5" : "p-2"
+          } ${
+            isMuted
+              ? "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
+              : "bg-white border-[#E5E1D8] text-[#5C5A55] hover:text-[#A84C32] hover:bg-[#FAF8F5]"
           }`}
+          aria-label={isMuted ? "Turn notifications on" : "Turn notifications off"}
         >
-          {count.toLocaleString()}
-        </span>
+          {muting ? (
+            <Loader2 className={`${iconSizes} animate-spin text-[#A84C32]`} />
+          ) : isMuted ? (
+            <BellOff className={`${iconSizes} text-amber-600`} />
+          ) : (
+            <Bell className={`${iconSizes} text-emerald-600`} />
+          )}
+        </button>
       )}
-    </button>
+    </div>
   );
 }
 

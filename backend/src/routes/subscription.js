@@ -112,7 +112,17 @@ router.get('/check/:teacherId', async (req, res, next) => {
       subscriberRef: req.user._id,
       teacherRef: req.params.teacherId,
     });
-    res.json({ subscribed: !!existing });
+    const user = await User.findById(req.user._id).select('mutedTeachers');
+    const isMuted =
+      user?.mutedTeachers?.some(
+        (m) => m.toString() === req.params.teacherId.toString()
+      ) || (existing && existing.webNotify === false);
+
+    res.json({
+      subscribed: !!existing,
+      webNotify: existing ? existing.webNotify : true,
+      muted: !!isMuted,
+    });
   } catch (err) {
     next(err);
   }
