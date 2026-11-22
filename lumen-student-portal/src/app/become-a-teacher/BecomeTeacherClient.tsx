@@ -121,7 +121,10 @@ export default function BecomeTeacherClient() {
   const handleGoogleSignIn = () => {
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
     if (!clientId) {
-      toast.error("Google Client ID is not configured yet. Please add NEXT_PUBLIC_GOOGLE_CLIENT_ID to .env.local.");
+      if (process.env.NODE_ENV === "development") {
+        console.warn("[Google Auth] NEXT_PUBLIC_GOOGLE_CLIENT_ID is not configured in environment variables.");
+      }
+      toast.error("Google Sign-In is temporarily unavailable. Please continue with your email.");
       return;
     }
 

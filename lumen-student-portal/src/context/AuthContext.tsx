@@ -75,6 +75,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else if (authError) {
           if (authError === "google_cancelled") {
             toast.info("Google sign-in was cancelled");
+          } else if (authError === "server_error") {
+            toast.error("Unable to complete Google sign-in at this time. Please try again or sign in with your email.");
           } else {
             toast.error(decodeURIComponent(authError));
           }
