@@ -9,9 +9,8 @@ import { useAuth } from "@/context/AuthContext";
 export default function BecomeTeacherBanner() {
   const { user, ready } = useAuth();
 
-  // Hide for logged-in students and teachers
-  if (!ready) return null;
-  if (user?.role === "student" || user?.role === "teacher") return null;
+  // Hide for logged-in students and teachers once auth state resolves
+  if (ready && (user?.role === "student" || user?.role === "teacher")) return null;
 
   return (
     <section

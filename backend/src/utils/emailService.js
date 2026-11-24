@@ -241,7 +241,7 @@ export async function sendTeacherApplicationAdminNotification(applicantName, app
 export async function sendTeacherApprovalEmail(toEmail, name, teacherPortalLink) {
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.EMAIL_FROM || 'Medhashine <onboarding@resend.dev>';
-  const safePortalLink = (teacherPortalLink || 'https://medhashine.in/teacher/dashboard').replace(/^https?:\/\/localhost(:\d+)?/i, 'https://medhashine.in');
+  const safePortalLink = (teacherPortalLink || 'https://www.medhashine.in/teacher/dashboard').replace(/^https?:\/\/localhost(:\d+)?/i, 'https://www.medhashine.in');
 
   console.log(`[Teacher Approved] ${name} <${toEmail}> — Portal: ${safePortalLink}`);
 
@@ -340,7 +340,7 @@ export async function sendTeacherRejectionEmail(toEmail, name, reason) {
 export async function sendQuizNotificationEmail(toEmail, name, teacherName, quizTitle, quizDescription, quizLink) {
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.EMAIL_FROM || 'Medhashine <onboarding@resend.dev>';
-  const safeQuizLink = (quizLink || 'https://medhashine.in').replace(/^https?:\/\/localhost(:\d+)?/i, 'https://medhashine.in');
+  const safeQuizLink = (quizLink || 'https://www.medhashine.in').replace(/^https?:\/\/localhost(:\d+)?/i, 'https://www.medhashine.in');
 
   console.log(`[Quiz Notification] Sending to ${toEmail} — Quiz: "${quizTitle}" by ${teacherName} — Link: ${safeQuizLink}`);
 

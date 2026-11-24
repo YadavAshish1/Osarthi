@@ -18,7 +18,10 @@ export default function BlogCard({ blog, index = 0 }: { blog: BlogItem; index?: 
         <img
           src={blog.cover || getDefaultSubjectCover(blog.subject)}
           alt={blog.title}
-          loading="lazy"
+          width={640}
+          height={400}
+          loading={index < 3 ? "eager" : "lazy"}
+          fetchPriority={index < 3 ? "high" : undefined}
           className="w-full h-full object-cover transform group-hover:scale-108 transition-transform duration-500 ease-out"
         />
         <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-full text-[11px] font-ui font-medium text-[#1A1A1A] flex items-center gap-1 shadow-xs">

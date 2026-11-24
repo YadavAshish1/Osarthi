@@ -1,7 +1,31 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import Script from "next/script";
+import { Cormorant_Garamond, Lora, Manrope } from "next/font/google";
 import "./globals.css";
+
+const cormorant = Cormorant_Garamond({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  style: ["normal", "italic"],
+  variable: "--font-cormorant",
+  display: "swap",
+});
+
+const lora = Lora({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
+  variable: "--font-lora",
+  display: "swap",
+});
+
+const manrope = Manrope({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-manrope",
+  display: "swap",
+});
 import { AuthProvider } from "@/context/AuthContext";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -113,16 +137,20 @@ export default function RootLayout({
   };
 
   return (
-    <html lang="hi" className="h-full antialiased">
+    <html
+      lang="hi"
+      className={`h-full antialiased ${cormorant.variable} ${lora.variable} ${manrope.variable}`}
+    >
       <body className="min-h-full flex flex-col bg-[#FAF8F5] text-[#1A1A1A]">
         {/* Organization JSON-LD Schema */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
-        {/* Google AdSense */}
-        <script
-          async
+        {/* Google AdSense — deferred until page idle to protect LCP/INP */}
+        <Script
+          id="google-adsense"
+          strategy="lazyOnload"
           src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClientId}`}
           crossOrigin="anonymous"
         />
@@ -134,9 +162,7 @@ export default function RootLayout({
             <Header />
           </Suspense>
           <main data-testid="main-content" className="flex-1">
-            <Suspense fallback={<div className="p-12 text-center">Loading...</div>}>
-              {children}
-            </Suspense>
+            {children}
           </main>
           <Footer />
           <AuthModal />

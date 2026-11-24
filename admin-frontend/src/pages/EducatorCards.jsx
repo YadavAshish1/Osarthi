@@ -497,7 +497,7 @@ export default function EducatorCards() {
                   type="text"
                   value={formData.ctaUrl}
                   onChange={(e) => setFormData({ ...formData, ctaUrl: e.target.value })}
-                  placeholder="/teachers/ak-singh or /insights"
+                  placeholder="/teachers/AK-Singh-6a9834bdfb53aa95cffb5225 or /insights"
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white text-sm focus:border-sky-500 focus:outline-none"
                 />
               </div>

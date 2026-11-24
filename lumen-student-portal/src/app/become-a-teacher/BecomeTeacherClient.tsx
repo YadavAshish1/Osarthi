@@ -67,7 +67,7 @@ function GoogleIcon({ className = "w-5 h-5" }: { className?: string }) {
 
 export default function BecomeTeacherClient() {
   const router = useRouter();
-  const { user, openAuth, login, sendOtp, register, ready } = useAuth();
+  const { user, openAuth, login, sendOtp, register } = useAuth();
 
   const [view, setView] = useState<"overview" | "form" | "submitted">("overview");
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -483,14 +483,6 @@ export default function BecomeTeacherClient() {
       setSubmitting(false);
     }
   };
-
-  if (!ready) {
-    return (
-      <div className="min-h-screen bg-[#FAF8F5] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-[#A84C32]" />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-[#1A1A1A]">

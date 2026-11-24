@@ -8,7 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 export default function StartLearningBanner() {
   const { user, ready, openAuth } = useAuth();
   const sectionRef = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(true);
 
   useEffect(() => {
     const observer = new IntersectionObserver(

@@ -1,11 +1,16 @@
 import React from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import StudentQuizHistory from "@/components/StudentQuizHistory";
 
-export const metadata = {
-  title: "My Quiz History & Performance | Medhashine",
+export const metadata: Metadata = {
+  title: "My Quiz History & Performance",
   description: "View your completed quizzes, question-by-question solutions, and performance accuracy on Medhashine.",
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 export default function QuizHistoryPage() {

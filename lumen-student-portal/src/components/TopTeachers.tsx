@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
+import Link from "next/link";
 import {
   PlaySquare,
   GraduationCap,
@@ -104,9 +105,11 @@ function TeacherCard({
   onClick: (e: React.MouseEvent) => void;
 }) {
   const theme = getTheme(card.themeColor, index);
+  const href = card.ctaUrl || "/teachers";
 
   return (
-    <div
+    <Link
+      href={href}
       onClick={onClick}
       className={`group relative rounded-[28px] sm:rounded-[32px] bg-white border-2 pt-8 pb-6 px-5 flex flex-col justify-between select-none cursor-pointer transition-all duration-500 ${isActive
           ? `shadow-[0_28px_60px_-12px_rgba(0,0,0,0.22)] ${theme.borderColor} ring-4 ring-[#A84C32]/10`
@@ -203,7 +206,7 @@ function TeacherCard({
           </span>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -217,7 +220,8 @@ function EducatorInviteCard({
   const theme = THEMES["#A84C32"];
 
   return (
-    <div
+    <Link
+      href="/become-a-teacher"
       onClick={onClick}
       className={`group relative rounded-[28px] sm:rounded-[32px] bg-white border-2 pt-8 pb-6 px-5 flex flex-col justify-between select-none cursor-pointer transition-all duration-500 ${isActive
           ? `shadow-[0_28px_60px_-12px_rgba(0,0,0,0.22)] ${theme.borderColor} ring-4 ring-[#A84C32]/10`
@@ -306,15 +310,16 @@ function EducatorInviteCard({
           </span>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
 
-export default function TopTeachers() {
-  const [cards, setCards] = useState<EducatorCardItem[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function TopTeachers({ initialTeachers }: { initialTeachers?: EducatorCardItem[] | null }) {
+  const hasInitialProp = Array.isArray(initialTeachers);
+  const [cards, setCards] = useState<EducatorCardItem[]>(hasInitialProp ? initialTeachers : []);
+  const [loading, setLoading] = useState(!hasInitialProp);
   const sectionRef = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(true);
 
   // 3D Circular Arc Carousel State
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -335,6 +340,7 @@ export default function TopTeachers() {
   }, []);
 
   useEffect(() => {
+    if (hasInitialProp) return;
     api
       .get("/explore/top-teachers")
       .then(({ data }) => {
@@ -346,7 +352,7 @@ export default function TopTeachers() {
       })
       .catch(() => setCards([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [hasInitialProp]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -586,14 +592,6 @@ export default function TopTeachers() {
                   e.preventDefault();
                   e.stopPropagation();
                   setCurrentIndex(index);
-                } else {
-                  // If center card is clicked, navigate to card's ctaUrl or default
-                  if (item.type === "teacher") {
-                    const target = item.data.ctaUrl || `/teachers`;
-                    window.location.href = target;
-                  } else {
-                    window.location.href = "/become-teacher";
-                  }
                 }
               };
 

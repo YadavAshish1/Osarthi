@@ -16,12 +16,18 @@ const FALLBACK_STATS: Stats = {
   mentors: "50+",
 };
 
-export default function StatsBar() {
-  const [stats, setStats] = useState<Stats>(FALLBACK_STATS);
-  const [visible, setVisible] = useState(false);
+export default function StatsBar({ initialStats }: { initialStats?: Partial<Stats> | null }) {
+  const hasInitial = Boolean(initialStats && typeof initialStats === "object");
+  const [stats, setStats] = useState<Stats>({
+    learners: initialStats?.learners || FALLBACK_STATS.learners,
+    insights: initialStats?.insights || FALLBACK_STATS.insights,
+    mentors: initialStats?.mentors || FALLBACK_STATS.mentors,
+  });
+  const [visible, setVisible] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (hasInitial) return;
     api
       .get("/explore/stats")
       .then(({ data }) => {
@@ -34,7 +40,7 @@ export default function StatsBar() {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [hasInitial]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(

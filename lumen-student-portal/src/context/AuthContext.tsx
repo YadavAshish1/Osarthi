@@ -1,6 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
+import { usePathname } from "next/navigation";
 import { api, formatApiErrorDetail } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -33,6 +34,7 @@ interface AuthContextType {
   forgotPassword: (email: string) => Promise<{ ok: boolean; error?: string }>;
   resetPassword: (email: string, otp: string, newPassword: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
+  isLoggingOut: () => boolean;
   requireAuth: (onSuccess?: () => void) => boolean;
   openAuth: (mode?: "login" | "register" | "forgot") => void;
   closeAuth: () => void;
@@ -40,9 +42,13 @@ interface AuthContextType {
   updateUser: (updates: Partial<User>) => void;
 }
 
+const LOGOUT_STORAGE_KEY = "medhashine_logout_event";
+
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const signedOutPathRef = useRef<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
   const [authModal, setAuthModal] = useState<AuthModalState>({
@@ -51,13 +57,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     onSuccess: null,
   });
 
-  // Listen for auth:logout event triggered when refresh token expires
+  useEffect(() => {
+    if (signedOutPathRef.current && pathname !== signedOutPathRef.current) {
+      signedOutPathRef.current = null;
+    }
+  }, [pathname]);
+
+  // Listen for auth:logout (expired session) and cross-tab explicit logout broadcasts
   useEffect(() => {
     const handleLogout = () => {
       setUser(null);
     };
+    const handleStorageLogout = (e: StorageEvent) => {
+      if (e.key === LOGOUT_STORAGE_KEY && e.newValue) {
+        signedOutPathRef.current = window.location.pathname;
+        setUser(null);
+      }
+    };
     window.addEventListener("auth:logout", handleLogout);
-    return () => window.removeEventListener("auth:logout", handleLogout);
+    window.addEventListener("storage", handleStorageLogout);
+    return () => {
+      window.removeEventListener("auth:logout", handleLogout);
+      window.removeEventListener("storage", handleStorageLogout);
+    };
   }, []);
 
   // On mount: try /api/auth/me and handle OAuth redirect params
@@ -152,6 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data } = await api.post("/auth/login", { email, password });
       const u = data.user;
       if (!u) throw new Error("Invalid response");
+      signedOutPathRef.current = null;
       setUser({
         id: u._id,
         name: u.name,
@@ -216,6 +239,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
         const u = data.user;
         if (!u) throw new Error("Invalid response");
+        signedOutPathRef.current = null;
         setUser({ id: u._id, name: u.name, email: u.email, role: u.role, avatar: u.avatar });
         return { ok: true, user: u };
       } catch (e: any) {
@@ -265,11 +289,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    const currentPath =
+      typeof window !== "undefined" ? window.location.pathname : pathname;
+    signedOutPathRef.current = currentPath || "/";
     try {
       await api.post("/auth/logout");
     } catch {}
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.setItem(LOGOUT_STORAGE_KEY, String(Date.now()));
+      }
+    } catch {}
     setUser(null);
-  }, []);
+  }, [pathname]);
+
+  const isLoggingOut = useCallback(() => {
+    if (!signedOutPathRef.current) return false;
+    const currentPath =
+      typeof window !== "undefined" ? window.location.pathname : pathname;
+    return signedOutPathRef.current === currentPath;
+  }, [pathname]);
 
   const requireAuth = useCallback(
     (onSuccess?: () => void) => {
@@ -314,6 +353,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         forgotPassword,
         resetPassword,
         logout,
+        isLoggingOut,
         requireAuth,
         openAuth,
         closeAuth,

@@ -126,14 +126,25 @@ function TestimonialCard({ t }: { t: Testimonial }) {
   );
 }
 
-export default function TestimonialsSection() {
-  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function TestimonialsSection({
+  initialTestimonials,
+}: {
+  initialTestimonials?: Testimonial[] | null;
+}) {
+  const hasInitialProp = Array.isArray(initialTestimonials);
+  const [testimonials, setTestimonials] = useState<Testimonial[]>(() => {
+    if (hasInitialProp) {
+      return initialTestimonials.length > 0 ? initialTestimonials : FALLBACK_TESTIMONIALS;
+    }
+    return [];
+  });
+  const [loading, setLoading] = useState(!hasInitialProp);
   const sectionRef = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(true);
   const [swiperInstance, setSwiperInstance] = useState<SwiperType | null>(null);
 
   useEffect(() => {
+    if (hasInitialProp) return;
     api
       .get("/explore/testimonials")
       .then(({ data }) => {
@@ -145,7 +156,7 @@ export default function TestimonialsSection() {
       })
       .catch(() => setTestimonials(FALLBACK_TESTIMONIALS))
       .finally(() => setLoading(false));
-  }, []);
+  }, [hasInitialProp]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(

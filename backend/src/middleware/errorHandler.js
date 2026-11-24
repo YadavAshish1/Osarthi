@@ -21,6 +21,9 @@ export function errorHandler(err, _req, res, _next) {
   if (err.name === 'ValidationError') {
     return res.status(400).json({ message: err.message });
   }
+  if (err.name === 'CastError') {
+    return res.status(400).json({ message: 'Invalid resource identifier' });
+  }
 
   // In production, never expose internal error details to client
   const status = err.status || 500;

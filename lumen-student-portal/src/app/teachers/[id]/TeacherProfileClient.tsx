@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, BookOpen, GraduationCap, Briefcase, Clock, Calendar, Share2, Check, ChevronDown, Loader2 } from "lucide-react";
-import { api, BlogItem, TeacherProfile, mapContentToBlog, FALLBACK_BLOGS, getDefaultSubjectCover } from "@/lib/api";
+import { api, BlogItem, TeacherProfile, mapContentToBlog, getDefaultSubjectCover } from "@/lib/api";
 import { toast } from "sonner";
 import SubscribeButton from "@/components/SubscribeButton";
 import { useAuth } from "@/context/AuthContext";
@@ -97,7 +97,6 @@ export default function TeacherProfileClient({
 
   useEffect(() => {
     if (initialTeacher) {
-      setLoading(false);
       return;
     }
 
@@ -119,33 +118,7 @@ export default function TeacherProfileClient({
           return;
         }
       } catch {
-        // API fallback logic
-      }
-
-      if (!initialTeacher) {
-        // Fallback for demo/offline
-        const fallbackBlogs = FALLBACK_BLOGS.filter(
-          (b) => b.teacher_id === id || id.includes(b.teacher_name.split(" ")[1]?.toLowerCase() || "")
-        );
-        const activeBlogs = fallbackBlogs.length > 0 ? fallbackBlogs : FALLBACK_BLOGS;
-
-        setTeacher({
-          _id: id,
-          name: activeBlogs[0]?.teacher_name || "Educator Profile",
-          avatar: activeBlogs[0]?.teacher_avatar || "",
-          role: "Teacher",
-          bio: "Dedicated educator passionate about inspiring student curiosity, critical thinking, and academic excellence.",
-          education: [
-            { degree: "Master of Science", institution: "Central University", year: "2018" },
-            { degree: "Bachelor of Education (B.Ed)", institution: "State University", year: "2016" },
-          ],
-          experience: [
-            { title: "Senior Faculty", organization: "Medhashine Education", duration: "2020 - Present" },
-          ],
-        });
-        setBlogs(activeBlogs);
-        setTotalCount(activeBlogs.length);
-        setHasMore(false);
+        // Teacher profile does not exist or could not be fetched
       }
       setLoading(false);
     })();
@@ -335,7 +308,7 @@ export default function TeacherProfileClient({
       </section>
 
       {/* Authored Essays / Insights Section */}
-      <main className="max-w-4xl mx-auto px-6 pt-4">
+      <section aria-label="Authored insights" className="max-w-4xl mx-auto px-6 pt-4">
         <div className="flex items-center justify-between pb-6 border-b border-[#E5E1D8] mb-8">
           <div className="flex items-center gap-3">
             <BookOpen className="h-5 w-5 text-[#A84C32]" />
@@ -438,7 +411,7 @@ export default function TeacherProfileClient({
             </p>
           </div>
         )}
-      </main>
+      </section>
     </div>
   );
 }

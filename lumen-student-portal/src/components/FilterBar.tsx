@@ -162,6 +162,20 @@ export default function FilterBar({
     onChange(newFilters);
   };
 
+  const resolvedSubjectValue = useMemo(() => {
+    if (!filters.subject) return "";
+    if (subjectOptions.some((s) => s.value === filters.subject)) return filters.subject;
+    const match = subjectOptions.find((s) => s.value.split(",").includes(filters.subject));
+    return match ? match.value : filters.subject;
+  }, [filters.subject, subjectOptions]);
+
+  const resolvedTopicValue = useMemo(() => {
+    if (!filters.topic) return "";
+    if (topicOptions.some((tp) => tp.value === filters.topic)) return filters.topic;
+    const match = topicOptions.find((tp) => tp.value.split(",").includes(filters.topic));
+    return match ? match.value : filters.topic;
+  }, [filters.topic, topicOptions]);
+
   return (
     <div data-testid="filter-bar" className="flex flex-wrap items-center gap-3 font-ui text-sm">
       {/* Teacher Filter */}
@@ -197,7 +211,7 @@ export default function FilterBar({
       {/* Subject Filter */}
       <select
         data-testid="filter-subject"
-        value={filters.subject}
+        value={resolvedSubjectValue}
         onChange={(e) => handleSubjectChange(e.target.value)}
         className="h-10 px-4 rounded-full bg-white border border-[#E5E1D8] text-[#1A1A1A] hover:border-[#A84C32] focus:outline-none focus:border-[#A84C32] transition-colors cursor-pointer"
       >
@@ -212,7 +226,7 @@ export default function FilterBar({
       {/* Topic Filter */}
       <select
         data-testid="filter-topic"
-        value={filters.topic}
+        value={resolvedTopicValue}
         onChange={(e) => onChange({ ...filters, topic: e.target.value })}
         className="h-10 px-4 rounded-full bg-white border border-[#E5E1D8] text-[#1A1A1A] hover:border-[#A84C32] focus:outline-none focus:border-[#A84C32] transition-colors cursor-pointer"
       >

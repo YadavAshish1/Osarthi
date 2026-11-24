@@ -19,7 +19,7 @@ import {
   TrendingUp,
   Heart,
 } from "lucide-react";
-import { api, mapContentToBlog, BlogItem } from "@/lib/api";
+import { api, mapContentToBlog, BlogItem, getTeacherSlug } from "@/lib/api";
 import { trackSearch } from "@/lib/gtag";
 import { getExpandedHighlightTerms } from "@/lib/transliterate";
 
@@ -246,7 +246,7 @@ export default function GlobalSearchModal({
         items.push({
           type: "teacher",
           id: t._id,
-          url: `/teachers/${t._id}`,
+          url: `/teachers/${getTeacherSlug(t._id, t.name)}`,
           title: t.name,
         });
       });
@@ -265,7 +265,7 @@ export default function GlobalSearchModal({
 
     if (activeTab === "all" || activeTab === "topics") {
       results.topics.forEach((top) => {
-        const param = top.type === "topic" ? `topic=${top._id}` : `subject=${encodeURIComponent(top.name)}`;
+        const param = top.type === "topic" ? `topic=${top._id}` : `subject=${top._id}`;
         items.push({
           type: "topic",
           id: top._id,
@@ -580,7 +580,7 @@ export default function GlobalSearchModal({
                     {recommendations.teachers.map((teacher) => (
                       <div
                         key={teacher._id}
-                        onClick={() => handleSelect(`/teachers/${teacher._id}`, teacher.name)}
+                        onClick={() => handleSelect(`/teachers/${getTeacherSlug(teacher._id, teacher.name)}`, teacher.name)}
                         className="p-3 rounded-xl bg-white border border-[#E5E1D8] hover:border-[#A84C32] transition-all cursor-pointer flex items-center gap-3 group hover:shadow-2xs"
                       >
                         {teacher.avatar ? (
@@ -812,7 +812,7 @@ export default function GlobalSearchModal({
                       return (
                         <div
                           key={teacher._id}
-                          onClick={() => handleSelect(`/teachers/${teacher._id}`, teacher.name)}
+                          onClick={() => handleSelect(`/teachers/${getTeacherSlug(teacher._id, teacher.name)}`, teacher.name)}
                           className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center gap-3 group ${
                             isSelected
                               ? "bg-[#FAF8F5] border-[#A84C32] ring-2 ring-[#A84C32]/20"
@@ -940,7 +940,7 @@ export default function GlobalSearchModal({
                       const param =
                         top.type === "topic"
                           ? `topic=${top._id}`
-                          : `subject=${encodeURIComponent(top.name)}`;
+                          : `subject=${top._id}`;
 
                       return (
                         <div

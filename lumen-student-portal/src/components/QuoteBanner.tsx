@@ -50,14 +50,16 @@ const DEFAULT_BANNERS: BannerItem[] = [
   },
 ];
 
-export default function QuoteBanner() {
-  const [banners, setBanners] = useState<BannerItem[]>(DEFAULT_BANNERS);
+export default function QuoteBanner({ initialBanners }: { initialBanners?: BannerItem[] | null }) {
+  const hasInitial = Array.isArray(initialBanners) && initialBanners.length > 0;
+  const [banners, setBanners] = useState<BannerItem[]>(hasInitial ? initialBanners : DEFAULT_BANNERS);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [isFading, setIsFading] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Fetch admin-managed banners
+  // Fetch admin-managed banners when not preloaded via SSR
   useEffect(() => {
+    if (hasInitial) return;
     api
       .get("/explore/banners")
       .then(({ data }) => {
@@ -70,7 +72,7 @@ export default function QuoteBanner() {
       .catch(() => {
         setBanners(DEFAULT_BANNERS);
       });
-  }, []);
+  }, [hasInitial]);
 
   // Auto-scroll when multiple banners exist
   useEffect(() => {
@@ -138,13 +140,18 @@ export default function QuoteBanner() {
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      className="relative overflow-hidden transition-all duration-700 min-h-[340px] sm:min-h-[380px] md:min-h-[440px] flex flex-col justify-between"
-      style={{
-        backgroundImage: `url(${bg})`,
-        backgroundSize: "cover",
-        backgroundPosition: "center center",
-      }}
+      className="relative overflow-hidden bg-[#1C1513] transition-all duration-700 min-h-[340px] sm:min-h-[380px] md:min-h-[440px] flex flex-col justify-between"
     >
+      {bg && (
+        <img
+          src={bg}
+          alt=""
+          aria-hidden="true"
+          loading="eager"
+          fetchPriority="high"
+          className="absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-700 pointer-events-none"
+        />
+      )}
       {/* Dark warm ambient overlay */}
       <div
         className="absolute inset-0 transition-opacity duration-700"

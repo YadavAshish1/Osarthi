@@ -499,6 +499,9 @@ router.get('/featured', async (req, res, next) => {
 /** GET /api/explore/blogs/:id - single published blog (no auth) */
 router.get('/blogs/:id', async (req, res, next) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(404).json({ message: 'Blog not found or not published' });
+    }
     const content = await Content.findOne({ _id: req.params.id, published: true })
       .populate('classRef', 'name')
       .populate('subjectRef', 'name')

@@ -405,8 +405,8 @@ export async function notifySubscribersOfQuiz(quiz, teacher) {
       await Notification.insertMany(notificationsToInsert);
     }
 
-    const clientUrl = process.env.PUBLIC_APP_URL || process.env.SITE_URL || 'https://medhashine.in';
-    const baseUrl = clientUrl.includes('localhost') ? 'https://medhashine.in' : clientUrl.replace(/\/+$/, '');
+    const clientUrl = process.env.PUBLIC_APP_URL || process.env.SITE_URL || 'https://www.medhashine.in';
+    const baseUrl = clientUrl.includes('localhost') ? 'https://www.medhashine.in' : clientUrl.replace(/\/+$/, '');
     const quizLink = `${baseUrl}/quiz/${quiz._id}`;
     subscriptions.forEach((sub) => {
       if (sub.emailNotify && sub.subscriberRef?.email) {

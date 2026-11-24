@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { ArrowLeft, Clock, Heart, Share2, Check, Bookmark, BookmarkCheck, BookmarkX, MoreVertical } from "lucide-react";
-import { api, BlogItem, CommentItem, FALLBACK_BLOGS, mapContentToBlog, getTeacherSlug } from "@/lib/api";
+import { api, BlogItem, CommentItem, mapContentToBlog, getTeacherSlug, getDefaultSubjectCover } from "@/lib/api";
 import { renderMarkedText, mediaUrl } from "@/lib/renderMarks";
 import CommentThread from "@/components/CommentThread";
 import AdSenseBanner from "@/components/google-ad-sense/AdSenseBanner";
@@ -16,10 +16,18 @@ export default function BlogDetailClient({
   id,
   slug,
   initialBlog,
+  subjectId = "",
+  topicId = "",
+  classId = "",
+  relatedBlogs = [],
 }: {
   id: string;
   slug: string;
   initialBlog: BlogItem | null;
+  subjectId?: string;
+  topicId?: string;
+  classId?: string;
+  relatedBlogs?: BlogItem[];
 }) {
   const { user, requireAuth } = useAuth();
 
@@ -210,9 +218,12 @@ export default function BlogDetailClient({
 
   useEffect(() => {
     (async () => {
-      if (!initialBlog) {
-        setLoading(true);
+      if (initialBlog) {
+        await loadComments();
+        setLoading(false);
+        return;
       }
+      setLoading(true);
       try {
         const { data } = await api.get(`/explore/blogs/${id}`);
         if (data && data.title) {
@@ -225,16 +236,7 @@ export default function BlogDetailClient({
           return;
         }
       } catch { }
-
-      if (!initialBlog) {
-        const fallback = FALLBACK_BLOGS.find((b) => b.id === id || b.slug === slug) || FALLBACK_BLOGS[0];
-        setBlog(fallback);
-        setLikesCount(fallback.likes_count || 12);
-        setLoading(false);
-      } else {
-        await loadComments();
-        setLoading(false);
-      }
+      setLoading(false);
     })();
   }, [id, slug, initialBlog, loadComments]);
 
@@ -277,7 +279,7 @@ export default function BlogDetailClient({
     >
       <div className="max-w-3xl mx-auto px-6 pt-10 md:pt-16">
         <Link
-          href="/"
+          href="/insights"
           data-testid="back-to-home"
           className="inline-flex items-center gap-2 font-ui text-xs tracking-widest uppercase text-[#5C5A55] hover:text-[#A84C32] transition-colors"
         >
@@ -286,13 +288,34 @@ export default function BlogDetailClient({
       </div>
 
       <header className="max-w-3xl mx-auto px-6 pt-8 pb-10">
-        <div className="eyebrow text-[#A84C32] mb-4 flex items-center gap-2">
-          <span>{blog.subject}</span>
-          <span className="text-[#E5E1D8]">•</span>
-          <span>{blog.topic}</span>
-          <span className="text-[#E5E1D8]">•</span>
-          <span className="text-[#5C5A55]">{blog.class_level}</span>
-        </div>
+        <nav aria-label="Breadcrumb" className="eyebrow text-[#A84C32] mb-4 flex flex-wrap items-center gap-2">
+          {blog.subject && (
+            <Link
+              href={subjectId ? `/insights?subject=${encodeURIComponent(subjectId)}` : `/insights?q=${encodeURIComponent(blog.subject)}`}
+              className="hover:underline"
+            >
+              {blog.subject}
+            </Link>
+          )}
+          {blog.subject && blog.topic && <span className="text-[#E5E1D8]">•</span>}
+          {blog.topic && (
+            <Link
+              href={topicId ? `/insights?topic=${encodeURIComponent(topicId)}` : `/insights?q=${encodeURIComponent(blog.topic)}`}
+              className="hover:underline"
+            >
+              {blog.topic}
+            </Link>
+          )}
+          {(blog.subject || blog.topic) && blog.class_level && <span className="text-[#E5E1D8]">•</span>}
+          {blog.class_level && (
+            <Link
+              href={classId ? `/insights?class_level=${encodeURIComponent(classId)}` : `/insights?q=${encodeURIComponent(blog.class_level)}`}
+              className="text-[#5C5A55] hover:text-[#A84C32] hover:underline"
+            >
+              {blog.class_level}
+            </Link>
+          )}
+        </nav>
 
         <h1
           data-testid="blog-title"
@@ -639,6 +662,51 @@ export default function BlogDetailClient({
       <div className="max-w-3xl mx-auto px-6">
         <AdSenseBanner slot="4103581240" />
       </div>
+
+      {/* Related Insights for Topic Discovery & Internal Linking */}
+      {relatedBlogs.length > 0 && (
+        <section aria-label="Related insights" className="max-w-3xl mx-auto px-6 mt-12 pt-10 border-t border-[#E5E1D8]">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="font-serif-display text-2xl sm:text-3xl font-semibold text-[#1A1A1A]">
+              More in {blog.subject || "This Subject"}
+            </h2>
+            <Link
+              href={subjectId ? `/insights?subject=${encodeURIComponent(subjectId)}` : "/insights"}
+              className="font-ui text-xs font-semibold text-[#A84C32] hover:underline"
+            >
+              View all →
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {relatedBlogs.map((rel) => (
+              <Link
+                key={rel.id}
+                href={`/blog/${rel.slug || rel.id}`}
+                className="group bg-white border border-[#E5E1D8] hover:border-[#A84C32] rounded-xl overflow-hidden flex flex-col transition-all shadow-2xs hover:shadow-sm"
+              >
+                <div className="aspect-[16/10] bg-[#F5F2EB] overflow-hidden">
+                  <img
+                    src={rel.cover || getDefaultSubjectCover(rel.subject, rel.title)}
+                    alt={rel.title}
+                    loading="lazy"
+                    width={320}
+                    height={200}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                </div>
+                <div className="p-3.5 flex-1 flex flex-col justify-between">
+                  <h3 className="font-serif-display text-base font-semibold text-[#1A1A1A] group-hover:text-[#A84C32] line-clamp-2 leading-snug">
+                    {rel.title}
+                  </h3>
+                  <span className="mt-2 font-ui text-[11px] text-[#5C5A55]">
+                    {rel.read_minutes} min read
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Reflections / Comments */}
       <div

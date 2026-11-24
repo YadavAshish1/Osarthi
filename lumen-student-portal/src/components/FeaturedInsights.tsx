@@ -105,16 +105,28 @@ function ExploreAllCard() {
   );
 }
 
-export default function FeaturedInsights() {
-  const [allInsights, setAllInsights] = useState<BlogItem[]>([]);
+function mergeWithFallbackInsights(loadedItems: BlogItem[]): BlogItem[] {
+  const existingTitles = new Set(loadedItems.map((b) => b.title.toLowerCase()));
+  const missingFallbacks = FALLBACK_BLOGS.filter(
+    (fb) => !existingTitles.has(fb.title.toLowerCase())
+  );
+  return [...loadedItems, ...missingFallbacks];
+}
+
+export default function FeaturedInsights({ initialBlogs }: { initialBlogs?: BlogItem[] }) {
+  const hasInitial = Array.isArray(initialBlogs) && initialBlogs.length > 0;
+  const [allInsights, setAllInsights] = useState<BlogItem[]>(() =>
+    hasInitial ? mergeWithFallbackInsights(initialBlogs) : FALLBACK_BLOGS
+  );
   const [activeFilter, setActiveFilter] = useState("");
-  const [loading, setLoading] = useState(true);
+  const loading = false;
   const sectionRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
 
   useEffect(() => {
+    if (hasInitial) return;
     api
       .get("/explore/featured?limit=60")
       .then(({ data }) => {
@@ -122,18 +134,10 @@ export default function FeaturedInsights() {
         if (Array.isArray(data) && data.length > 0) {
           loadedItems = data.map(mapContentToBlog);
         }
-
-        // Ensure foundational subjects (like Mathematics, Physics, English) are present
-        const existingTitles = new Set(loadedItems.map((b) => b.title.toLowerCase()));
-        const missingFallbacks = FALLBACK_BLOGS.filter(
-          (fb) => !existingTitles.has(fb.title.toLowerCase())
-        );
-
-        setAllInsights([...loadedItems, ...missingFallbacks]);
+        setAllInsights(mergeWithFallbackInsights(loadedItems));
       })
-      .catch(() => setAllInsights(FALLBACK_BLOGS))
-      .finally(() => setLoading(false));
-  }, []);
+      .catch(() => setAllInsights(FALLBACK_BLOGS));
+  }, [hasInitial]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(

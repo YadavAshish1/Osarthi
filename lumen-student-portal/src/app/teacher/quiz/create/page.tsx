@@ -1,10 +1,15 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import QuizStudioClient from "./QuizStudioClient";
 import { Loader2 } from "lucide-react";
 
-export const metadata = {
-  title: "Educator Quiz Studio | Medhashine",
+export const metadata: Metadata = {
+  title: "Educator Quiz Studio",
   description: "Create and publish interactive practice assessments and quizzes for students.",
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 export default function QuizCreatePage() {

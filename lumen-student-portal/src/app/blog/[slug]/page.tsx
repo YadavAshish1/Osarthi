@@ -1,12 +1,21 @@
 import type { Metadata } from "next";
+import { notFound, permanentRedirect } from "next/navigation";
 import BlogDetailClient from "./BlogDetailClient";
-import { API, BlogItem, FALLBACK_BLOGS, mapContentToBlog, getDefaultSubjectCover } from "@/lib/api";
+import { API, BlogItem, FALLBACK_BLOGS, mapContentToBlog, getDefaultSubjectCover, getTeacherSlug } from "@/lib/api";
 import { romanizeHindi, hasDevanagari } from "@/lib/transliterate";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.medhashine.in";
 
+function safeDecodeSlug(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 function extractIdFromSlug(slug: string): string {
-  const mongoMatch = slug.match(/([a-f0-9]{24})$/);
+  const mongoMatch = slug.match(/([a-f0-9]{24})$/i);
   if (mongoMatch) return mongoMatch[1];
   const lastHyphen = slug.lastIndexOf("-");
   if (lastHyphen !== -1) {
@@ -17,18 +26,62 @@ function extractIdFromSlug(slug: string): string {
   return slug;
 }
 
-async function fetchBlogServer(id: string, slug: string): Promise<BlogItem | null> {
-  try {
-    const res = await fetch(`${API}/explore/blogs/${id}`, { next: { revalidate: 60 } });
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.title) {
-        return mapContentToBlog(data);
-      }
-    }
-  } catch {}
+interface BlogServerResult {
+  blog: BlogItem;
+  subjectId: string;
+  topicId: string;
+  classId: string;
+}
 
-  return FALLBACK_BLOGS.find((b) => b.id === id || b.slug === slug) || null;
+async function fetchBlogServer(id: string, slug: string): Promise<BlogServerResult | null> {
+  if (/^[a-f0-9]{24}$/i.test(id)) {
+    try {
+      const res = await fetch(`${API}/explore/blogs/${id}`, {
+        next: { revalidate: 60 },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.title) {
+          return {
+            blog: mapContentToBlog(data),
+            subjectId: data.subjectRef?._id || "",
+            topicId: data.topicRef?._id || "",
+            classId: data.classRef?._id || "",
+          };
+        }
+      }
+    } catch {}
+    return null;
+  }
+
+  if (/^blog-\d+$/i.test(id)) {
+    const fallback = FALLBACK_BLOGS.find((b) => b.id === id || b.slug === slug);
+    if (fallback) {
+      return { blog: fallback, subjectId: "", topicId: "", classId: "" };
+    }
+  }
+
+  return null;
+}
+
+async function fetchRelatedBlogs(subjectId: string, currentId: string): Promise<BlogItem[]> {
+  if (!subjectId || !/^[a-f0-9]{24}$/i.test(subjectId)) return [];
+  try {
+    const res = await fetch(`${API}/explore/blogs?subjectId=${encodeURIComponent(subjectId)}&limit=4`, {
+      next: { revalidate: 300 },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!Array.isArray(data?.items)) return [];
+    return data.items
+      .map(mapContentToBlog)
+      .filter((item: BlogItem) => item.id !== currentId)
+      .slice(0, 3);
+  } catch {
+    return [];
+  }
 }
 
 // Detect article language based on subject + title content
@@ -50,18 +103,20 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const resolvedParams = await params;
   const rawSlug = resolvedParams.slug || "";
-  const slug = decodeURIComponent(rawSlug);
+  const slug = safeDecodeSlug(rawSlug);
   const id = extractIdFromSlug(slug);
 
-  const blog = await fetchBlogServer(id, slug);
+  const result = await fetchBlogServer(id, slug);
 
-  if (!blog) {
+  if (!result) {
     return {
       title: "Insight Not Found",
       description: "The requested insight could not be found.",
+      robots: { index: false, follow: false },
     };
   }
 
+  const { blog } = result;
   const title = blog.title;
   const lang = detectLanguage(blog.subject, blog.title);
   const isHindi = lang === "hi-IN";
@@ -76,7 +131,7 @@ export async function generateMetadata({
       : `Read "${blog.title}" by ${blog.teacher_name} on Medhashine.`);
   const coverUrl = blog.cover || getDefaultSubjectCover(blog.subject);
 
-  const canonicalSlug = blog.slug || rawSlug;
+  const canonicalSlug = blog.slug || slug;
   const canonicalUrl = `/blog/${canonicalSlug}`;
 
   return {
@@ -131,7 +186,7 @@ export async function generateMetadata({
     openGraph: {
       title: `${blog.title} | Medhashine`,
       description,
-      url: `${siteUrl}${canonicalUrl}`,
+      url: `${siteUrl}/blog/${encodeURIComponent(canonicalSlug)}`,
       type: "article",
       locale: isHindi ? "hi_IN" : "en_IN",
       publishedTime: blog.created_at,
@@ -154,66 +209,86 @@ export default async function BlogDetailPage({
 }) {
   const resolvedParams = await params;
   const rawSlug = resolvedParams.slug || "";
-  const slug = decodeURIComponent(rawSlug);
+  const slug = safeDecodeSlug(rawSlug);
   const id = extractIdFromSlug(slug);
 
-  const blog = await fetchBlogServer(id, slug);
+  const result = await fetchBlogServer(id, slug);
+  if (!result) {
+    notFound();
+  }
+
+  const { blog, subjectId, topicId, classId } = result;
+  if (blog.slug && slug !== blog.slug) {
+    permanentRedirect(`/blog/${encodeURIComponent(blog.slug)}`);
+  }
+
+  const relatedBlogs = await fetchRelatedBlogs(subjectId, blog.id);
+  const canonicalFullUrl = `${siteUrl}/blog/${encodeURIComponent(blog.slug || "")}`;
+  const teacherUrl =
+    blog.teacher_id && /^[a-f0-9]{24}$/i.test(blog.teacher_id)
+      ? `${siteUrl}/teachers/${encodeURIComponent(getTeacherSlug(blog.teacher_id, blog.teacher_name))}`
+      : undefined;
 
   // Structured Data (JSON-LD) for Schema.org BlogPosting / Article for Google Search
-  const jsonLd = blog
-    ? {
-        "@context": "https://schema.org",
-        "@type": "Article",
-        headline: blog.title,
-        description: blog.excerpt,
-        image: blog.cover || getDefaultSubjectCover(blog.subject),
-        datePublished: blog.created_at,
-        dateModified: blog.updated_at || blog.created_at,
-        inLanguage: detectLanguage(blog.subject, blog.title),
-        educationalLevel: blog.class_level || undefined,
-        about: [
-          blog.subject ? { "@type": "Thing", name: blog.subject } : null,
-          blog.topic ? { "@type": "Thing", name: blog.topic } : null,
-        ].filter(Boolean),
-        author: {
-          "@type": "Person",
-          name: blog.teacher_name,
-          worksFor: {
-            "@type": "EducationalOrganization",
-            name: "Medhashine",
-            url: siteUrl,
-          },
-        },
-        publisher: {
-          "@type": "EducationalOrganization",
-          name: "Medhashine",
-          url: siteUrl,
-        },
-        mainEntityOfPage: {
-          "@type": "WebPage",
-          "@id": `${siteUrl}/blog/${blog.slug || ""}`,
-        },
-        keywords: [
-          blog.subject,
-          blog.topic,
-          blog.class_level,
-          romanizeHindi(blog.topic),
-          romanizeHindi(blog.title),
-        ]
-          .filter(Boolean)
-          .join(", "),
-      }
-    : null;
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: blog.title,
+    description: blog.excerpt,
+    image: blog.cover || getDefaultSubjectCover(blog.subject),
+    datePublished: blog.created_at,
+    dateModified: blog.updated_at || blog.created_at,
+    inLanguage: detectLanguage(blog.subject, blog.title),
+    educationalLevel: blog.class_level || undefined,
+    about: [
+      blog.subject ? { "@type": "Thing", name: blog.subject } : null,
+      blog.topic ? { "@type": "Thing", name: blog.topic } : null,
+    ].filter(Boolean),
+    author: {
+      "@type": "Person",
+      name: blog.teacher_name,
+      ...(teacherUrl ? { url: teacherUrl } : {}),
+      worksFor: {
+        "@type": "EducationalOrganization",
+        name: "Medhashine",
+        url: siteUrl,
+      },
+    },
+    publisher: {
+      "@type": "EducationalOrganization",
+      name: "Medhashine",
+      url: siteUrl,
+    },
+    mainEntityOfPage: {
+      "@type": "WebPage",
+      "@id": canonicalFullUrl,
+    },
+    keywords: [
+      blog.subject,
+      blog.topic,
+      blog.class_level,
+      romanizeHindi(blog.topic),
+      romanizeHindi(blog.title),
+    ]
+      .filter(Boolean)
+      .join(", "),
+  };
 
   return (
     <>
-      {jsonLd && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
-      )}
-      <BlogDetailClient id={id} slug={slug} initialBlog={blog} />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <BlogDetailClient
+        id={id}
+        slug={slug}
+        initialBlog={blog}
+        subjectId={subjectId}
+        topicId={topicId}
+        classId={classId}
+        relatedBlogs={relatedBlogs}
+      />
     </>
   );
 }

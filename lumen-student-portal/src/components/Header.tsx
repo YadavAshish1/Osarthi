@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
@@ -29,14 +29,40 @@ import GlobalSearchModal from "@/components/GlobalSearchModal";
 import NotificationBell from "@/components/NotificationBell";
 import UserDropdownMenu from "@/components/common/UserDropdownMenu";
 
+function HeaderQuerySync({
+  user,
+  openAuth,
+  onQueryChange,
+}: {
+  user: unknown;
+  openAuth: (mode?: "login" | "register" | "forgot") => void;
+  onQueryChange: (val: string) => void;
+}) {
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    onQueryChange(searchParams.get("q") || "");
+    const authParam = searchParams.get("auth");
+    if ((authParam === "login" || authParam === "register") && !user) {
+      openAuth(authParam);
+      if (typeof window !== "undefined") {
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete("auth");
+        window.history.replaceState({}, "", cleanUrl.pathname + (cleanUrl.search || ""));
+      }
+    }
+  }, [searchParams, user, openAuth, onQueryChange]);
+
+  return null;
+}
+
 export default function Header({ onSearch }: { onSearch?: (q: string) => void }) {
   const { user, ready, logout, openAuth } = useAuth();
-  const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
 
   const [mounted, setMounted] = useState(false);
-  const [q, setQ] = useState(searchParams.get("q") || "");
+  const [q, setQ] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [teacherStatus, setTeacherStatus] = useState<"none" | "pending" | "approved">("none");
@@ -60,17 +86,6 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
-
-
-  // Support ?auth=login or ?auth=register query param
-  useEffect(() => {
-    const authParam = searchParams.get("auth");
-    if (authParam === "login" && !user) {
-      openAuth("login");
-    } else if (authParam === "register" && !user) {
-      openAuth("register");
-    }
-  }, [searchParams, user, openAuth]);
 
   useEffect(() => {
     if (!user) {
@@ -576,6 +591,9 @@ export default function Header({ onSearch }: { onSearch?: (q: string) => void })
       </header>
 
       {/* Luxury Global Search Modal */}
+      <Suspense fallback={null}>
+        <HeaderQuerySync user={user} openAuth={openAuth} onQueryChange={setQ} />
+      </Suspense>
       <GlobalSearchModal
         isOpen={searchModalOpen}
         onClose={() => setSearchModalOpen(false)}

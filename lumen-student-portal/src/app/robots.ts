@@ -8,7 +8,9 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/api/", "/_next/", "/profile/", "/teacher/"],
+        // Never block /_next/ so Googlebot can fetch CSS and JS chunks for rendering.
+        // /teacher/ keeps its trailing slash so /teachers public profiles stay crawlable.
+        disallow: ["/api/", "/profile/", "/teacher/"],
       },
     ],
     sitemap: `${baseUrl}/sitemap.xml`,
