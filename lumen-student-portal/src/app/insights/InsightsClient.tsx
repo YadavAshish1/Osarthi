@@ -4,15 +4,10 @@ import React, { Suspense, useState, useEffect, useCallback, useRef, useMemo } fr
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
-  ChevronDown,
-  Loader2,
   BookOpen,
   Users,
   Layers,
   Bookmark,
-  ArrowUp,
-  ChevronLeft,
-  ChevronRight,
   Sparkles,
 } from "lucide-react";
 import FilterBar, {
@@ -21,15 +16,12 @@ import FilterBar, {
   TreeNode,
   ViewMode,
 } from "@/components/FilterBar";
-import BlogCard from "@/components/BlogCard";
-import EmptyState from "@/components/EmptyState";
+import InsightsResultsSection from "@/components/insights/InsightsResultsSection";
+import { useBookmarkActions } from "@/components/insights/useBookmarkActions";
 import { api, BlogItem, FALLBACK_BLOGS, mapContentToBlog } from "@/lib/api";
-import { useAuth } from "@/context/AuthContext";
-import { toast } from "sonner";
 
 const PAGE_SIZE = 21;
 const VALID_SORTS = new Set<InsightSort>(["newest", "popular", "liked", "oldest"]);
-const EMPTY_BOOKMARK_SET = new Set<string>();
 
 interface InsightsClientProps {
   initialBlogs: BlogItem[] | null;
@@ -79,57 +71,6 @@ function SearchParamsSync({
   return null;
 }
 
-function InsightsSkeleton({ viewMode }: { viewMode: ViewMode }) {
-  if (viewMode === "list") {
-    return (
-      <div className="space-y-4">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div
-            key={i}
-            className="animate-pulse rounded-xl border border-[#E5E1D8] bg-white overflow-hidden flex flex-col sm:flex-row"
-          >
-            <div className="sm:w-64 h-44 bg-[#E5E1D8]/50 shrink-0" />
-            <div className="flex-1 p-6 space-y-3">
-              <div className="h-3 w-36 bg-[#E5E1D8]/60 rounded-full" />
-              <div className="h-6 w-3/4 bg-[#E5E1D8]/50 rounded" />
-              <div className="h-4 w-full bg-[#E5E1D8]/35 rounded" />
-              <div className="h-4 w-24 bg-[#E5E1D8]/40 rounded pt-2" />
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div
-          key={i}
-          className="animate-pulse rounded-xl border border-[#E5E1D8] bg-white overflow-hidden"
-        >
-          <div className="aspect-[16/10] bg-[#E5E1D8]/50" />
-          <div className="p-6 space-y-4">
-            <div className="h-3 w-28 bg-[#E5E1D8]/60 rounded-full" />
-            <div className="space-y-2">
-              <div className="h-5 w-full bg-[#E5E1D8]/50 rounded" />
-              <div className="h-5 w-3/4 bg-[#E5E1D8]/50 rounded" />
-            </div>
-            <div className="space-y-2">
-              <div className="h-3 w-full bg-[#E5E1D8]/30 rounded" />
-              <div className="h-3 w-5/6 bg-[#E5E1D8]/30 rounded" />
-            </div>
-            <div className="flex items-center gap-3 pt-3 border-t border-[#E5E1D8]/50">
-              <div className="h-8 w-8 rounded-full bg-[#E5E1D8]/50" />
-              <div className="h-3 w-24 bg-[#E5E1D8]/40 rounded" />
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export default function InsightsClient({
   initialBlogs,
   initialTotal,
@@ -141,7 +82,8 @@ export default function InsightsClient({
   initialQuery,
 }: InsightsClientProps) {
   const router = useRouter();
-  const { user, requireAuth } = useAuth();
+  const { user, effectiveBookmarkedIds, bookmarkBusyId, handleToggleBookmark } =
+    useBookmarkActions();
 
   const [searchInput, setSearchInput] = useState(initialQuery.q);
   const [q, setQ] = useState(initialQuery.q);
@@ -165,10 +107,7 @@ export default function InsightsClient({
 
   const [tree, setTree] = useState<TreeNode[]>(initialTree);
   const [teachers, setTeachers] = useState<{ id: string; name: string }[]>(initialTeachers);
-  const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
-  const [bookmarkBusyId, setBookmarkBusyId] = useState<string | null>(null);
   const [showBackToTop, setShowBackToTop] = useState(false);
-  const feedTopRef = useRef<HTMLElement>(null);
   const pendingPageScrollRef = useRef(false);
 
   const initialKeyRef = useRef(
@@ -196,16 +135,15 @@ export default function InsightsClient({
     return names.size;
   }, [tree]);
 
-  // Sync URL query params into local state (browser Back/Forward & external search modal)
   const handleSync = useCallback(
     (nextQ: string, nextFilters: FilterState, nextSort: InsightSort, nextPage: number) => {
       setSearchInput((prev) => (prev === nextQ ? prev : nextQ));
       setQ((prevQ) => (prevQ === nextQ ? prevQ : nextQ));
       setFilters((prev) =>
         prev.teacher_id === nextFilters.teacher_id &&
-          prev.class_level === nextFilters.class_level &&
-          prev.subject === nextFilters.subject &&
-          prev.topic === nextFilters.topic
+        prev.class_level === nextFilters.class_level &&
+        prev.subject === nextFilters.subject &&
+        prev.topic === nextFilters.topic
           ? prev
           : nextFilters
       );
@@ -215,7 +153,6 @@ export default function InsightsClient({
     []
   );
 
-  // Hydrate filter metadata client-side only if SSR didn't receive it
   useEffect(() => {
     if (initialTree.length > 0 && initialTeachers.length > 0) return;
     (async () => {
@@ -236,31 +173,6 @@ export default function InsightsClient({
     })();
   }, [initialTree.length, initialTeachers.length]);
 
-  // Hydrate logged-in user's saved bookmarks
-  useEffect(() => {
-    if (!user) return;
-    let active = true;
-    (async () => {
-      try {
-        const { data } = await api.get("/profile/activity");
-        if (!active || !data) return;
-        const ids = new Set<string>(
-          (data.savedBlogs || []).map((b: { _id?: string; id?: string }) => b._id || b.id || "")
-        );
-        ids.delete("");
-        setBookmarkedIds(ids);
-      } catch {
-        // silent
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [user]);
-
-  const effectiveBookmarkedIds = user ? bookmarkedIds : EMPTY_BOOKMARK_SET;
-
-  // Show floating "Back to top" button when scrolled down
   useEffect(() => {
     const onScroll = () => setShowBackToTop(window.scrollY > 650);
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -290,7 +202,6 @@ export default function InsightsClient({
     [buildQueryString, router]
   );
 
-  // Debounce inline search input -> q + URL update
   useEffect(() => {
     if (searchInput === q) return;
     const timer = setTimeout(() => {
@@ -355,9 +266,7 @@ export default function InsightsClient({
     fetchBlogs(basePage, false);
   }, [q, filters, sort, basePage, fetchBlogs, hasInitialData]);
 
-  const handleLoadMore = () => fetchBlogs(page + 1, true);
-
-  const scrollToFeedTop = useCallback(() => {
+  const scrollToTop = useCallback(() => {
     if (typeof window === "undefined") return;
     window.scrollTo({ top: 0, behavior: "smooth" });
     document.scrollingElement?.scrollTo({ top: 0, behavior: "smooth" });
@@ -366,16 +275,13 @@ export default function InsightsClient({
   useEffect(() => {
     if (!pendingPageScrollRef.current || loading) return;
     pendingPageScrollRef.current = false;
-    const rafId = window.requestAnimationFrame(() => {
-      scrollToFeedTop();
-    });
+    const rafId = window.requestAnimationFrame(() => scrollToTop());
     return () => window.cancelAnimationFrame(rafId);
-  }, [page, basePage, loading, scrollToFeedTop]);
+  }, [page, basePage, loading, scrollToTop]);
 
   const handlePaginationClick = (targetPage: number) => {
     pendingPageScrollRef.current = true;
-    scrollToFeedTop();
-    // If "Discover More" extended current view without changing basePage, clicking basePage (e.g. Page 1) won't change URL
+    scrollToTop();
     if (targetPage === basePage && page !== targetPage) {
       setPage(targetPage);
       fetchBlogs(targetPage, false);
@@ -411,44 +317,13 @@ export default function InsightsClient({
     updateUrl("", emptyFilters, "newest");
   };
 
-  const handleToggleBookmark = async (blogId: string) => {
-    if (!user) {
-      requireAuth();
-      return;
-    }
-
-    const wasSaved = bookmarkedIds.has(blogId);
-    setBookmarkedIds((prev) => {
-      const next = new Set(prev);
-      if (wasSaved) next.delete(blogId);
-      else next.add(blogId);
-      return next;
-    });
-    setBookmarkBusyId(blogId);
-
-    try {
-      const { data } = await api.post("/profile/bookmarks/toggle", { blogId });
-      toast.success(data?.saved ? "Saved to your reading list" : "Removed from saved insights");
-    } catch {
-      setBookmarkedIds((prev) => {
-        const next = new Set(prev);
-        if (wasSaved) next.add(blogId);
-        else next.delete(blogId);
-        return next;
-      });
-      toast.error("Could not update bookmark. Please try again.");
-    } finally {
-      setBookmarkBusyId(null);
-    }
-  };
-
   const hasAnyFilterOrSearch = Boolean(
     q.trim() ||
-    filters.teacher_id ||
-    filters.class_level ||
-    filters.subject ||
-    filters.topic ||
-    sort !== "newest"
+      filters.teacher_id ||
+      filters.class_level ||
+      filters.subject ||
+      filters.topic ||
+      sort !== "newest"
   );
 
   const showSpotlight =
@@ -458,32 +333,13 @@ export default function InsightsClient({
     !hasAnyFilterOrSearch &&
     blogs.length >= 4;
 
-  const gridBlogs = showSpotlight ? blogs.slice(1) : blogs;
-
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-  const nextQueryStr = buildQueryString(q, filters, sort, page + 1);
-  const nextPageHref = `/insights?${nextQueryStr}`;
-  const prevPageNum = page > 1 ? page - 1 : 1;
-  const prevQueryStr = buildQueryString(q, filters, sort, prevPageNum);
-  const prevPageHref = prevQueryStr ? `/insights?${prevQueryStr}` : "/insights";
-
-  const pageNumbers = useMemo(() => {
-    if (totalPages <= 1) return [];
-    const pages: (number | "ellipsis")[] = [];
-    const delta = 1;
-    const rangeStart = Math.max(2, page - delta);
-    const rangeEnd = Math.min(totalPages - 1, page + delta);
-
-    pages.push(1);
-    if (rangeStart > 2) pages.push("ellipsis");
-    for (let i = rangeStart; i <= rangeEnd; i++) pages.push(i);
-    if (rangeEnd < totalPages - 1) pages.push("ellipsis");
-    if (totalPages > 1) pages.push(totalPages);
-    return pages;
-  }, [totalPages, page]);
-
-  const startRange = totalCount === 0 ? 0 : (basePage - 1) * PAGE_SIZE + 1;
-  const endRange = Math.min(totalCount, startRange + blogs.length - 1);
+  const getPageHref = useCallback(
+    (targetPage: number) => {
+      const qs = buildQueryString(q, filters, sort, targetPage);
+      return qs ? `/insights?${qs}` : "/insights";
+    },
+    [buildQueryString, q, filters, sort]
+  );
 
   return (
     <>
@@ -552,7 +408,7 @@ export default function InsightsClient({
       </section>
 
       {/* Discovery Bar & Feed */}
-      <section ref={feedTopRef} className="max-w-screen-xl mx-auto px-4 sm:px-6 md:px-12 py-5 sm:py-8 md:py-12 scroll-mt-24">
+      <section className="max-w-screen-xl mx-auto px-4 sm:px-6 md:px-12 py-5 sm:py-8 md:py-12">
         <div className="mb-5 sm:mb-8">
           <FilterBar
             tree={tree}
@@ -571,188 +427,30 @@ export default function InsightsClient({
           />
         </div>
 
-        {/* Status Summary Row */}
-        {!loading && blogs.length > 0 && (
-          <div className="flex items-center justify-between mb-4 sm:mb-6 text-xs font-ui text-[#5C5A55]">
-            <p>
-              Showing <span className="font-semibold text-[#1A1A1A]">{startRange}–{endRange}</span> of{" "}
-              <span className="font-semibold text-[#1A1A1A]">{totalCount}</span> insights
-              {q.trim() ? (
-                <>
-                  {" "}for <span className="font-semibold text-[#A84C32]">&ldquo;{q.trim()}&rdquo;</span>
-                </>
-              ) : null}
-            </p>
-            {totalPages > 1 && (
-              <span className="hidden sm:inline">
-                Page {page} of {totalPages}
-              </span>
-            )}
-          </div>
-        )}
-
-        {loading ? (
-          <InsightsSkeleton viewMode={viewMode} />
-        ) : blogs.length === 0 ? (
-          <EmptyState
-            onClear={handleClear}
-            searchQuery={q.trim()}
-            onClearSearch={q.trim() ? handleClearSearch : undefined}
-            recommendedBlogs={popularBlogs.length > 0 ? popularBlogs : FALLBACK_BLOGS.slice(0, 3)}
-            bookmarkedIds={effectiveBookmarkedIds}
-            onToggleBookmark={handleToggleBookmark}
-          />
-        ) : (
-          <div className="space-y-5 sm:space-y-8">
-            {showSpotlight && blogs[0] && (
-              <BlogCard
-                blog={blogs[0]}
-                index={0}
-                variant="spotlight"
-                isBookmarked={effectiveBookmarkedIds.has(blogs[0].id)}
-                onToggleBookmark={handleToggleBookmark}
-                bookmarkBusy={bookmarkBusyId === blogs[0].id}
-              />
-            )}
-
-            {viewMode === "list" ? (
-              <div className="space-y-3 sm:space-y-4">
-                {gridBlogs.map((b, i) => (
-                  <BlogCard
-                    key={b.id}
-                    blog={b}
-                    index={i}
-                    variant="list"
-                    isBookmarked={effectiveBookmarkedIds.has(b.id)}
-                    onToggleBookmark={handleToggleBookmark}
-                    bookmarkBusy={bookmarkBusyId === b.id}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-7 lg:gap-8">
-                {gridBlogs.map((b, i) => (
-                  <BlogCard
-                    key={b.id}
-                    blog={b}
-                    index={showSpotlight ? i + 1 : i}
-                    variant="grid"
-                    isBookmarked={effectiveBookmarkedIds.has(b.id)}
-                    onToggleBookmark={handleToggleBookmark}
-                    bookmarkBusy={bookmarkBusyId === b.id}
-                  />
-                ))}
-              </div>
-            )}
-
-            {(hasMore || page > 1 || totalPages > 1) && (
-              <div className="mt-10 sm:mt-14 pt-6 sm:pt-8 border-t border-[#E5E1D8] flex flex-col items-center gap-4 sm:gap-5">
-                {hasMore && (
-                  <div className="flex flex-col items-center gap-2.5 sm:gap-3">
-                    <div className="w-48 sm:w-52 h-1.5 rounded-full bg-[#E5E1D8] overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-[#A84C32] transition-all duration-500 ease-out"
-                        style={{
-                          width: `${Math.min((endRange / Math.max(totalCount, 1)) * 100, 100)}%`,
-                        }}
-                      />
-                    </div>
-                    <p className="font-ui text-xs text-[#5C5A55]">
-                      Loaded {blogs.length} on this view ({totalCount} total)
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleLoadMore}
-                      disabled={loadingMore}
-                      className="group flex items-center gap-2.5 px-7 sm:px-8 py-2.5 sm:py-3 rounded-full border border-[#E5E1D8] bg-white font-ui text-sm font-medium text-[#1A1A1A] hover:border-[#A84C32] hover:text-[#A84C32] hover:shadow-md transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
-                    >
-                      {loadingMore ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Loading more insights…
-                        </>
-                      ) : (
-                        <>
-                          Discover More
-                          <ChevronDown className="h-4 w-4 group-hover:translate-y-0.5 transition-transform" />
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
-
-                {totalPages > 1 && (
-                  <nav
-                    aria-label="Pagination"
-                    className="flex flex-wrap items-center justify-center gap-1.5 font-ui text-xs"
-                  >
-                    {page > 1 && (
-                      <Link
-                        href={prevPageHref}
-                        scroll={false}
-                        onClick={() => handlePaginationClick(prevPageNum)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full border border-[#E5E1D8] bg-white text-[#1A1A1A] hover:border-[#A84C32] hover:text-[#A84C32] transition-colors"
-                      >
-                        <ChevronLeft className="h-3.5 w-3.5" />
-                        Prev
-                      </Link>
-                    )}
-
-                    {pageNumbers.map((item, idx) =>
-                      item === "ellipsis" ? (
-                        <span key={`e-${idx}`} className="px-2 text-[#5C5A55]">
-                          …
-                        </span>
-                      ) : (
-                        <Link
-                          key={item}
-                          href={(() => {
-                            const qs = buildQueryString(q, filters, sort, item);
-                            return qs ? `/insights?${qs}` : "/insights";
-                          })()}
-                          scroll={false}
-                          onClick={() => handlePaginationClick(item)}
-                          aria-current={item === page ? "page" : undefined}
-                          className={`w-8 h-8 rounded-full inline-flex items-center justify-center border transition-colors ${item === page
-                            ? "bg-[#1A1A1A] text-white border-[#1A1A1A] font-semibold"
-                            : "bg-white text-[#5C5A55] border-[#E5E1D8] hover:border-[#A84C32] hover:text-[#A84C32]"
-                            }`}
-                        >
-                          {item}
-                        </Link>
-                      )
-                    )}
-
-                    {hasMore && (
-                      <Link
-                        href={nextPageHref}
-                        scroll={false}
-                        onClick={() => handlePaginationClick(page + 1)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full border border-[#E5E1D8] bg-white text-[#1A1A1A] hover:border-[#A84C32] hover:text-[#A84C32] transition-colors"
-                      >
-                        Next
-                        <ChevronRight className="h-3.5 w-3.5" />
-                      </Link>
-                    )}
-                  </nav>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+        <InsightsResultsSection
+          blogs={blogs}
+          totalCount={totalCount}
+          pageSize={PAGE_SIZE}
+          page={page}
+          basePage={basePage}
+          hasMore={hasMore}
+          loading={loading}
+          loadingMore={loadingMore}
+          viewMode={viewMode}
+          searchQuery={q}
+          showSpotlight={showSpotlight}
+          popularBlogs={popularBlogs}
+          bookmarkedIds={effectiveBookmarkedIds}
+          bookmarkBusyId={bookmarkBusyId}
+          onToggleBookmark={handleToggleBookmark}
+          onLoadMore={() => fetchBlogs(page + 1, true)}
+          onClear={handleClear}
+          onClearSearch={handleClearSearch}
+          onPaginationClick={handlePaginationClick}
+          getPageHref={getPageHref}
+          showBackToTop={showBackToTop}
+        />
       </section>
-
-      {/* Floating Back to Top */}
-      {showBackToTop && (
-        <button
-          type="button"
-          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-          aria-label="Back to top"
-          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-30 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-[#1A1A1A]/90 backdrop-blur-xs text-white hover:bg-[#A84C32] shadow-lg flex items-center justify-center transition-all cursor-pointer"
-        >
-          <ArrowUp className="h-4 w-4" />
-        </button>
-      )}
     </>
   );
 }

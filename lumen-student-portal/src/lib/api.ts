@@ -182,6 +182,34 @@ export function slugify(text: string): string {
   return clean || "essay";
 }
 
+export const MIN_INDEXABLE_TAXONOMY_COUNT = 2;
+
+export function toTaxonomySlug(text: string): string {
+  return slugify(text).toLowerCase();
+}
+
+export function getInsightTaxonomyPath(
+  className?: string,
+  subjectName?: string,
+  topicName?: string,
+  encode = false
+): string {
+  const parts: string[] = [];
+  const enc = (val: string) => (encode ? encodeURIComponent(val) : val);
+
+  if (className?.trim()) {
+    parts.push(enc(toTaxonomySlug(className)));
+    if (subjectName?.trim()) {
+      parts.push(enc(toTaxonomySlug(subjectName)));
+      if (topicName?.trim()) {
+        parts.push(enc(toTaxonomySlug(topicName)));
+      }
+    }
+  }
+
+  return parts.length > 0 ? `/insights/${parts.join("/")}` : "/insights";
+}
+
 /**
  * Curated high-res educational editorial photography pools.
  */

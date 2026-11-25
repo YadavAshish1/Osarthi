@@ -1,5 +1,11 @@
 import type { MetadataRoute } from "next";
-import { API, slugify, getTeacherSlug } from "@/lib/api";
+import {
+  API,
+  MIN_INDEXABLE_TAXONOMY_COUNT,
+  getInsightTaxonomyPath,
+  getTeacherSlug,
+  slugify,
+} from "@/lib/api";
 
 // Force dynamic sitemap assembly per request while Data Cache (`revalidate: 3600`) caches API payloads;
 // prevents Render cold-start timeouts during `next build` from baking an empty static sitemap onto CDN.
@@ -58,6 +64,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   const blogRoutes: MetadataRoute.Sitemap = [];
+  const taxonomyCounts = new Map<string, { path: string; count: number; priority: number }>();
+
+  const bumpTaxonomy = (path: string, priority: number) => {
+    if (!path || path === "/insights") return;
+    const existing = taxonomyCounts.get(path);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      taxonomyCounts.set(path, { path, count: 1, priority });
+    }
+  };
+
   let page = 1;
   let hasMore = true;
 
@@ -81,11 +99,36 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
           changeFrequency: "weekly",
           priority: 0.9,
         });
+
+        const clsName = item.classRef?.name || (typeof item.classRef === "string" ? item.classRef : "");
+        const subName = item.subjectRef?.name || (typeof item.subjectRef === "string" ? item.subjectRef : "");
+        const topName = item.topicRef?.name || (typeof item.topicRef === "string" ? item.topicRef : "");
+
+        if (clsName?.trim()) {
+          bumpTaxonomy(getInsightTaxonomyPath(clsName, undefined, undefined, true), 0.85);
+          if (subName?.trim()) {
+            bumpTaxonomy(getInsightTaxonomyPath(clsName, subName, undefined, true), 0.85);
+            if (topName?.trim()) {
+              bumpTaxonomy(getInsightTaxonomyPath(clsName, subName, topName, true), 0.8);
+            }
+          }
+        }
       }
       hasMore = Boolean(data?.hasMore);
       page += 1;
     }
   } catch {}
+
+  const taxonomyRoutes: MetadataRoute.Sitemap = [];
+  for (const entry of taxonomyCounts.values()) {
+    if (entry.count >= MIN_INDEXABLE_TAXONOMY_COUNT) {
+      taxonomyRoutes.push({
+        url: `${baseUrl}${entry.path}`,
+        changeFrequency: "weekly",
+        priority: entry.priority,
+      });
+    }
+  }
 
   const teacherRoutes: MetadataRoute.Sitemap = [];
   try {
@@ -110,5 +153,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
   } catch {}
 
-  return [...staticRoutes, ...blogRoutes, ...teacherRoutes];
+  return [...staticRoutes, ...taxonomyRoutes, ...blogRoutes, ...teacherRoutes];
 }

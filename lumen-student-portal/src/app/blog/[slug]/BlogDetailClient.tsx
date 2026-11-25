@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { ArrowLeft, Clock, Heart, Share2, Check, Bookmark, BookmarkCheck, BookmarkX, MoreVertical } from "lucide-react";
-import { api, BlogItem, CommentItem, mapContentToBlog, getTeacherSlug, getDefaultSubjectCover } from "@/lib/api";
+import { api, BlogItem, CommentItem, mapContentToBlog, getTeacherSlug, getDefaultSubjectCover, getInsightTaxonomyPath } from "@/lib/api";
 import { renderMarkedText, mediaUrl } from "@/lib/renderMarks";
 import CommentThread from "@/components/CommentThread";
 import AdSenseBanner from "@/components/google-ad-sense/AdSenseBanner";
@@ -289,9 +289,24 @@ export default function BlogDetailClient({
 
       <header className="max-w-3xl mx-auto px-6 pt-8 pb-10">
         <nav aria-label="Breadcrumb" className="eyebrow text-[#A84C32] mb-4 flex flex-wrap items-center gap-2">
+          {blog.class_level && (
+            <Link
+              href={getInsightTaxonomyPath(blog.class_level, undefined, undefined, true)}
+              className="text-[#5C5A55] hover:text-[#A84C32] hover:underline"
+            >
+              {blog.class_level}
+            </Link>
+          )}
+          {blog.class_level && (blog.subject || blog.topic) && <span className="text-[#E5E1D8]">•</span>}
           {blog.subject && (
             <Link
-              href={subjectId ? `/insights?subject=${encodeURIComponent(subjectId)}` : `/insights?q=${encodeURIComponent(blog.subject)}`}
+              href={
+                blog.class_level
+                  ? getInsightTaxonomyPath(blog.class_level, blog.subject, undefined, true)
+                  : subjectId
+                  ? `/insights?subject=${encodeURIComponent(subjectId)}`
+                  : `/insights?q=${encodeURIComponent(blog.subject)}`
+              }
               className="hover:underline"
             >
               {blog.subject}
@@ -300,19 +315,16 @@ export default function BlogDetailClient({
           {blog.subject && blog.topic && <span className="text-[#E5E1D8]">•</span>}
           {blog.topic && (
             <Link
-              href={topicId ? `/insights?topic=${encodeURIComponent(topicId)}` : `/insights?q=${encodeURIComponent(blog.topic)}`}
+              href={
+                blog.class_level && blog.subject
+                  ? getInsightTaxonomyPath(blog.class_level, blog.subject, blog.topic, true)
+                  : topicId
+                  ? `/insights?topic=${encodeURIComponent(topicId)}`
+                  : `/insights?q=${encodeURIComponent(blog.topic)}`
+              }
               className="hover:underline"
             >
               {blog.topic}
-            </Link>
-          )}
-          {(blog.subject || blog.topic) && blog.class_level && <span className="text-[#E5E1D8]">•</span>}
-          {blog.class_level && (
-            <Link
-              href={classId ? `/insights?class_level=${encodeURIComponent(classId)}` : `/insights?q=${encodeURIComponent(blog.class_level)}`}
-              className="text-[#5C5A55] hover:text-[#A84C32] hover:underline"
-            >
-              {blog.class_level}
             </Link>
           )}
         </nav>
