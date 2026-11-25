@@ -194,10 +194,10 @@ router.get('/topics', async (req, res, next) => {
   }
 });
 
-/** GET /api/explore/blogs?topicId=&classId=&subjectId=&search=&page=&limit= */
+/** GET /api/explore/blogs?topicId=&classId=&subjectId=&search=&sort=&page=&limit= */
 router.get('/blogs', async (req, res, next) => {
   try {
-    const { topicId, classId, subjectId, teacherId, search, page = 1, limit = 12 } = req.query;
+    const { topicId, classId, subjectId, teacherId, search, sort = 'newest', page = 1, limit = 12 } = req.query;
     const filter = { published: true };
 
     const parseIds = (val) => {
@@ -224,13 +224,24 @@ router.get('/blogs', async (req, res, next) => {
       filter.title = buildSearchRegex(search);
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const sortOptions = {
+      newest: { createdAt: -1 },
+      popular: { viewsCount: -1, likesCount: -1, createdAt: -1 },
+      liked: { likesCount: -1, viewsCount: -1, createdAt: -1 },
+      oldest: { createdAt: 1 },
+    };
+    const sortQuery = sortOptions[sort] || sortOptions.newest;
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 12));
+    const skip = (pageNum - 1) * limitNum;
+
     const [items, total] = await Promise.all([
       Content.find(filter)
-        .sort({ createdAt: -1 })
+        .sort(sortQuery)
         .skip(skip)
-        .limit(parseInt(limit))
-        .select('title blocks createdAt updatedAt topicRef subjectRef classRef createdBy')
+        .limit(limitNum)
+        .select('title blocks createdAt updatedAt viewsCount likesCount bookmarksCount topicRef subjectRef classRef createdBy')
         .populate('classRef', 'name')
         .populate('subjectRef', 'name')
         .populate('topicRef', 'name')
@@ -241,8 +252,8 @@ router.get('/blogs', async (req, res, next) => {
     res.json({
       items,
       total,
-      page: parseInt(page),
-      pages: Math.ceil(total / parseInt(limit)),
+      page: pageNum,
+      pages: Math.ceil(total / limitNum),
       hasMore: skip + items.length < total,
     });
   } catch (err) {

@@ -101,6 +101,8 @@ export interface BlogItem {
   created_at: string;
   updated_at?: string;
   likes_count?: number;
+  views_count?: number;
+  bookmarks_count?: number;
   user_liked?: boolean;
 }
 
@@ -294,7 +296,9 @@ export function mapContentToBlog(raw: any): BlogItem {
     read_minutes,
     created_at: raw.createdAt || raw.created_at || new Date().toISOString(),
     updated_at: raw.updatedAt || raw.updated_at || undefined,
-    likes_count: raw.likes_count || 0,
+    likes_count: Math.max(0, raw.likesCount ?? raw.likes_count ?? 0),
+    views_count: Math.max(0, raw.viewsCount ?? raw.views_count ?? 0),
+    bookmarks_count: Math.max(0, raw.bookmarksCount ?? raw.bookmarks_count ?? 0),
     user_liked: raw.user_liked || false,
   };
 }
