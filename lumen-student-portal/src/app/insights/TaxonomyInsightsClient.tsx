@@ -17,6 +17,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import type { InsightSort, TreeNode, ViewMode } from "@/components/FilterBar";
+import { ResponsiveSearchableSelect } from "@/components/SearchableFilterPicker";
 import InsightsResultsSection from "@/components/insights/InsightsResultsSection";
 import { useBookmarkActions } from "@/components/insights/useBookmarkActions";
 import type { TaxonomyContext } from "@/lib/insightsTaxonomy";
@@ -410,26 +411,19 @@ export default function TaxonomyInsightsClient({
 
             <div className="flex flex-wrap items-center gap-2 shrink-0">
               {teachers.length > 0 && (
-                <div className="relative flex-1 sm:flex-initial">
-                  <select
-                    aria-label="Filter by educator"
+                <div className="flex-1 sm:flex-initial">
+                  <ResponsiveSearchableSelect
+                    testId="taxonomy-filter-teacher"
+                    title="Educator"
+                    allLabel="All Educators"
                     value={teacherId}
-                    onChange={(e) => {
-                      const nextTeacher = e.target.value;
+                    options={teachers.map((t) => ({ value: t.id, label: t.name }))}
+                    onSelect={(nextTeacher) => {
                       setTeacherId(nextTeacher);
                       setBasePage(1);
                       updateUrl(q, nextTeacher, sort);
                     }}
-                    className="w-full sm:w-auto h-10 pl-3.5 pr-8 rounded-full bg-white border border-[#E5E1D8] text-xs sm:text-sm text-[#1A1A1A] hover:border-[#A84C32] focus:outline-none focus:border-[#A84C32] appearance-none cursor-pointer"
-                  >
-                    <option value="">All Educators</option>
-                    {teachers.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="h-3.5 w-3.5 text-[#5C5A55] absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  />
                 </div>
               )}
 
